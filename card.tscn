@@ -11,7 +11,19 @@ offset_bottom = 140.0
 pivot_offset = Vector2(50, 70)
 script = ExtResource("1_script")
 
-[node name="BackFace" type="ColorRect" parent="."]
+[node name="BackFace" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Placeholder" type="ColorRect" parent="BackFace"]
+show_behind_parent = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -21,7 +33,7 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0.141176, 0.141176, 0.141176, 1)
 
-[node name="Border" type="ReferenceRect" parent="BackFace"]
+[node name="Border" type="ReferenceRect" parent="BackFace/Placeholder"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -32,8 +44,20 @@ border_color = Color(1, 1, 1, 1)
 border_width = 2.0
 editor_only = false
 
-[node name="FrontFace" type="ColorRect" parent="."]
+[node name="FrontFace" type="TextureRect" parent="."]
 visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Placeholder" type="ColorRect" parent="FrontFace"]
+show_behind_parent = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -75,7 +99,7 @@ theme_override_colors/font_color = Color(0, 0, 0, 1)
 text = "Spades"
 horizontal_alignment = 1
 
-[node name="Border" type="ReferenceRect" parent="FrontFace"]
+[node name="Border" type="ReferenceRect" parent="FrontFace/Placeholder"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
