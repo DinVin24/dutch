@@ -38,10 +38,6 @@ func _ready():
 	bg_music_player.process_mode = Node.PROCESS_MODE_ALWAYS # Keep playing when paused
 	add_child(bg_music_player)
 	
-	# Initial deck creation
-	deck_manager.create_deck()
-	deck_ready.emit()
-
 func play_menu_music() -> void:
 	if bg_music_player and not bg_music_player.playing:
 		bg_music_player.play()
@@ -60,6 +56,11 @@ func initialize_game(p_count: int = 4):
 			"score": 0,
 			"hand": [] # CardData objects
 		})
+	
+	# Ensure a fresh deck is ready for the new match
+	deck_manager.create_deck()
+	deck_ready.emit()
+	
 	start_game()
 
 func change_state(new_state: GameState):
