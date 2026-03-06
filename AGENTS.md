@@ -19,7 +19,7 @@ Ship the rules-heavy Dutch card game in Godot with a four-person crew that treat
 ## Agentic Guidelines
 - Treat yourself as an agent with foresight: proactively suggest follow-up tests, request missing assets, and double-check README rules before changing gameplay code.
 - Use specialized AI tools (Gemini for layout, ChatGPT Codex for scripts) as noted in `team_workload_split.md`, but keep descriptions and commits human-readable.
-- Each commit/message should describe how it advances the team’s shared goal, what signals/exports were touched, and how the rest of the crew should respond.
+- Each commit/message should follow **Conventional Commits** format (e.g. `feat(ui): implement pause menu`, `fix(logic): correct scoring rule`). Include the Agent role and a descriptive summary in the body.
 - Never change the git email and user name.
 
 ## Coordination

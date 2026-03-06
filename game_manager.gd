@@ -18,6 +18,7 @@ signal deck_ready
 
 var current_state: GameState = GameState.INITIALIZING
 var deck_manager: DeckManager
+var bg_music_player: AudioStreamPlayer
 
 # Match Settings
 var num_players: int = 4 # Default to 4 players
@@ -27,9 +28,27 @@ func _ready():
 	deck_manager = DeckManager.new()
 	add_child(deck_manager)
 	
+	# Background Music Setup
+	bg_music_player = AudioStreamPlayer.new()
+	bg_music_player.stream = preload("res://bg_music.ogg")
+	if bg_music_player.stream is AudioStreamOggVorbis:
+		bg_music_player.stream.loop = true
+	bg_music_player.volume_db = -10.0
+	bg_music_player.bus = "Music"
+	bg_music_player.process_mode = Node.PROCESS_MODE_ALWAYS # Keep playing when paused
+	add_child(bg_music_player)
+	
 	# Initial deck creation
 	deck_manager.create_deck()
 	deck_ready.emit()
+
+func play_menu_music() -> void:
+	if bg_music_player and not bg_music_player.playing:
+		bg_music_player.play()
+
+func stop_menu_music() -> void:
+	if bg_music_player and bg_music_player.playing:
+		bg_music_player.stop()
 
 func initialize_game(p_count: int = 4):
 	num_players = p_count
