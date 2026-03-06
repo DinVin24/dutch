@@ -24,3 +24,11 @@ config/icon="res://icon.svg"
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+
+[autoload]
+
+GameManager="*res://game_manager.gd"
+
+[audio]
+
+buses/default_bus_layout="res://default_bus_layout.tres"
