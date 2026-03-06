@@ -43,9 +43,18 @@ func _handle_initial_deal():
 	
 	for p_idx in range(GameManager.num_players):
 		var marker = positions[p_idx]
-		# Perfect centering: Subtract half the total spread + half a card width
-		var start_x = marker.global_position.x - (card_spacing * (cards_per_player - 1)) / 2.0 - (card_width / 2.0)
-		var y_pos = marker.global_position.y - 70 # Offset for card height height/2
+		var is_vertical = (marker == player_pos_left or marker == player_pos_right)
+		
+		# Selection of centering/spread logic
+		var start_pos: Vector2
+		if is_vertical:
+			# Vertical spread logic for Left/Right
+			var start_y = marker.global_position.y - (card_spacing * (cards_per_player - 1)) / 2.0 - (card_width / 2.0)
+			start_pos = Vector2(marker.global_position.x, start_y)
+		else:
+			# Horizontal spread logic for Top/Bottom
+			var start_x = marker.global_position.x - (card_spacing * (cards_per_player - 1)) / 2.0 - (card_width / 2.0)
+			start_pos = Vector2(start_x, marker.global_position.y - 70)
 		
 		for i in range(cards_per_player):
 			var card_data_dict = GameManager.deck_manager.draw_card()
@@ -57,13 +66,25 @@ func _handle_initial_deal():
 			card_data.rank = card_data_dict.rank
 			card_data.value = card_data_dict.value
 			
-			# Only player's cards are face-up for now (debug)
-			card_data.is_face_up = (p_idx == 0)
+			# User request: All cards face-up for verification
+			card_data.is_face_up = true
 			
 			card_inst.setup(card_data)
 			add_child(card_inst)
 			
-			var target_pos = Vector2(start_x + (i * card_spacing), y_pos)
+			# Handle rotation for side players
+			if marker == player_pos_left:
+				card_inst.rotation_degrees = 90
+			elif marker == player_pos_right:
+				card_inst.rotation_degrees = -90
+			
+			# Position calculations based on orientation
+			var target_pos: Vector2
+			if is_vertical:
+				target_pos = Vector2(start_pos.x, start_pos.y + (i * card_spacing))
+			else:
+				target_pos = Vector2(start_pos.x + (i * card_spacing), start_pos.y)
+				
 			card_inst.global_position = deck_area.global_position
 			
 			var tween = create_tween()
