@@ -3,22 +3,24 @@ class_name CardUI
 
 signal card_clicked(card_node)
 
-@onready var front_face: TextureRect = $FrontFace
-@onready var back_face: TextureRect = $BackFace
+@onready var front_face: ColorRect = $FrontFace
+@onready var back_face: ColorRect = $BackFace
+@onready var rank_label: Label = $FrontFace/RankLabel
+@onready var suit_label: Label = $FrontFace/SuitLabel
 
 var data: CardData
 var is_flipping: bool = false
 
 func setup(p_data: CardData):
 	data = p_data
-	# In a real game, you'd load specific textures based on suit/rank
-	# For now, we'll use placeholder colors or the default icon
 	_update_visuals()
 
 func _update_visuals():
 	if data.is_face_up:
 		front_face.show()
 		back_face.hide()
+		rank_label.text = data.rank
+		suit_label.text = data.suit
 	else:
 		front_face.hide()
 		back_face.show()
