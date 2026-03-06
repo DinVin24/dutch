@@ -1,0 +1,17 @@
+extends Control
+
+func _on_start_button_pressed() -> void:
+	print("Start button pressed! (Game scene not yet implemented)")
+
+func _on_settings_button_pressed() -> void:
+	var settings_scene = preload("res://settings_menu.tscn")
+	var settings_instance = settings_scene.instantiate()
+	add_child(settings_instance)
+	settings_instance.back_pressed.connect(_on_settings_back)
+	$CenterContainer.hide()
+
+func _on_settings_back() -> void:
+	$CenterContainer.show()
+
+func _on_exit_button_pressed() -> void:
+	get_tree().quit()
