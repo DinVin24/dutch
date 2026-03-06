@@ -2,31 +2,17 @@ extends Control
 
 signal back_pressed
 
-@onready var resolution_option: OptionButton = $Panel/VBoxContainer/GridContainer/ResolutionOption
-@onready var window_mode_option: OptionButton = $Panel/VBoxContainer/GridContainer/WindowModeOption
-@onready var music_slider: HSlider = $Panel/VBoxContainer/GridContainer/MusicSlider
-@onready var sfx_slider: HSlider = $Panel/VBoxContainer/GridContainer/SFXSlider
-@onready var keybinds_container: VBoxContainer = $Panel/VBoxContainer/KeybindsScroll/KeybindsContainer
-
+@onready var resolution_option: OptionButton = $BackgroundTint/VBoxContainer/GridContainer/ResolutionOption
+@onready var window_mode_option: OptionButton = $BackgroundTint/VBoxContainer/GridContainer/WindowModeOption
+@onready var music_slider: HSlider = $BackgroundTint/VBoxContainer/GridContainer/MusicSlider
+@onready var sfx_slider: HSlider = $BackgroundTint/VBoxContainer/GridContainer/SFXSlider
+	
 var resolutions = [
 	Vector2i(1152, 648),
 	Vector2i(1280, 720),
 	Vector2i(1920, 1080),
 	Vector2i(2560, 1440)
 ]
-
-var actions_to_remap = {
-	"ui_accept": "Accept / Interact",
-	"ui_cancel": "Cancel",
-	"ui_up": "Up",
-	"ui_down": "Down",
-	"ui_left": "Left",
-	"ui_right": "Right"
-}
-
-var is_remapping = false
-var remapping_action_name = ""
-var remapping_button: Button = null
 
 func _ready() -> void:
 	# Resolution Setup
@@ -43,7 +29,6 @@ func _ready() -> void:
 	# Window Mode Setup
 	window_mode_option.add_item("Windowed", DisplayServer.WINDOW_MODE_WINDOWED)
 	window_mode_option.add_item("Fullscreen", DisplayServer.WINDOW_MODE_FULLSCREEN)
-	window_mode_option.add_item("Exclusive Fullscreen", DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN)
 	
 	var current_mode = DisplayServer.window_get_mode()
 	var mode_idx = 0
@@ -60,61 +45,6 @@ func _ready() -> void:
 		music_slider.value = db_to_linear(AudioServer.get_bus_volume_db(music_bus))
 	if sfx_bus >= 0:
 		sfx_slider.value = db_to_linear(AudioServer.get_bus_volume_db(sfx_bus))
-		
-	# Keybinds Setup
-	_create_keybind_ui()
-
-func _create_keybind_ui() -> void:
-	for child in keybinds_container.get_children():
-		child.queue_free()
-		
-	for action in actions_to_remap:
-		var hbox = HBoxContainer.new()
-		
-		var label = Label.new()
-		label.text = actions_to_remap[action]
-		label.custom_minimum_size = Vector2(150, 0)
-		
-		var button = Button.new()
-		button.text = _get_action_key_name(action)
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.pressed.connect(_on_keybind_button_pressed.bind(button, action))
-		
-		hbox.add_child(label)
-		hbox.add_child(button)
-		keybinds_container.add_child(hbox)
-
-func _get_action_key_name(action: String) -> String:
-	var events = InputMap.action_get_events(action)
-	for event in events:
-		if event is InputEventKey:
-			return OS.get_keycode_string(event.physical_keycode if event.physical_keycode != 0 else event.keycode)
-		elif event is InputEventMouseButton:
-			return "Mouse Button " + str(event.button_index)
-	return "Unbound"
-
-func _on_keybind_button_pressed(button: Button, action: String) -> void:
-	is_remapping = true
-	remapping_action_name = action
-	remapping_button = button
-	button.text = "Press any key..."
-
-func _input(event: InputEvent) -> void:
-	if is_remapping:
-		if event is InputEventKey or event is InputEventMouseButton:
-			if event.is_pressed():
-				# Remove old events and add new one
-				InputMap.action_erase_events(remapping_action_name)
-				InputMap.action_add_event(remapping_action_name, event)
-				
-				# Update UI button text
-				remapping_button.text = _get_action_key_name(remapping_action_name)
-				
-				is_remapping = false
-				remapping_action_name = ""
-				remapping_button = null
-				
-				get_viewport().set_input_as_handled()
 
 func _on_resolution_selected(index: int) -> void:
 	DisplayServer.window_set_size(resolutions[index])

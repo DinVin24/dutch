@@ -11,15 +11,16 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_def")
 
-[node name="Panel" type="Panel" parent="."]
+[node name="BackgroundTint" type="ColorRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+color = Color(0, 0, 0, 0.85)
 
-[node name="VBoxContainer" type="VBoxContainer" parent="Panel"]
+[node name="VBoxContainer" type="VBoxContainer" parent="BackgroundTint"]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -34,42 +35,42 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 15
 
-[node name="Label" type="Label" parent="Panel/VBoxContainer"]
+[node name="Label" type="Label" parent="BackgroundTint/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 48
 text = "Settings"
 horizontal_alignment = 1
 
-[node name="HSeparator" type="HSeparator" parent="Panel/VBoxContainer"]
+[node name="HSeparator" type="HSeparator" parent="BackgroundTint/VBoxContainer"]
 layout_mode = 2
 
-[node name="GridContainer" type="GridContainer" parent="Panel/VBoxContainer"]
+[node name="GridContainer" type="GridContainer" parent="BackgroundTint/VBoxContainer"]
 layout_mode = 2
 theme_override_constants/h_separation = 20
 theme_override_constants/v_separation = 10
 columns = 2
 
-[node name="ResolutionLabel" type="Label" parent="Panel/VBoxContainer/GridContainer"]
+[node name="ResolutionLabel" type="Label" parent="BackgroundTint/VBoxContainer/GridContainer"]
 layout_mode = 2
 text = "Resolution"
 
-[node name="ResolutionOption" type="OptionButton" parent="Panel/VBoxContainer/GridContainer"]
+[node name="ResolutionOption" type="OptionButton" parent="BackgroundTint/VBoxContainer/GridContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="WindowModeLabel" type="Label" parent="Panel/VBoxContainer/GridContainer"]
+[node name="WindowModeLabel" type="Label" parent="BackgroundTint/VBoxContainer/GridContainer"]
 layout_mode = 2
 text = "Window Mode"
 
-[node name="WindowModeOption" type="OptionButton" parent="Panel/VBoxContainer/GridContainer"]
+[node name="WindowModeOption" type="OptionButton" parent="BackgroundTint/VBoxContainer/GridContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="MusicLabel" type="Label" parent="Panel/VBoxContainer/GridContainer"]
+[node name="MusicLabel" type="Label" parent="BackgroundTint/VBoxContainer/GridContainer"]
 layout_mode = 2
 text = "Music Volume"
 
-[node name="MusicSlider" type="HSlider" parent="Panel/VBoxContainer/GridContainer"]
+[node name="MusicSlider" type="HSlider" parent="BackgroundTint/VBoxContainer/GridContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
@@ -77,11 +78,11 @@ max_value = 1.0
 step = 0.05
 value = 1.0
 
-[node name="SFXLabel" type="Label" parent="Panel/VBoxContainer/GridContainer"]
+[node name="SFXLabel" type="Label" parent="BackgroundTint/VBoxContainer/GridContainer"]
 layout_mode = 2
 text = "SFX Volume"
 
-[node name="SFXSlider" type="HSlider" parent="Panel/VBoxContainer/GridContainer"]
+[node name="SFXSlider" type="HSlider" parent="BackgroundTint/VBoxContainer/GridContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
@@ -89,35 +90,16 @@ max_value = 1.0
 step = 0.05
 value = 1.0
 
-[node name="HSeparator2" type="HSeparator" parent="Panel/VBoxContainer"]
+[node name="HSeparator2" type="HSeparator" parent="BackgroundTint/VBoxContainer"]
 layout_mode = 2
 
-[node name="KeybindsLabel" type="Label" parent="Panel/VBoxContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 24
-text = "Keybinds"
-horizontal_alignment = 1
-
-[node name="KeybindsScroll" type="ScrollContainer" parent="Panel/VBoxContainer"]
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="KeybindsContainer" type="VBoxContainer" parent="Panel/VBoxContainer/KeybindsScroll"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-theme_override_constants/separation = 10
-
-[node name="HSeparator3" type="HSeparator" parent="Panel/VBoxContainer"]
-layout_mode = 2
-
-[node name="BackButton" type="Button" parent="Panel/VBoxContainer"]
+[node name="BackButton" type="Button" parent="BackgroundTint/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Back"
 
-[connection signal="item_selected" from="Panel/VBoxContainer/GridContainer/ResolutionOption" to="." method="_on_resolution_selected"]
-[connection signal="item_selected" from="Panel/VBoxContainer/GridContainer/WindowModeOption" to="." method="_on_window_mode_selected"]
-[connection signal="value_changed" from="Panel/VBoxContainer/GridContainer/MusicSlider" to="." method="_on_music_value_changed"]
-[connection signal="value_changed" from="Panel/VBoxContainer/GridContainer/SFXSlider" to="." method="_on_sfx_value_changed"]
-[connection signal="pressed" from="Panel/VBoxContainer/BackButton" to="." method="_on_back_button_pressed"]
+[connection signal="item_selected" from="BackgroundTint/VBoxContainer/GridContainer/ResolutionOption" to="." method="_on_resolution_selected"]
+[connection signal="item_selected" from="BackgroundTint/VBoxContainer/GridContainer/WindowModeOption" to="." method="_on_window_mode_selected"]
+[connection signal="value_changed" from="BackgroundTint/VBoxContainer/GridContainer/MusicSlider" to="." method="_on_music_value_changed"]
+[connection signal="value_changed" from="BackgroundTint/VBoxContainer/GridContainer/SFXSlider" to="." method="_on_sfx_value_changed"]
+[connection signal="pressed" from="BackgroundTint/VBoxContainer/BackButton" to="." method="_on_back_button_pressed"]
