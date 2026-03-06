@@ -17,6 +17,7 @@ Here, agents act as Full-Stack Developers working on vertical slices (Epics) rat
    - If bugs exist, it shifts the pipeline back to The Executor.
 4. **The Reviewer (Agent 4 / Integration & Handoff)**
    - Ensures Conventional Commits were used and successfully Squash-Merges the Pull Request into a `develop` or `epic/*` branch (avoid merging directly to `main`).
+   - **Jira Sync:** Periodically runs `gh pr list --state merged` and `git log` to identify completed features from teammates and transitions corresponding Jira stories to **Done**.
    - Prompts The Planner to begin the next Epic.
 
 ## Agentic Guidelines
