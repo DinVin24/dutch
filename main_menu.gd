@@ -1,7 +1,7 @@
 extends Control
 
 func _on_start_button_pressed() -> void:
-	print("Start button pressed! (Game scene not yet implemented)")
+	get_tree().change_scene_to_file("res://game_board.tscn")
 
 func _on_settings_button_pressed() -> void:
 	var settings_scene = preload("res://settings_menu.tscn")
