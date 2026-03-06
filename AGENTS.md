@@ -4,21 +4,24 @@
 Ship the rules-heavy Dutch card game in Godot with a four-person crew that treats every instruction as an opportunity to leverage agentic AI (yourself included). Always keep the README.md rule set front and center: cards stay face down except on draws/swaps/jumps, point values are Ace=1 through King=13 (King of Diamonds = 0), and special moves like Jump-In, Queen, Jack, and the Dutch call govern turn flow and scoring.
 
 ## Roles & Responsibilities
-1. **Arena Architect (Agent 1 / UI & Game Board)**
-   - Build/maintain `game_board.tscn`, `game_board.gd`, and `player_ui.tscn` so the visual arena obeys README rules (places for deck/discard, four player zones, Dutch buttons, etc.).
-   - Integrate signals from the GameManager singleton instead of touching Agent 2 or Agent 3 scenes directly.
-2. **Card Engineer (Agent 2 / Card Data & Visuals)**
-   - Own `card_data.gd`, `card.tscn`, and `card.gd`. Keep card values (Jack=11, Queen=12, King=13, King of Diamonds=0) consistent with the README scoring.
-   - Provide crisp flipping visuals, click detection, and reusable data resources so Agent 3’s logic has a dependable card API.
-3. **Game Flow Lead (Agent 3 / Turn & Rule Logic)**
-   - Implement the turn cycle, Jump-In, special cards, Dutch calling, and scoring inside the GameManager singleton or scripts it owns.
-   - Avoid editing Agent 1 or 2’s scenes; hook into their signals and cards through exported nodes and methods.
-4. **QA / Pipeline (Agent 4 / Testing & Automation)**
-   - Drive agentic test runs (Godot unit tests, input simulations) and documentation updates. Verify agent decisions with replayable test cases.
+Here, agents act as Full-Stack Developers working on vertical slices (Epics) rather than horizontally across domains. Roles are divided by **Development Phase**:
+
+1. **The Planner (Agent 1 / Architecture & Planning)**
+   - Focuses solely on reading game rules, generating User Stories (Epics), and writing an `implementation_plan.md` for the next vertical slice.
+   - Does not write directly to project code files.
+2. **The Executor (Agent 2 / Coding & Implementation)**
+   - Takes the `implementation_plan.md` from The Planner and writes/modifies all necessary UI, Scripts, and Scenes to make that vertical slice function perfectly.
+   - Owns the `task.md` execution flow. 
+3. **The Validator (Agent 3 / QA & Validation)**
+   - Reviews The Executor's commit, plays the game, tests the edge cases in the user stories, and writes the `walkthrough.md`.
+   - If bugs exist, it shifts the pipeline back to The Executor.
+4. **The Reviewer (Agent 4 / Integration & Handoff)**
+   - Ensures Conventional Commits were used and successfully Squash-Merges the Pull Request into `main`.
+   - Prompts The Planner to begin the next Epic.
 
 ## Agentic Guidelines
 - Treat yourself as an agent with foresight: proactively suggest follow-up tests, request missing assets, and double-check README rules before changing gameplay code.
-- Use specialized AI tools (Gemini for layout, ChatGPT Codex for scripts) as noted in `team_workload_split.md`, but keep descriptions and commits human-readable.
+- Use specialized AI tools (e.g. Gemini for layout tasks, ChatGPT Codex for generic scripts) as appropriate, but always keep descriptions and commits human-readable.
 - Each commit/message should follow **Conventional Commits** format (e.g. `feat(ui): implement pause menu`, `fix(logic): correct scoring rule`). Include the Agent role and a descriptive summary in the body.
 - When merging Pull Requests into `main`, always use **Squash and Merge** to keep the history linear and clean.
 - Never change the git email and user name.
@@ -33,5 +36,5 @@ Ship the rules-heavy Dutch card game in Godot with a four-person crew that treat
 - Document any assumptions (e.g., “Jump-In triggered when discarded card matches without turn change”) so later agents can re-evaluate them.
 
 ## Safety Notes
-- The “Google Antigravity” work you inherited is part of this repo’s narrative; treat it as a reference but not a requirement. When in doubt, follow the authoritative README and the team_workload_split ownership matrix.
+- The “Google Antigravity” work you inherited is part of this repo’s narrative; treat it as a reference but not a requirement. When in doubt, follow the authoritative README.
 - If a new team member or agent requests clarification, prefer a short question to avoid delivering the wrong implementation.
