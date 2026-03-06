@@ -15,6 +15,10 @@ run/main_scene="res://main_menu.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"
 
+[autoload]
+
+GameManager="*res://game_manager.gd"
+
 [physics]
 
 3d/physics_engine="Jolt Physics"
@@ -24,11 +28,3 @@ config/icon="res://icon.svg"
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
-
-[autoload]
-
-GameManager="*res://game_manager.gd"
-
-[audio]
-
-buses/default_bus_layout="res://default_bus_layout.tres"
