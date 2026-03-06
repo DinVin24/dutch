@@ -13,6 +13,9 @@ var card_spacing = 110.0
 var padding = 20.0
 var card_pivot = Vector2(50, 70)
 
+var pause_menu_scene = preload("res://pause_menu.tscn")
+var pause_menu_instance: Node = null
+
 func _ready():
 	print("Game Board: Ready. Connecting signals...")
 	GameManager.game_state_changed.connect(_on_game_state_changed)
@@ -115,3 +118,27 @@ func get_card_transform(p_idx: int, card_idx: int, total_cards: int) -> Dictiona
 			target_pivot = Vector2(screen_size.x - padding - half_h, start_y + (card_idx * card_spacing))
 	
 	return {"position": target_pivot, "rotation": rot_deg}
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		if pause_menu_instance == null:
+			_pause_game()
+		else:
+			_resume_game()
+
+func _pause_game() -> void:
+	get_tree().paused = true
+	pause_menu_instance = pause_menu_scene.instantiate()
+	add_child(pause_menu_instance)
+	pause_menu_instance.resumed.connect(_resume_game)
+	pause_menu_instance.main_menu_requested.connect(_go_to_main_menu)
+
+func _resume_game() -> void:
+	get_tree().paused = false
+	if pause_menu_instance:
+		pause_menu_instance.queue_free()
+		pause_menu_instance = null
+
+func _go_to_main_menu() -> void:
+	get_tree().paused = false
+	get_tree().change_scene_to_file("res://main_menu.tscn")
