@@ -44,17 +44,16 @@ func _handle_initial_deal():
 	for p_idx in range(GameManager.num_players):
 		for i in range(cards_per_player):
 			var card_data_dict = GameManager.deck_manager.draw_card()
-			if card_data_dict.is_empty(): break
+			if card_data_dict.is_empty():
+				print("Deck is empty!")
+				break
 			
 			var card_inst = card_scene.instantiate()
-			var card_data = CardData.new()
-			card_data.suit = card_data_dict.suit
-			card_data.rank = card_data_dict.rank
-			card_data.value = card_data_dict.value
+			var card_data = CardData.new(card_data_dict.rank, card_data_dict.suit)
 			card_data.is_face_up = true
-			card_inst.setup(card_data)
 			
 			add_child(card_inst)
+			card_inst.setup(card_data) # Call after add_child to be safe
 			player_hands[p_idx].append(card_inst)
 			
 			# Get target transform
@@ -71,6 +70,7 @@ func _handle_initial_deal():
 			var tween = create_tween()
 			tween.tween_property(card_inst, "global_position", final_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 			
+			print("Dealt ", card_data.display_name(), " to Player ", p_idx)
 			await get_tree().create_timer(0.1).timeout
 
 func reposition_all_cards():
