@@ -13,9 +13,17 @@ var is_flipping: bool = false
 
 func setup(p_data: CardData):
 	data = p_data
+	# If we are already in the tree (e.g. setup called after add_child), update now
+	if is_node_ready():
+		_update_visuals()
+
+func _ready():
+	# This ensures visuals are set once the node enters the tree and @onready is done
 	_update_visuals()
 
 func _update_visuals():
+	if not data: return
+	
 	if data.is_face_up:
 		front_face.show()
 		back_face.hide()

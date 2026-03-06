@@ -45,16 +45,24 @@ func _handle_initial_deal():
 		var marker = positions[p_idx]
 		var is_vertical = (marker == player_pos_left or marker == player_pos_right)
 		
-		# Selection of centering/spread logic
+		# Define spread total height/width
+		var total_spread = card_spacing * (cards_per_player - 1)
+		
+		# Base target positions relative to marker
 		var start_pos: Vector2
 		if is_vertical:
-			# Vertical spread logic for Left/Right
-			var start_y = marker.global_position.y - (card_spacing * (cards_per_player - 1)) / 2.0 - (card_width / 2.0)
+			# For vertical layouts, center the spread around the marker's Y
+			var start_y = marker.global_position.y - (total_spread / 2.0)
+			# Move Right side slightly lower as per user request (added 20px)
+			if marker == player_pos_right:
+				start_y += 20
 			start_pos = Vector2(marker.global_position.x, start_y)
 		else:
-			# Horizontal spread logic for Top/Bottom
-			var start_x = marker.global_position.x - (card_spacing * (cards_per_player - 1)) / 2.0 - (card_width / 2.0)
-			start_pos = Vector2(start_x, marker.global_position.y - 70)
+			# For horizontal layouts (Top/Bottom), center around marker's X
+			var start_x = marker.global_position.x - (total_spread / 2.0)
+			# Offset from markers slightly
+			var y_offset = -70 if marker == player_pos_bottom else 0
+			start_pos = Vector2(start_x, marker.global_position.y + y_offset)
 		
 		for i in range(cards_per_player):
 			var card_data_dict = GameManager.deck_manager.draw_card()
@@ -65,29 +73,38 @@ func _handle_initial_deal():
 			card_data.suit = card_data_dict.suit
 			card_data.rank = card_data_dict.rank
 			card_data.value = card_data_dict.value
-			
-			# User request: All cards face-up for verification
 			card_data.is_face_up = true
 			
+			# IMPORTANT: Setup happens before add_child, 
+			# but CardUI._ready handles the visual update now.
 			card_inst.setup(card_data)
-			add_child(card_inst)
 			
-			# Handle rotation for side players
+			# Rotation
 			if marker == player_pos_left:
 				card_inst.rotation_degrees = 90
 			elif marker == player_pos_right:
 				card_inst.rotation_degrees = -90
 			
-			# Position calculations based on orientation
-			var target_pos: Vector2
+			add_child(card_inst)
+			
+			# Target calculations
+			var spread_offset = i * card_spacing
+			var final_target = start_pos
 			if is_vertical:
-				target_pos = Vector2(start_pos.x, start_pos.y + (i * card_spacing))
+				final_target.y += spread_offset
 			else:
-				target_pos = Vector2(start_pos.x + (i * card_spacing), start_pos.y)
-				
-			card_inst.global_position = deck_area.global_position
+				final_target.x += spread_offset
+			
+			# COMPENSATE FOR PIVOT (center of 100x140 card is 50,70)
+			# This makes the CENTER of the card match the target coordinate
+			var visual_center = Vector2(50, 70)
+			card_inst.global_position = final_target - visual_center
+			
+			# Spawn at deck
+			var spawn_pos = deck_area.global_position - visual_center
+			card_inst.global_position = spawn_pos
 			
 			var tween = create_tween()
-			tween.tween_property(card_inst, "global_position", target_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tween.tween_property(card_inst, "global_position", final_target - visual_center, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 			
 			await get_tree().create_timer(0.1).timeout
