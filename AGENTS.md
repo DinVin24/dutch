@@ -20,6 +20,7 @@ Ship the rules-heavy Dutch card game in Godot with a four-person crew that treat
 - Treat yourself as an agent with foresight: proactively suggest follow-up tests, request missing assets, and double-check README rules before changing gameplay code.
 - Use specialized AI tools (Gemini for layout, ChatGPT Codex for scripts) as noted in `team_workload_split.md`, but keep descriptions and commits human-readable.
 - Each commit/message should follow **Conventional Commits** format (e.g. `feat(ui): implement pause menu`, `fix(logic): correct scoring rule`). Include the Agent role and a descriptive summary in the body.
+- When merging Pull Requests into `main`, always use **Squash and Merge** to keep the history linear and clean.
 - Never change the git email and user name.
 
 ## Coordination
