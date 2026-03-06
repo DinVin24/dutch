@@ -1,4 +1,4 @@
-[gd_scene load_steps=3 format=3 uid="uid://b5k8j6u8e2r8j"]
+[gd_scene load_steps=4 format=3 uid="uid://b5k8j6u8e2r8j"]
 
 [ext_resource type="Script" path="res://card.gd" id="1_script"]
 [ext_resource type="Texture2D" path="res://icon.svg" id="2_icon"]
@@ -12,7 +12,7 @@ offset_bottom = 140.0
 pivot_offset = Vector2(50, 70)
 script = ExtResource("1_script")
 
-[node name="BackFace" type="ColorRect" parent="."]
+[node name="BackFace" type="TextureRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -20,20 +20,12 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.141176, 0.141176, 0.141176, 1)
+texture = ExtResource("2_icon")
+stretch_mode = 2
+expand_mode = 1
+modulate = Color(0.13, 0.13, 0.13, 1)
 
-[node name="Border" type="ReferenceRect" parent="BackFace"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-border_color = Color(1, 1, 1, 1)
-border_width = 2.0
-editor_only = false
-
-[node name="FrontFace" type="ColorRect" parent="."]
+[node name="FrontFace" type="TextureRect" parent="."]
 visible = false
 layout_mode = 1
 anchors_preset = 15
@@ -42,6 +34,10 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+texture = ExtResource("2_icon")
+stretch_mode = 2
+expand_mode = 1
+modulate = Color(0.95, 0.95, 0.95, 1)
 
 [node name="Icon" type="TextureRect" parent="FrontFace"]
 layout_mode = 1
@@ -58,6 +54,7 @@ grow_horizontal = 2
 grow_vertical = 2
 texture = ExtResource("2_icon")
 expand_mode = 1
+stretch_mode = 2
 
 [node name="Label" type="Label" parent="FrontFace"]
 layout_mode = 1
@@ -72,4 +69,18 @@ theme_override_colors/font_color = Color(0, 0, 0, 1)
 text = "A"
 horizontal_alignment = 1
 
-[connection signal="gui_input" from="." to="." method="_on_gui_input"]
+[node name="Interaction" type="TextureButton" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+focus_mode = 0
+flat = true
+expand_mode = 1
+stretch_mode = 0
+modulate = Color(1, 1, 1, 0)
+
+[connection signal="pressed" from="Interaction" to="." method="_on_card_pressed"]

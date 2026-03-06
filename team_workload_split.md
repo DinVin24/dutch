@@ -1,8 +1,8 @@
 # Team Workload Split - Dutch Card Game
 
-To avoid stepping on each other's toes and dealing with those murky merge conflicts, we'll split the project strictly by **Domain/Component**. Each person owns different scripts and scenes.
+To avoid stepping on each other's toes and dealing with those murky merge conflicts, we'll split the project strictly by **Domain/Component**. Each agent owns different scripts and scenes.
 
-## Person 1: aalex069 (The UI & Game Board Architect)
+## Agent 1: Arena Architect (The UI & Game Board Architect)
 **Tool:** Gemini
 **Reason:** Gemini is great at drafting layout structures and understanding visual relationships, making it perfect for generating the Godot Control node trees and structural UI scripts. 
 **Goal:** Build the visual arena where the game takes place.
@@ -18,20 +18,16 @@ To avoid stepping on each other's toes and dealing with those murky merge confli
 
 ---
 
-## Person 2: vlad (The Card Engineer - Data & Visuals)
+## Agent 2: Card Engineer (Data & Visuals)
 **Tool:** ChatGPT Codex with GPT 5.1 mini
 **Reason:** GPT 5.1 mini is fast and precise for creating straightforward, object-oriented scripts and tightly scoped classes like the Card data structures and state flip animations.
-**Goal:** Create the core "Card" object that handles clicking, flipping, and data.
+**Goal:** Create the core “Card” object that handles clicking, flipping, and data.
 **Focus Files:** `card.tscn`, `card.gd`, `card_data.gd` (or Resource)
 
 **Tasks:**
-1. Create a `card_data.gd` Resource script that holds a card's underlying data (`suit`, `rank`, `point_value`).
-    - *Tip:* Jack = 11, Queen = 12, King = 13, Red King = 0.
-2. Build the `card.tscn` scene. It needs:
-   - A `TextureRect` or `Sprite2D` for the front of the card.
-   - A `TextureRect` or `Sprite2D` for the back of the card.
-   - An `Area2D` (if 2D) or `TextureButton` to detect mouse clicks/hovers.
-3. Write `card.gd` to handle flipping animations (tweening the scale to simulate a 3D flip) and emit signals when the card is clicked.
+1. Create a `card_data.gd` Resource script holding `suit`, `rank`, and derived `point_value`, enshrining Jack=11, Queen=12, King=13, and King of Diamonds = 0; include helpers for normalized display names so any UI reflects the rules.
+2. Build `card.tscn` with a textured front/back setup plus a transparent `TextureButton` (or Area2D) so clicks only hit the card interaction area, and wire in label/icon nodes for suit/rank presentation.
+3. Implement `card.gd` to consume the resource, update front/back visuals based on `is_face_up`, color the label/icon by suit, animate flips via tweens, and emit `card_clicked`/`card_flipped` so the GameManager can react.
 
 ## Workflow Rules to Avoid Arguments
 - **Never edit another person's scene.** Person 3's core logic is already implemented. If Person 1 or 2 needs UI/Card logic to interact with the game state, use the signals in the `GameManager` singleton.
