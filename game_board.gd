@@ -10,7 +10,7 @@ extends Control
 # Responsive storage: Array of Arrays [player_index][card_index] = Card node
 var player_hands: Array = [[], [], [], []]
 var card_spacing = 110.0
-var padding = 60.0
+var padding = 20.0
 var card_pivot = Vector2(50, 70)
 
 func _ready():

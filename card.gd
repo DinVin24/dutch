@@ -17,10 +17,10 @@ func setup(p_data: CardData) -> void:
 		push_warning("CardData not provided to CardUI")
 		return
 	data = p_data
-	# Recalculate if needed
+	# Recalculate if needed (ensure King of Diamonds etc are right)
 	data.recalc_point_value()
 	
-	# If we are already in the tree (e.g. setup called after add_child), update now
+	# If we are already in the tree, update now
 	if is_node_ready():
 		_update_visuals()
 
@@ -35,20 +35,19 @@ func _update_visuals() -> void:
 		front_face.visible = true
 		back_face.visible = false
 		
-		# Show rank and point value if available
+		# Show rank and suit
 		rank_label.text = str(data.rank)
-		if data.point_value != int(data.rank) and data.rank != "A" and data.rank != "J" and data.rank != "Q" and data.rank != "K":
-			# This is a bit complex, let's just show rank and suit
-			pass
+		suit_label.text = str(data.suit)
 		
-		# Classmate's logic for color
+		# Classmate's logic for color (fixing syntax error)
 		var normalized_suit = data.suit.strip_edges().capitalize()
 		var is_red = normalized_suit in ["Hearts", "Diamonds"]
-		rank_label.theme_override_colors / font_color = Color(0.8, 0.1, 0.1) if is_red else Color(0, 0, 0)
-		suit_label.text = str(data.suit)
-		suit_label.theme_override_colors / font_color = Color(0.8, 0.1, 0.1) if is_red else Color(0, 0, 0)
+		var text_color = Color(0.8, 0.1, 0.1) if is_red else Color(0, 0, 0)
 		
-		print("CardUI: Displaying ", rank_label.text, " of ", suit_label.text)
+		rank_label.add_theme_color_override("font_color", text_color)
+		suit_label.add_theme_color_override("font_color", text_color)
+		
+		print("CardUI: Displaying %s of %s (Value: %d)" % [data.rank, data.suit, data.point_value])
 	else:
 		front_face.visible = false
 		back_face.visible = true
@@ -76,6 +75,5 @@ func _on_interaction_pressed() -> void:
 	emit_signal("card_clicked", self , data)
 
 func _on_gui_input(event: InputEvent):
-	# Keep this as fallback or if button doesn't cover everything
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		emit_signal("card_clicked", self , data)
