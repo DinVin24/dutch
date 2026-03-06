@@ -19,6 +19,10 @@ signal deck_ready
 var current_state: GameState = GameState.INITIALIZING
 var deck_manager: DeckManager
 
+# Match Settings
+var num_players: int = 4 # Default to 4 players
+var players_info: Array = []
+
 func _ready():
 	deck_manager = DeckManager.new()
 	add_child(deck_manager)
@@ -26,6 +30,18 @@ func _ready():
 	# Initial deck creation
 	deck_manager.create_deck()
 	deck_ready.emit()
+
+func initialize_game(p_count: int = 4):
+	num_players = p_count
+	players_info.clear()
+	for i in range(num_players):
+		players_info.append({
+			"id": i,
+			"name": "Player " + str(i + 1) if i == 0 else "Bot " + str(i),
+			"score": 0,
+			"hand": [] # CardData objects
+		})
+	start_game()
 
 func change_state(new_state: GameState):
 	current_state = new_state
