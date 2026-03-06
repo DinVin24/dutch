@@ -23,60 +23,53 @@ func _on_game_state_changed(new_state):
 			_handle_initial_deal()
 
 func _handle_initial_deal():
-	print("Game Board: Dealing cards to ", GameManager.num_players, " players...")
+	print("Game Board: Dealing cards with border-based positioning...")
 	var card_scene = preload("res://card.tscn")
 	var card_spacing = 110.0
 	var cards_per_player = 4
-	var card_width = 100.0
+	var card_size = Vector2(100, 140)
+	var padding = 20.0
 	
-	# Map player index to Marker2D nodes
-	var positions = [player_pos_bottom]
-	if GameManager.num_players == 2:
-		positions.append(player_pos_top)
-	elif GameManager.num_players == 3:
-		positions.append(player_pos_left)
-		positions.append(player_pos_top)
-	elif GameManager.num_players == 4:
-		positions.append(player_pos_left)
-		positions.append(player_pos_top)
-		positions.append(player_pos_right)
+	var screen_size = get_viewport_rect().size
+	var total_spread = card_spacing * (cards_per_player - 1)
 	
 	for p_idx in range(GameManager.num_players):
-		var marker = positions[p_idx]
-		var is_vertical = (marker == player_pos_left or marker == player_pos_right)
-		
-		# Define spread total height/width
-		var total_spread = card_spacing * (cards_per_player - 1)
-		
-		# Base target positions relative to markers
 		var start_pos: Vector2
-		if is_vertical:
-			# Use the marker's Y, but specifically sync Right to Left as requested
-			var target_y = marker.global_position.y
-			if marker == player_pos_right:
-				target_y = player_pos_left.global_position.y
-				
-			var start_y = target_y - (total_spread / 2.0)
-			
-			var x_pos = marker.global_position.x
-			if marker == player_pos_right:
-				# Move Right player further RIGHT
-				x_pos += 150
-			elif marker == player_pos_left:
-				# Move Left player further RIGHT (closer to table center)
-				x_pos += 120
-				
-			start_pos = Vector2(x_pos, start_y)
-		else:
-			# For horizontal layouts (Top/Bottom), center around marker's X
-			var start_x = marker.global_position.x - (total_spread / 2.0)
-			# Move bottom player MUCH lower (+150 padding from marker)
-			var y_pos = marker.global_position.y
-			if marker == player_pos_bottom:
-				y_pos += 150
-			
-			start_pos = Vector2(start_x, y_pos)
+		var rotation = 0.0
+		var is_vertical = false
 		
+		match p_idx:
+			0: # BOTTOM (Player)
+				var start_x = (screen_size.x - total_spread) / 2.0
+				var y_pos = screen_size.y - padding - card_size.y
+				start_pos = Vector2(start_x, y_pos)
+			1: # TOP (Bot 1)
+				if GameManager.num_players == 2:
+					var start_x = (screen_size.x - total_spread) / 2.0
+					var y_pos = padding
+					start_pos = Vector2(start_x, y_pos)
+				else: # For 3/4 players, 1 is Left
+					var x_pos = padding
+					var start_y = (screen_size.y - total_spread) / 2.0
+					start_pos = Vector2(x_pos, start_y)
+					rotation = 90
+					is_vertical = true
+			2: # TOP or RIGHT
+				if GameManager.num_players == 3:
+					var start_x = (screen_size.x - total_spread) / 2.0
+					var y_pos = padding
+					start_pos = Vector2(start_x, y_pos)
+				else: # For 4 players, 2 is Top
+					var start_x = (screen_size.x - total_spread) / 2.0
+					var y_pos = padding
+					start_pos = Vector2(start_x, y_pos)
+			3: # RIGHT
+				var x_pos = screen_size.x - padding - card_size.y # card_size.y because it's rotated 90
+				var start_y = (screen_size.y - total_spread) / 2.0
+				start_pos = Vector2(x_pos, start_y)
+				rotation = -90
+				is_vertical = true
+
 		for i in range(cards_per_player):
 			var card_data_dict = GameManager.deck_manager.draw_card()
 			if card_data_dict.is_empty(): break
@@ -87,37 +80,29 @@ func _handle_initial_deal():
 			card_data.rank = card_data_dict.rank
 			card_data.value = card_data_dict.value
 			card_data.is_face_up = true
-			
-			# IMPORTANT: Setup happens before add_child, 
-			# but CardUI._ready handles the visual update now.
 			card_inst.setup(card_data)
 			
-			# Rotation
-			if marker == player_pos_left:
-				card_inst.rotation_degrees = 90
-			elif marker == player_pos_right:
-				card_inst.rotation_degrees = -90
-			
+			card_inst.rotation_degrees = rotation
 			add_child(card_inst)
 			
-			# Target calculations
-			var spread_offset = i * card_spacing
-			var final_target = start_pos
+			# Pivot is at (50, 70). Positioning global_position means positioning the TOP-LEFT of the card.
+			# But rotation happens around the pivot.
+			var offset = i * card_spacing
+			var target_pos = start_pos
 			if is_vertical:
-				final_target.y += spread_offset
+				target_pos.y += offset
 			else:
-				final_target.x += spread_offset
+				target_pos.x += offset
 			
-			# COMPENSATE FOR PIVOT (center of 100x140 card is 50,70)
-			# This makes the CENTER of the card match the target coordinate
-			var visual_center = Vector2(50, 70)
-			card_inst.global_position = final_target - visual_center
+			# To place the card relative to its BOUNDS while it has a pivot at center:
+			# target_pos is the intended Top-Left of the card hand.
+			# We must set global_position so the center (pivot) lands correctly.
+			card_inst.global_position = target_pos
 			
-			# Spawn at deck
-			var spawn_pos = deck_area.global_position - visual_center
+			var spawn_pos = deck_area.global_position
 			card_inst.global_position = spawn_pos
 			
 			var tween = create_tween()
-			tween.tween_property(card_inst, "global_position", final_target - visual_center, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tween.tween_property(card_inst, "global_position", target_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 			
 			await get_tree().create_timer(0.1).timeout
