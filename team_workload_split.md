@@ -2,7 +2,9 @@
 
 To avoid stepping on each other's toes and dealing with those murky merge conflicts, we'll split the project strictly by **Domain/Component**. Each person owns different scripts and scenes.
 
-## Person 1: The UI & Game Board Architect
+## Person 1: aalex069 (The UI & Game Board Architect)
+**Tool:** Gemini
+**Reason:** Gemini is great at drafting layout structures and understanding visual relationships, making it perfect for generating the Godot Control node trees and structural UI scripts. 
 **Goal:** Build the visual arena where the game takes place.
 **Focus Files:** `game_board.tscn`, `game_board.gd`, `player_ui.tscn`
 
@@ -16,7 +18,9 @@ To avoid stepping on each other's toes and dealing with those murky merge confli
 
 ---
 
-## Person 2: The Card Engineer (Data & Visuals)
+## Person 2: vlad (The Card Engineer - Data & Visuals)
+**Tool:** ChatGPT Codex with GPT 5.1 mini
+**Reason:** GPT 5.1 mini is fast and precise for creating straightforward, object-oriented scripts and tightly scoped classes like the Card data structures and state flip animations.
 **Goal:** Create the core "Card" object that handles clicking, flipping, and data.
 **Focus Files:** `card.tscn`, `card.gd`, `card_data.gd` (or Resource)
 
@@ -31,7 +35,9 @@ To avoid stepping on each other's toes and dealing with those murky merge confli
 
 ---
 
-## Person 3: The Game State Manager (The Brains)
+## Person 3: DinVin (The Game State Manager - The Brains)
+**Tool:** Antigravity with Gemini 3.1 Pro (Me!)
+**Reason:** Building the core game loop, state machine, and ruleset requires the most context holding and agentic capability. Antigravity can autonomously architect the singleton architecture and weave the signals together perfectly.
 **Goal:** Write the background logic that manages the rules, turns, and deck generation. This person shouldn't touch the UI scenes at all yet.
 **Focus Files:** `game_manager.gd` (Autoload/Singleton), `deck_manager.gd`
 
