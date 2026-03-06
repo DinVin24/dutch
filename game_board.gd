@@ -22,10 +22,38 @@ func _ready():
 	GameManager.game_state_changed.connect(_on_game_state_changed)
 	resized.connect(_on_resized)
 	
+	# Connect deck interaction
+	var deck_button = $CenterTable/DeckArea/Placeholder/Interaction
+	if deck_button:
+		deck_button.pressed.connect(_on_deck_clicked)
+	
 	await get_tree().process_frame
+	_update_deck_visual()
 	
 	print("Game Board: Starting game...")
 	GameManager.initialize_game(4)
+
+func _update_deck_visual():
+	# Clear previous deck visuals
+	for child in deck_area.get_children():
+		if child.name.begins_with("DeckVisual"):
+			child.queue_free()
+	
+	# Add a few offset cards to represent the deck
+	var card_scene = preload("res://card.tscn")
+	var stack_size = min(5, GameManager.deck_manager.deck.size())
+	for i in range(stack_size):
+		var card_bg = card_scene.instantiate()
+		deck_area.add_child(card_bg)
+		card_bg.name = "DeckVisual_" + str(i)
+		card_bg.setup(CardData.new("Ace", "Clubs")) # Data doesn't matter for back
+		card_bg.position = Vector2(-i * 2, -i * 2)
+		card_bg.z_index = -i
+		card_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+func _on_deck_clicked():
+	print("Deck clicked!")
+	# Logic for drawing will go in next Epic, but for now we just log it.
 
 func _on_resized():
 	# Reposition all cards instantly when window size changes
@@ -54,10 +82,10 @@ func _handle_initial_deal():
 			
 			var card_inst = card_scene.instantiate()
 			var card_data = CardData.new(card_data_dict.rank, card_data_dict.suit)
-			card_data.is_face_up = true
+			card_data.is_face_up = false # Standard Dutch Rule: Dealt face down
 			
 			add_child(card_inst)
-			card_inst.setup(card_data) # Call after add_child to be safe
+			card_inst.setup(card_data)
 			player_hands[p_idx].append(card_inst)
 			
 			# Get target transform
@@ -74,8 +102,23 @@ func _handle_initial_deal():
 			var tween = create_tween()
 			tween.tween_property(card_inst, "global_position", final_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 			
-			print("Dealt ", card_data.display_name(), " to Player ", p_idx)
-			await get_tree().create_timer(0.1).timeout
+			await get_tree().create_timer(0.05).timeout
+	
+	# Initial Discard
+	var first_discard = GameManager.deck_manager.draw_card()
+	if not first_discard.is_empty():
+		var discard_inst = card_scene.instantiate()
+		var discard_data = CardData.new(first_discard.rank, first_discard.suit)
+		discard_data.is_face_up = true
+		add_child(discard_inst)
+		discard_inst.setup(discard_data)
+		
+		# Position at discard area
+		discard_inst.global_position = discard_area.global_position - card_pivot
+		GameManager.deck_manager.discard_card(first_discard)
+
+	print("Game Board: Deal complete.")
+	GameManager.change_state(GameManager.GameState.PLAYER_TURN)
 
 func reposition_all_cards():
 	for p_idx in range(player_hands.size()):
