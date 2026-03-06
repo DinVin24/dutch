@@ -23,16 +23,16 @@ func _on_game_state_changed(new_state):
 			_handle_initial_deal()
 
 func _handle_initial_deal():
-	print("Game Board: Dealing cards with corrected pivot-compensated positioning...")
+	print("Game Board: Dealing cards with robust pivot-compensated positioning...")
 	var card_scene = preload("res://card.tscn")
 	var card_spacing = 110.0
 	var cards_per_player = 4
-	var padding = 20.0
+	var padding = 60.0 # Increased padding slightly to ensure no clipping
 	
-	# Current card dimensions from card.tscn/gd
-	var card_width = 100.0
-	var card_height = 140.0
-	var card_pivot = Vector2(50, 70) # Center of the card
+	# Dimensions for calculations (100x140 card)
+	var card_pivot = Vector2(50, 70)
+	var half_h = 70.0
+	var half_w = 50.0
 	
 	var screen_size = get_viewport_rect().size
 	var total_spread = card_spacing * (cards_per_player - 1)
@@ -51,47 +51,44 @@ func _handle_initial_deal():
 			card_inst.setup(card_data)
 			
 			var target_pivot: Vector2
-			var rotation = 0.0
+			var rot_deg = 0.0
 			
-			# Logic for "20 pixels away from the closest border"
-			# We calculate the intended WORLD position of the card's visual center (pivot)
 			match p_idx:
 				0: # BOTTOM
+					rot_deg = 0
 					var start_x = (screen_size.x - total_spread) / 2.0
-					target_pivot = Vector2(start_x + (i * card_spacing), screen_size.y - padding - (card_height / 2.0))
-					rotation = 0
-				1: # TOP or LEFT
+					target_pivot = Vector2(start_x + (i * card_spacing), screen_size.y - padding - half_h)
+				1: # TOP (in 2-player) or LEFT (in 3-4 player)
 					if GameManager.num_players == 2:
+						rot_deg = 180
 						var start_x = (screen_size.x - total_spread) / 2.0
-						target_pivot = Vector2(start_x + (i * card_spacing), padding + (card_height / 2.0))
-						rotation = 180
-					else: # LEFT
+						target_pivot = Vector2(start_x + (i * card_spacing), padding + half_h)
+					else:
+						rot_deg = 90
 						var start_y = (screen_size.y - total_spread) / 2.0
-						target_pivot = Vector2(padding + (card_height / 2.0), start_y + (i * card_spacing))
-						rotation = 90
+						target_pivot = Vector2(padding + half_h, start_y + (i * card_spacing))
 				2: # TOP
+					rot_deg = 180
 					var start_x = (screen_size.x - total_spread) / 2.0
-					target_pivot = Vector2(start_x + (i * card_spacing), padding + (card_height / 2.0))
-					rotation = 180
+					target_pivot = Vector2(start_x + (i * card_spacing), padding + half_h)
 				3: # RIGHT
+					rot_deg = -90
 					var start_y = (screen_size.y - total_spread) / 2.0
-					target_pivot = Vector2(screen_size.x - padding - (card_height / 2.0), start_y + (i * card_spacing))
-					rotation = -90
+					target_pivot = Vector2(screen_size.x - padding - half_h, start_y + (i * card_spacing))
 
-			card_inst.rotation_degrees = rotation
+			# Add to scene FIRST so global properties work correctly
 			add_child(card_inst)
+			card_inst.rotation_degrees = rot_deg
 			
-			# CRITICAL: In Godot, for a Control node with a pivot_offset, 
-			# global_position = target_pivot_position - pivot_offset.rotated(global_rotation)
-			var rad_rot = deg_to_rad(rotation)
-			var rotated_pivot = card_pivot.rotated(rad_rot)
-			var final_global_pos = target_pivot - rotated_pivot
+			# Pivot-aware positioning formula:
+			# global_position = desired_pivot_world_pos - pivot_offset.rotated(global_rotation)
+			var final_pos = target_pivot - card_pivot.rotated(deg_to_rad(rot_deg))
 			
-			# Initial spawn at deck (also compensated)
+			# Spawn at deck
 			var spawn_pos = deck_area.global_position - card_pivot
 			card_inst.global_position = spawn_pos
 			
 			var tween = create_tween()
-			tween.tween_property(card_inst, "global_position", final_global_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tween.tween_property(card_inst, "global_position", final_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 			
 			await get_tree().create_timer(0.1).timeout
