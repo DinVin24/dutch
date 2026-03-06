@@ -48,29 +48,34 @@ func _handle_initial_deal():
 		# Define spread total height/width
 		var total_spread = card_spacing * (cards_per_player - 1)
 		
-		# Base target positions relative to marker
+		# Base target positions relative to markers
 		var start_pos: Vector2
 		if is_vertical:
-			# USE THE SAME CENTER Y FOR BOTH LEFT AND RIGHT
-			# (Calculated from the viewport center to avoid any marker drift)
-			var center_y = get_viewport_rect().size.y / 2.0
-			var start_y = center_y - (total_spread / 2.0)
+			# Use the marker's Y, but specifically sync Right to Left as requested
+			var target_y = marker.global_position.y
+			if marker == player_pos_right:
+				target_y = player_pos_left.global_position.y
+				
+			var start_y = target_y - (total_spread / 2.0)
 			
 			var x_pos = marker.global_position.x
 			if marker == player_pos_right:
-				# Move RIGHT player MORE right (away from center)
-				x_pos += 80
+				# Move Right player further RIGHT
+				x_pos += 150
 			elif marker == player_pos_left:
-				# Move LEFT cards to the right (closer to center)
-				x_pos += 80
+				# Move Left player further RIGHT (closer to table center)
+				x_pos += 120
 				
 			start_pos = Vector2(x_pos, start_y)
 		else:
 			# For horizontal layouts (Top/Bottom), center around marker's X
 			var start_x = marker.global_position.x - (total_spread / 2.0)
-			# Move bottom player LOWER (changed from +20 to +100)
-			var y_offset = 100 if marker == player_pos_bottom else 0
-			start_pos = Vector2(start_x, marker.global_position.y + y_offset)
+			# Move bottom player MUCH lower (+150 padding from marker)
+			var y_pos = marker.global_position.y
+			if marker == player_pos_bottom:
+				y_pos += 150
+			
+			start_pos = Vector2(start_x, y_pos)
 		
 		for i in range(cards_per_player):
 			var card_data_dict = GameManager.deck_manager.draw_card()

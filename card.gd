@@ -18,20 +18,22 @@ func setup(p_data: CardData):
 		_update_visuals()
 
 func _ready():
-	# This ensures visuals are set once the node enters the tree and @onready is done
 	_update_visuals()
 
 func _update_visuals():
-	if not data: return
+	if not data:
+		return
 	
 	if data.is_face_up:
-		front_face.show()
-		back_face.hide()
-		rank_label.text = data.rank
-		suit_label.text = data.suit
+		front_face.visible = true
+		back_face.visible = false
+		rank_label.text = str(data.rank)
+		suit_label.text = str(data.suit)
+		print("CardUI: Displaying ", rank_label.text, " of ", suit_label.text)
 	else:
-		front_face.hide()
-		back_face.show()
+		front_face.visible = false
+		back_face.visible = true
+		print("CardUI: Card is face down")
 
 func flip():
 	if is_flipping: return
