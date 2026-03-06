@@ -27,6 +27,7 @@ const RANKS = [
 
 func create_deck():
 	deck.clear()
+	discard_pile.clear()
 	for suit in SUITS:
 		for rank in RANKS:
 			var card_info = {
