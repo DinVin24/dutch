@@ -22,6 +22,9 @@ const CARD_HEIGHT = 140
 const SUIT_ORDER = ["Hearts", "Diamonds", "Clubs", "Spades"]
 const RANK_ORDER = ["Ace", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Jack", "Queen", "King"]
 
+# Static cache to avoid reloading the same file 52 times
+static var _master_texture: Texture2D = null
+
 func setup(p_data: CardData) -> void:
 	data = p_data
 	if is_node_ready():
@@ -74,20 +77,26 @@ func _update_visuals() -> void:
 		modulate = Color(1, 1, 1)
 
 func _apply_atlas_textures():
-	if not FileAccess.file_exists(SPRITE_SHEET_PATH):
-		front_face.texture = null
-		back_face.texture = null
-		return
+	if _master_texture == null:
+		if not FileAccess.file_exists(SPRITE_SHEET_PATH):
+			print("CardUI Error: Sprite sheet NOT found at ", SPRITE_SHEET_PATH)
+			front_face.texture = null
+			back_face.texture = null
+			return
 		
-	var atlas = load(SPRITE_SHEET_PATH)
-	if not atlas:
-		return
+		_master_texture = load(SPRITE_SHEET_PATH)
+		if _master_texture:
+			print("CardUI: Master sprite sheet loaded successfully (", _master_texture.get_width(), "x", _master_texture.get_height(), ")")
+		else:
+			print("CardUI Error: Failed to load master sprite sheet as a texture!")
+			return
 
 	# Back Face Calculation (Row 4, Col 0 as per guide)
-	var back_atlas = AtlasTexture.new()
-	back_atlas.atlas = atlas
-	back_atlas.region = Rect2(0, 4 * CARD_HEIGHT, CARD_WIDTH, CARD_HEIGHT)
-	back_face.texture = back_atlas
+	if back_face.texture == null:
+		var back_atlas = AtlasTexture.new()
+		back_atlas.atlas = _master_texture
+		back_atlas.region = Rect2(0, 4 * CARD_HEIGHT, CARD_WIDTH, CARD_HEIGHT)
+		back_face.texture = back_atlas
 	
 	# Front Face Calculation
 	var suit_idx = SUIT_ORDER.find(data.suit.capitalize())
@@ -95,10 +104,11 @@ func _apply_atlas_textures():
 	
 	if suit_idx != -1 and rank_idx != -1:
 		var front_atlas = AtlasTexture.new()
-		front_atlas.atlas = atlas
+		front_atlas.atlas = _master_texture
 		front_atlas.region = Rect2(rank_idx * CARD_WIDTH, suit_idx * CARD_HEIGHT, CARD_WIDTH, CARD_HEIGHT)
 		front_face.texture = front_atlas
 	else:
+		print("CardUI Error: Invalid rank/suit mapping: ", data.suit, "/", data.rank)
 		front_face.texture = null
 
 func set_selected(p_selected: bool):
