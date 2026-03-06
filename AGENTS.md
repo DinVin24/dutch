@@ -16,14 +16,15 @@ Here, agents act as Full-Stack Developers working on vertical slices (Epics) rat
    - Reviews The Executor's commit, plays the game, tests the edge cases in the user stories, and writes the `walkthrough.md`.
    - If bugs exist, it shifts the pipeline back to The Executor.
 4. **The Reviewer (Agent 4 / Integration & Handoff)**
-   - Ensures Conventional Commits were used and successfully Squash-Merges the Pull Request into `main`.
+   - Ensures Conventional Commits were used and successfully Squash-Merges the Pull Request into a `develop` or `epic/*` branch (avoid merging directly to `main`).
    - Prompts The Planner to begin the next Epic.
 
 ## Agentic Guidelines
 - Treat yourself as an agent with foresight: proactively suggest follow-up tests, request missing assets, and double-check README rules before changing gameplay code.
 - Use specialized AI tools (e.g. Gemini for layout tasks, ChatGPT Codex for generic scripts) as appropriate, but always keep descriptions and commits human-readable.
 - Each commit/message should follow **Conventional Commits** format (e.g. `feat(ui): implement pause menu`, `fix(logic): correct scoring rule`). Include the Agent role and a descriptive summary in the body.
-- When merging Pull Requests into `main`, always use **Squash and Merge** to keep the history linear and clean.
+- When merging Pull Requests, always use **Squash and Merge** into `develop` or `epic/*` branches to keep the history linear. Direct merges to `main` should only occur for stable releases.
+- **Human + AI Pairing:** Each Human+AI pair owns an entire Epic (vertical slice) from start to finish. This eliminates synchronous dependencies (e.g., waiting on someone else to build the UI) and prevents merge conflicts.
 - Never change the git email and user name.
 
 ## Coordination
