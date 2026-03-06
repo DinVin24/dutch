@@ -51,23 +51,25 @@ func _handle_initial_deal():
 		# Base target positions relative to marker
 		var start_pos: Vector2
 		if is_vertical:
-			# For vertical layouts, center the spread around the marker's Y
-			var start_y = marker.global_position.y - (total_spread / 2.0)
+			# USE THE SAME CENTER Y FOR BOTH LEFT AND RIGHT
+			# (Calculated from the viewport center to avoid any marker drift)
+			var center_y = get_viewport_rect().size.y / 2.0
+			var start_y = center_y - (total_spread / 2.0)
 			
 			var x_pos = marker.global_position.x
 			if marker == player_pos_right:
-				# Center them better and move more right (shifted +30px X, removed the test +20px Y)
-				x_pos += 30
+				# Move RIGHT player MORE right (away from center)
+				x_pos += 80
 			elif marker == player_pos_left:
-				# Move a bit more to the right (shifted +40px X)
-				x_pos += 40
+				# Move LEFT cards to the right (closer to center)
+				x_pos += 80
 				
 			start_pos = Vector2(x_pos, start_y)
 		else:
 			# For horizontal layouts (Top/Bottom), center around marker's X
 			var start_x = marker.global_position.x - (total_spread / 2.0)
-			# Move bottom player lower (changed -70 to +20)
-			var y_offset = 20 if marker == player_pos_bottom else 0
+			# Move bottom player LOWER (changed from +20 to +100)
+			var y_offset = 100 if marker == player_pos_bottom else 0
 			start_pos = Vector2(start_x, marker.global_position.y + y_offset)
 		
 		for i in range(cards_per_player):
