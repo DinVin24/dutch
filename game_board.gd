@@ -18,6 +18,7 @@ var pause_menu_instance: Node = null
 
 func _ready():
 	print("Game Board: Ready. Connecting signals...")
+	GameManager.stop_menu_music()
 	GameManager.game_state_changed.connect(_on_game_state_changed)
 	resized.connect(_on_resized)
 	
