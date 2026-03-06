@@ -4,13 +4,23 @@ class_name CardUI
 signal card_clicked(card_node, card_data)
 signal card_flipped(card_node, card_data)
 
-@onready var front_face: ColorRect = $FrontFace
-@onready var back_face: ColorRect = $BackFace
+@onready var front_face: TextureRect = $FrontFace
+@onready var back_face: TextureRect = $BackFace
 @onready var rank_label: Label = $FrontFace/RankLabel
 @onready var suit_label: Label = $FrontFace/SuitLabel
 
 var data: CardData
 var is_flipping: bool = false
+var is_selected: bool = false
+
+# Path configuration
+const SPRITE_SHEET_PATH = "res://assets/cards/playing_cards.png"
+const CARD_WIDTH = 100
+const CARD_HEIGHT = 140
+
+# Grid mapping (Matching user's exact specification)
+const SUIT_ORDER = ["Hearts", "Diamonds", "Clubs", "Spades"]
+const RANK_ORDER = ["Ace", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Jack", "Queen", "King"]
 
 func setup(p_data: CardData) -> void:
 	data = p_data
@@ -24,28 +34,76 @@ func _update_visuals() -> void:
 	if not data:
 		return
 	
-	# Ensure nodes exist
 	if not front_face or not back_face:
 		return
 		
+	# Coordinate / Texture setup
+	_apply_atlas_textures()
+	
+	# Visibility Handling
 	if data.is_face_up:
 		front_face.show()
 		back_face.hide()
 		
-		# Set text
+		# Text fallback / overlay logic
 		rank_label.text = str(data.rank)
 		suit_label.text = str(data.suit)
 		
-		# Visual styling (Red for Hearts/Diamonds)
 		var s = data.suit.capitalize()
 		var is_red = (s == "Hearts" or s == "Diamonds")
 		var color = Color(0.8, 0.1, 0.1) if is_red else Color(0, 0, 0)
 		
 		rank_label.add_theme_color_override("font_color", color)
 		suit_label.add_theme_color_override("font_color", color)
+		
+		# Hide labels IF the texture loaded successfully
+		if front_face.texture != null and front_face.texture is AtlasTexture and front_face.texture.atlas != null:
+			rank_label.hide()
+			suit_label.hide()
+		else:
+			rank_label.show()
+			suit_label.show()
 	else:
 		front_face.hide()
 		back_face.show()
+		
+	# Selection / Interaction visuals
+	if is_selected:
+		modulate = Color(1.3, 1.3, 1.3)
+	else:
+		modulate = Color(1, 1, 1)
+
+func _apply_atlas_textures():
+	if not FileAccess.file_exists(SPRITE_SHEET_PATH):
+		front_face.texture = null
+		back_face.texture = null
+		return
+		
+	var atlas = load(SPRITE_SHEET_PATH)
+	if not atlas:
+		return
+
+	# Back Face Calculation (Row 4, Col 0 as per guide)
+	var back_atlas = AtlasTexture.new()
+	back_atlas.atlas = atlas
+	back_atlas.region = Rect2(0, 4 * CARD_HEIGHT, CARD_WIDTH, CARD_HEIGHT)
+	back_face.texture = back_atlas
+	
+	# Front Face Calculation
+	var suit_idx = SUIT_ORDER.find(data.suit.capitalize())
+	var rank_idx = RANK_ORDER.find(data.rank)
+	
+	if suit_idx != -1 and rank_idx != -1:
+		var front_atlas = AtlasTexture.new()
+		front_atlas.atlas = atlas
+		front_atlas.region = Rect2(rank_idx * CARD_WIDTH, suit_idx * CARD_HEIGHT, CARD_WIDTH, CARD_HEIGHT)
+		front_face.texture = front_atlas
+	else:
+		front_face.texture = null
+
+func set_selected(p_selected: bool):
+	is_selected = p_selected
+	_update_visuals()
 
 func flip() -> void:
 	if is_flipping or not data:
