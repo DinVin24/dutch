@@ -33,23 +33,6 @@ To avoid stepping on each other's toes and dealing with those murky merge confli
    - An `Area2D` (if 2D) or `TextureButton` to detect mouse clicks/hovers.
 3. Write `card.gd` to handle flipping animations (tweening the scale to simulate a 3D flip) and emit signals when the card is clicked.
 
----
-
-## Person 3: DinVin (The Game State Manager - The Brains)
-**Tool:** Antigravity with Gemini 3.1 Pro (Me!)
-**Reason:** Building the core game loop, state machine, and ruleset requires the most context holding and agentic capability. Antigravity can autonomously architect the singleton architecture and weave the signals together perfectly.
-**Goal:** Write the background logic that manages the rules, turns, and deck generation. This person shouldn't touch the UI scenes at all yet.
-**Focus Files:** `game_manager.gd` (Autoload/Singleton), `deck_manager.gd`
-
-**Tasks:**
-1. Create a `game_manager.gd` script and add it to Project -> Settings -> Autoload.
-2. Define the State Machine for the game flow: `DEAL_CARDS`, `PLAYER_TURN`, `CPU_TURN`, `CHECK_DUTCH`, `GAME_OVER`.
-3. Create a `deck_manager.gd` script/class responsible for:
-   - Generating a standard 52-card deck array.
-   - Shuffling the array.
-   - Handling `draw_card()` and `discard_card(card)` logic.
-4. Setup signals in `game_manager.gd` like `signal turn_started(player_id)` and `signal game_over(winner_id)` that the UI will eventually listen to.
-
 ## Workflow Rules to Avoid Arguments
-- **Never edit another person's scene.** If Person 3 needs the UI to do something, Person 3 fires a Signal, and Person 1 writes the code to listen to it.
-- **Merge Order:** When the night is over, have Person 2 (Cards) merge first, then Person 3 (Logic), and finally Person 1 (UI) plugs the cards and logic into the board.
+- **Never edit another person's scene.** Person 3's core logic is already implemented. If Person 1 or 2 needs UI/Card logic to interact with the game state, use the signals in the `GameManager` singleton.
+- **Merge Order:** When the night is over, have Person 2 (Cards) merge first, and then finally Person 1 (UI) plugs the cards into the board and connects them to the `GameManager`.
