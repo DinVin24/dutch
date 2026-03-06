@@ -4,6 +4,7 @@ extends Node
 enum GameState {
 	INITIALIZING,
 	DEAL_CARDS,
+	INITIAL_PEEK,
 	PLAYER_TURN,
 	CPU_TURN,
 	CHECK_DUTCH,

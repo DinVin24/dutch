@@ -23,7 +23,7 @@ func _ready():
 	resized.connect(_on_resized)
 	
 	# Connect deck interaction
-	var deck_button = $CenterTable/DeckArea/Placeholder/Interaction
+	var deck_button = $CenterTable/DeckArea/Slotbg/Interaction
 	if deck_button:
 		deck_button.pressed.connect(_on_deck_clicked)
 	
@@ -63,6 +63,60 @@ func _on_game_state_changed(new_state):
 	match new_state:
 		GameManager.GameState.DEAL_CARDS:
 			_handle_initial_deal()
+		GameManager.GameState.INITIAL_PEEK:
+			_start_peek_phase()
+
+var cards_peeked = 0
+var max_peeks = 2
+
+func _start_peek_phase():
+	print("Game Board: Peek phase started. Please look at 2 cards.")
+	# For human player (index 0), we'll enable clicking to peek
+	# We can use a simple message on the HUD
+	var label = Label.new()
+	label.name = "PeekInstructions"
+	label.text = "Select 2 of your cards to peek"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	$GameUI/MainHUD.add_child(label)
+	label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	label.position.y += 50
+	
+	for card in player_hands[0]:
+		if not card.card_clicked.is_connected(_on_card_peek_clicked):
+			card.card_clicked.connect(_on_card_peek_clicked)
+
+func _on_card_peek_clicked(card_node, _card_data):
+	if GameManager.current_state != GameManager.GameState.INITIAL_PEEK:
+		return
+	if card_node in player_hands[0]:
+		if not card_node.data.is_face_up and cards_peeked < max_peeks:
+			card_node.flip()
+			cards_peeked += 1
+			if cards_peeked >= max_peeks:
+				_show_start_game_button()
+
+func _show_start_game_button():
+	var btn = Button.new()
+	btn.name = "StartGameBtn"
+	btn.text = "Start Game"
+	$GameUI/MainHUD.add_child(btn)
+	btn.set_anchors_preset(Control.PRESET_CENTER)
+	btn.pressed.connect(_on_start_game_pressed)
+
+func _on_start_game_pressed():
+	# Flip peeked cards back
+	for card in player_hands[0]:
+		if card.data.is_face_up:
+			card.flip()
+	
+	# Cleanup UI
+	if $GameUI/MainHUD.has_node("PeekInstructions"):
+		$GameUI/MainHUD.get_node("PeekInstructions").queue_free()
+	if $GameUI/MainHUD.has_node("StartGameBtn"):
+		$GameUI/MainHUD.get_node("StartGameBtn").queue_free()
+	
+	# Start the game
+	GameManager.change_state(GameManager.GameState.PLAYER_TURN)
 
 func _handle_initial_deal():
 	print("Game Board: Dealing responsive cards...")
@@ -104,21 +158,8 @@ func _handle_initial_deal():
 			
 			await get_tree().create_timer(0.05).timeout
 	
-	# Initial Discard
-	var first_discard = GameManager.deck_manager.draw_card()
-	if not first_discard.is_empty():
-		var discard_inst = card_scene.instantiate()
-		var discard_data = CardData.new(first_discard.rank, first_discard.suit)
-		discard_data.is_face_up = true
-		add_child(discard_inst)
-		discard_inst.setup(discard_data)
-		
-		# Position at discard area
-		discard_inst.global_position = discard_area.global_position - card_pivot
-		GameManager.deck_manager.discard_card(first_discard)
-
-	print("Game Board: Deal complete.")
-	GameManager.change_state(GameManager.GameState.PLAYER_TURN)
+	print("Game Board: Deal complete. Transitioning to Peek phase.")
+	GameManager.change_state(GameManager.GameState.INITIAL_PEEK)
 
 func reposition_all_cards():
 	for p_idx in range(player_hands.size()):
