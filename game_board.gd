@@ -32,6 +32,10 @@ func _ready():
 	if deck_button:
 		deck_button.pressed.connect(_on_deck_clicked)
 	
+	var discard_button = $CenterTable/DiscardArea/Slotbg/Interaction
+	if discard_button:
+		discard_button.pressed.connect(_on_discard_clicked)
+	
 	await get_tree().process_frame
 	_update_deck_visual()
 	
