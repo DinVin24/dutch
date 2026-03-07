@@ -61,7 +61,7 @@ func _update_deck_visual():
 		card_bg.setup(CardData.new("Ace", "Clubs")) # Data doesn't matter for back
 		card_bg.position = Vector2(-i * 2, -i * 2)
 		card_bg.z_index = -i
-		card_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card_bg.set_interaction_enabled(false)
 
 func _on_turn_started(player_idx):
 	print("Game Board: Player ", player_idx, "'s turn.")
@@ -88,17 +88,21 @@ func _on_turn_started(player_idx):
 		deck_button.mouse_default_cursor_shape = Control.CURSOR_ARROW
 
 func _on_deck_clicked():
+	print("GameBoard: Interaction - Deck clicked. Current state: ", GameManager.GameState.keys()[GameManager.current_state])
 	if GameManager.current_state != GameManager.GameState.PLAYER_TURN:
 		print("Warning: It is not your turn!")
 		return
 	
-	print("Player drawing card...")
+	print("GameBoard: Drawing card via GameManager...")
 	GameManager.player_draw_card()
 
 func _on_discard_clicked():
+	print("GameBoard: Interaction - Discard clicked. State: ", GameManager.GameState.keys()[GameManager.current_state], " Player: ", GameManager.current_player_index)
 	if GameManager.current_state == GameManager.GameState.DRAWN_CARD_PENDING and GameManager.current_player_index == 0:
-		print("Player discarding drawn card...")
+		print("GameBoard: Discarding card via GameManager...")
 		GameManager.player_discard_drawn_card()
+	else:
+		print("GameBoard: Discard ignored. Conditions not met.")
 
 func _on_player_card_clicked(card_node, _card_data):
 	if GameManager.current_state == GameManager.GameState.DRAWN_CARD_PENDING and GameManager.current_player_index == 0:
@@ -286,7 +290,7 @@ func _on_card_discarded(player_idx, card_data):
 			card_to_discard.position = Vector2.ZERO # Center perfectly in area
 			card_to_discard.rotation_degrees = 0
 			card_to_discard.z_index = 0
-			card_to_discard.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			card_to_discard.set_interaction_enabled(false)
 		)
 
 func _on_card_drawn_to_pending(player_idx, card_data):
