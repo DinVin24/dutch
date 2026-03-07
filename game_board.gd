@@ -66,56 +66,38 @@ func _on_game_state_changed(new_state):
 		GameManager.GameState.INITIAL_PEEK:
 			_start_peek_phase()
 
-var cards_peeked = 0
-var max_peeks = 2
-
 func _start_peek_phase():
-	print("Game Board: Peek phase started. Please look at 2 cards.")
-	# For human player (index 0), we'll enable clicking to peek
-	# We can use a simple message on the HUD
+	print("Game Board: Initial Peek - Memorize your cards!")
+	
+	# Visual feedback for peek phase
 	var label = Label.new()
 	label.name = "PeekInstructions"
-	label.text = "Select 2 of your cards to peek"
+	label.text = "Memorizing your cards..."
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	$GameUI/MainHUD.add_child(label)
 	label.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	label.position.y += 50
 	
-	for card in player_hands[0]:
-		if not card.card_clicked.is_connected(_on_card_peek_clicked):
-			card.card_clicked.connect(_on_card_peek_clicked)
-
-func _on_card_peek_clicked(card_node, _card_data):
-	if GameManager.current_state != GameManager.GameState.INITIAL_PEEK:
-		return
-	if card_node in player_hands[0]:
-		if not card_node.data.is_face_up and cards_peeked < max_peeks:
-			card_node.flip()
-			cards_peeked += 1
-			if cards_peeked >= max_peeks:
-				_show_start_game_button()
-
-func _show_start_game_button():
-	var btn = Button.new()
-	btn.name = "StartGameBtn"
-	btn.text = "Start Game"
-	$GameUI/MainHUD.add_child(btn)
-	btn.set_anchors_preset(Control.PRESET_CENTER)
-	btn.pressed.connect(_on_start_game_pressed)
-
-func _on_start_game_pressed():
-	# Flip peeked cards back
-	for card in player_hands[0]:
-		if card.data.is_face_up:
-			card.flip()
+	await get_tree().create_timer(0.5).timeout
 	
-	# Cleanup UI
+	# Automatically reveal the first 2 cards for the player
+	if player_hands[0].size() >= 2:
+		player_hands[0][0].flip()
+		player_hands[0][1].flip()
+		
+	# Wait for 3 seconds for the player to memorize
+	await get_tree().create_timer(3.0).timeout
+	
+	# Flip them back
+	if player_hands[0].size() >= 2:
+		player_hands[0][0].flip()
+		player_hands[0][1].flip()
+		
+	# Cleanup label
 	if $GameUI/MainHUD.has_node("PeekInstructions"):
 		$GameUI/MainHUD.get_node("PeekInstructions").queue_free()
-	if $GameUI/MainHUD.has_node("StartGameBtn"):
-		$GameUI/MainHUD.get_node("StartGameBtn").queue_free()
-	
-	# Start the game
+		
+	print("Game Board: Peek phase complete. Starting Player Turn.")
 	GameManager.change_state(GameManager.GameState.PLAYER_TURN)
 
 func _handle_initial_deal():
