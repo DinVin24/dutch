@@ -52,59 +52,67 @@ alignment = 1
 custom_minimum_size = Vector2(100, 140)
 layout_mode = 2
 
-[node name="Placeholder" type="ColorRect" parent="CenterTable/DeckArea"]
+[node name="Slotbg" type="ColorRect" parent="CenterTable/DeckArea"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(1, 1, 1, 0.0784314)
+color = Color(1, 1, 1, 0.0392157)
 
-[node name="Label" type="Label" parent="CenterTable/DeckArea/Placeholder"]
+[node name="Border" type="ReferenceRect" parent="CenterTable/DeckArea/Slotbg"]
 layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -20.0
-offset_top = -11.5
-offset_right = 20.0
-offset_bottom = 11.5
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-text = "DECK"
-horizontal_alignment = 1
+border_color = Color(1, 1, 1, 0.117647)
+border_width = 2.0
+editor_only = false
+
+[node name="Interaction" type="TextureButton" parent="CenterTable/DeckArea/Slotbg"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_default_cursor_shape = 2
 
 [node name="DiscardArea" type="Control" parent="CenterTable"]
 custom_minimum_size = Vector2(100, 140)
 layout_mode = 2
 
-[node name="Placeholder" type="ColorRect" parent="CenterTable/DiscardArea"]
+[node name="Slotbg" type="ColorRect" parent="CenterTable/DiscardArea"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(1, 1, 1, 0.0784314)
+color = Color(1, 1, 1, 0.0392157)
 
-[node name="Label" type="Label" parent="CenterTable/DiscardArea/Placeholder"]
+[node name="Border" type="ReferenceRect" parent="CenterTable/DiscardArea/Slotbg"]
 layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -31.5
-offset_top = -11.5
-offset_right = 31.5
-offset_bottom = 11.5
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-text = "DISCARD"
-horizontal_alignment = 1
+border_color = Color(1, 1, 1, 0.117647)
+border_width = 2.0
+editor_only = false
+
+[node name="Interaction" type="TextureButton" parent="CenterTable/DiscardArea/Slotbg"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_default_cursor_shape = 2
 
 [node name="PlayerPositions" type="Control" parent="."]
 layout_mode = 1

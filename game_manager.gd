@@ -4,6 +4,7 @@ extends Node
 enum GameState {
 	INITIALIZING,
 	DEAL_CARDS,
+	INITIAL_PEEK,
 	PLAYER_TURN,
 	CPU_TURN,
 	CHECK_DUTCH,
@@ -15,6 +16,8 @@ signal game_state_changed(new_state)
 signal turn_started(player_id)
 signal game_over(winner_id)
 signal deck_ready
+signal card_drawn(player_id, card_data)
+signal card_discarded(player_id, card_data)
 
 var current_state: GameState = GameState.INITIALIZING
 var deck_manager: DeckManager

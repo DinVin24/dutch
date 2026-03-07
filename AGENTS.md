@@ -14,10 +14,12 @@ Here, agents act as Full-Stack Developers working on vertical slices (Epics) rat
    - Owns the `task.md` execution flow. 
 3. **The Validator (Agent 3 / QA & Validation)**
    - Reviews The Executor's commit, plays the game, tests the edge cases in the user stories, and writes the `walkthrough.md`.
+   - **PR Verification:** Explicitly verifies Pull Requests against the `implementation_plan.md` and README rules before handoff.
    - If bugs exist, it shifts the pipeline back to The Executor.
 4. **The Reviewer (Agent 4 / Integration & Handoff)**
    - Ensures Conventional Commits were used and successfully Squash-Merges the Pull Request into a `develop` or `epic/*` branch (avoid merging directly to `main`).
-   - **Jira Sync:** Periodically runs `gh pr list --state merged` and `git log` to identify completed features from teammates and transitions corresponding Jira stories to **Done**.
+   - **Jira Sync:** Periodically runs `gh pr list --state all` and `git log` to identify teammate/agent progress.
+   - **Mapping & Transitions:** Maps features to Jira tickets and transitions them through all categories (**Backlog**, **Planning**, **Execution**, **Validation**, **Done**) based on Git/PR state.
    - Prompts The Planner to begin the next Epic.
 
 ## Agentic Guidelines
@@ -26,6 +28,7 @@ Here, agents act as Full-Stack Developers working on vertical slices (Epics) rat
 - Each commit/message should follow **Conventional Commits** format (e.g. `feat(ui): implement pause menu`, `fix(logic): correct scoring rule`). Include the Agent role and a descriptive summary in the body.
 - When merging Pull Requests, always use **Squash and Merge** into `develop` or `epic/*` branches to keep the history linear. Direct merges to `main` should only occur for stable releases.
 - **Human + AI Pairing:** Each Human+AI pair owns an entire Epic (vertical slice) from start to finish. This eliminates synchronous dependencies (e.g., waiting on someone else to build the UI) and prevents merge conflicts.
+- **Never Work on Completed Stories:** Agents must never work on a story marked as completed (`[x]`) in `user_stories.md`. Once a story is checked, it is considered finalized and locked. Any changes to completed features require an explicit user request or a documented bug fix (mapped to a new task). Adding *new* stories (bullets) to an existing Epic is allowed and encouraged; the restriction only applies to the specific items already marked as done.
 - Never change the git email and user name.
 
 ## Coordination

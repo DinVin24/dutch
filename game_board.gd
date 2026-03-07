@@ -22,10 +22,38 @@ func _ready():
 	GameManager.game_state_changed.connect(_on_game_state_changed)
 	resized.connect(_on_resized)
 	
+	# Connect deck interaction
+	var deck_button = $CenterTable/DeckArea/Slotbg/Interaction
+	if deck_button:
+		deck_button.pressed.connect(_on_deck_clicked)
+	
 	await get_tree().process_frame
+	_update_deck_visual()
 	
 	print("Game Board: Starting game...")
 	GameManager.initialize_game(4)
+
+func _update_deck_visual():
+	# Clear previous deck visuals
+	for child in deck_area.get_children():
+		if child.name.begins_with("DeckVisual"):
+			child.queue_free()
+	
+	# Add a few offset cards to represent the deck
+	var card_scene = preload("res://card.tscn")
+	var stack_size = min(5, GameManager.deck_manager.deck.size())
+	for i in range(stack_size):
+		var card_bg = card_scene.instantiate()
+		deck_area.add_child(card_bg)
+		card_bg.name = "DeckVisual_" + str(i)
+		card_bg.setup(CardData.new("Ace", "Clubs")) # Data doesn't matter for back
+		card_bg.position = Vector2(-i * 2, -i * 2)
+		card_bg.z_index = -i
+		card_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+func _on_deck_clicked():
+	print("Deck clicked!")
+	# Logic for drawing will go in next Epic, but for now we just log it.
 
 func _on_resized():
 	# Reposition all cards instantly when window size changes
@@ -35,6 +63,42 @@ func _on_game_state_changed(new_state):
 	match new_state:
 		GameManager.GameState.DEAL_CARDS:
 			_handle_initial_deal()
+		GameManager.GameState.INITIAL_PEEK:
+			_start_peek_phase()
+
+func _start_peek_phase():
+	print("Game Board: Initial Peek - Memorize your cards!")
+	
+	# Visual feedback for peek phase
+	var label = Label.new()
+	label.name = "PeekInstructions"
+	label.text = "Memorizing your cards..."
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	$GameUI/MainHUD.add_child(label)
+	label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	label.position.y += 50
+	
+	await get_tree().create_timer(0.5).timeout
+	
+	# Automatically reveal the first 2 cards for the player
+	if player_hands[0].size() >= 2:
+		player_hands[0][0].flip()
+		player_hands[0][1].flip()
+		
+	# Wait for 3 seconds for the player to memorize
+	await get_tree().create_timer(3.0).timeout
+	
+	# Flip them back
+	if player_hands[0].size() >= 2:
+		player_hands[0][0].flip()
+		player_hands[0][1].flip()
+		
+	# Cleanup label
+	if $GameUI/MainHUD.has_node("PeekInstructions"):
+		$GameUI/MainHUD.get_node("PeekInstructions").queue_free()
+		
+	print("Game Board: Peek phase complete. Starting Player Turn.")
+	GameManager.change_state(GameManager.GameState.PLAYER_TURN)
 
 func _handle_initial_deal():
 	print("Game Board: Dealing responsive cards...")
@@ -54,10 +118,10 @@ func _handle_initial_deal():
 			
 			var card_inst = card_scene.instantiate()
 			var card_data = CardData.new(card_data_dict.rank, card_data_dict.suit)
-			card_data.is_face_up = true
+			card_data.is_face_up = false # Standard Dutch Rule: Dealt face down
 			
 			add_child(card_inst)
-			card_inst.setup(card_data) # Call after add_child to be safe
+			card_inst.setup(card_data)
 			player_hands[p_idx].append(card_inst)
 			
 			# Get target transform
@@ -74,8 +138,10 @@ func _handle_initial_deal():
 			var tween = create_tween()
 			tween.tween_property(card_inst, "global_position", final_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 			
-			print("Dealt ", card_data.display_name(), " to Player ", p_idx)
-			await get_tree().create_timer(0.1).timeout
+			await get_tree().create_timer(0.05).timeout
+	
+	print("Game Board: Deal complete. Transitioning to Peek phase.")
+	GameManager.change_state(GameManager.GameState.INITIAL_PEEK)
 
 func reposition_all_cards():
 	for p_idx in range(player_hands.size()):
