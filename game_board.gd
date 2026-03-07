@@ -24,6 +24,7 @@ func _ready():
 	GameManager.game_state_changed.connect(_on_game_state_changed)
 	GameManager.turn_started.connect(_on_turn_started)
 	GameManager.card_drawn_to_pending.connect(_on_card_drawn_to_pending)
+	GameManager.card_discarded.connect(_on_card_discarded)
 	resized.connect(_on_resized)
 	
 	# Connect deck interaction
@@ -250,6 +251,7 @@ func _handle_initial_deal():
 			add_child(card_inst)
 			card_inst.setup(card_data)
 			player_hands[p_idx].append(card_inst)
+			GameManager.players_info[p_idx].hand.append(card_data)
 			
 			if p_idx == 0:
 				card_inst.card_clicked.connect(_on_player_card_clicked)
