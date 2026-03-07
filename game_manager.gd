@@ -135,6 +135,7 @@ func player_discard_drawn_card():
 	if current_state != GameState.DRAWN_CARD_PENDING:
 		return
 	
+	print("GameManager: Discarding drawn card: ", discarded_card.rank, " of ", discarded_card.suit)
 	# Move pending card to discard pile
 	deck_manager.discard_pile.append(drawn_card_data)
 	card_discarded.emit(current_player_index, drawn_card_data)
@@ -152,6 +153,7 @@ func player_swap_drawn_card(card_idx: int):
 		
 	# Swap cards
 	var old_card = player_h[card_idx]
+	print("GameManager: Swapping drawn card with hand card at idx ", card_idx, " (", old_card.rank, ")")
 	player_h[card_idx] = drawn_card_data
 	
 	# Old card goes to discard

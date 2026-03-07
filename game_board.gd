@@ -114,28 +114,32 @@ func _on_card_discarded(player_idx, card_data):
 	else:
 		# Was it a card from a hand? (During a swap)
 		# We need to find which node it was. 
-		# If it's the player's hand, we replace it with the pending one.
-		if player_idx == GameManager.current_player_index:
-			var hand = player_hands[player_idx]
-			for i in range(hand.size()):
-				if hand[i].data == card_data:
-					card_to_discard = hand[i]
-					# Replace in hand with pending card if it exists
-					if pending_card:
-						if pending_card_tween and pending_card_tween.is_running():
-							pending_card_tween.kill()
-							
-						hand[i] = pending_card
+		# We use player_idx directly from the signal to avoid race conditions with next_turn()
+		var hand = player_hands[player_idx]
+		for i in range(hand.size()):
+			if hand[i].data == card_data:
+				card_to_discard = hand[i]
+				
+				# If it's the player's hand, disconnect signals so it doesn't click from discard
+				if player_idx == 0:
+					if card_to_discard.card_clicked.is_connected(_on_player_card_clicked):
+						card_to_discard.card_clicked.disconnect(_on_player_card_clicked)
+				
+				# Replace in hand with pending card if it exists
+				if pending_card:
+					if pending_card_tween and pending_card_tween.is_running():
+						pending_card_tween.kill()
 						
-						# Clean up signal connection if p_idx == 0
-						if player_idx == 0:
-							if not hand[i].card_clicked.is_connected(_on_player_card_clicked):
-								hand[i].card_clicked.connect(_on_player_card_clicked)
-						
-						pending_card = null
-						# Reposition the new hand card
-						reposition_all_cards()
-					break
+					hand[i] = pending_card
+					
+					# Connect signal for the new card in human hand
+					if player_idx == 0:
+						if not hand[i].card_clicked.is_connected(_on_player_card_clicked):
+							hand[i].card_clicked.connect(_on_player_card_clicked)
+					
+					pending_card = null
+					reposition_all_cards()
+				break
 	
 	if card_to_discard:
 		card_to_discard.z_index = 100 # Move above others
@@ -275,10 +279,11 @@ func reposition_all_cards():
 		for i in range(hand.size()):
 			var card = hand[i]
 			if is_instance_valid(card):
+				print("GameBoard: Repositioning card ", i, " for player ", p_idx, " Node: ", card.name)
 				var transform = get_card_transform(p_idx, i, hand.size())
 				var final_pos = transform.position - card_pivot.rotated(deg_to_rad(transform.rotation))
 				
-				var tween = create_tween()
+				var tween = create_tween().set_parallel(true)
 				tween.tween_property(card, "rotation_degrees", transform.rotation, 0.3)
 				tween.tween_property(card, "global_position", final_pos, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
