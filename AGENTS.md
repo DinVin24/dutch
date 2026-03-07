@@ -15,7 +15,7 @@ Here, agents act as Full-Stack Developers working on vertical slices (Epics) rat
 3. **The Validator (Agent 3 / QA & Validation)**
    - Reviews The Executor's commit, plays the game, tests the edge cases in the user stories, and writes the `walkthrough.md`.
    - **PR Verification:** Explicitly verifies Pull Requests against the `implementation_plan.md` and README rules before handoff.
-   - If bugs exist, it shifts the pipeline back to The Executor.
+   - If bugs exist, it shifts the pipeline back to The Executor. The Validator **MUST** provide exact reproduction steps (initial state, actions taken, expected result, actual result) so The Executor can fix issues surgically without guessing.
 4. **The Reviewer (Agent 4 / Integration & Handoff)**
    - Ensures Conventional Commits were used and successfully Squash-Merges the Pull Request into a `develop` or `epic/*` branch (avoid merging directly to `main`).
    - **Jira Sync:** Periodically runs `gh pr list --state all` and `git log` to identify teammate/agent progress.
@@ -23,6 +23,7 @@ Here, agents act as Full-Stack Developers working on vertical slices (Epics) rat
    - Prompts The Planner to begin the next Epic.
 
 ## Agentic Guidelines
+- **Strict FSM Architecture:** Agents must enforce a strict Finite State Machine (FSM) for game states at all times during the development phase (e.g., `STATE_DRAW_PHASE`, `STATE_WAITING_FOR_PEEK`, `STATE_INTERRUPT`). Avoid loose boolean flags (like `is_player_turn`) to control game logic, to prevent race conditions during interrupts like Jump-Ins.
 - Treat yourself as an agent with foresight: proactively suggest follow-up tests, request missing assets, and double-check README rules before changing gameplay code.
 - Use specialized AI tools (e.g. Gemini for layout tasks, ChatGPT Codex for generic scripts) as appropriate, but always keep descriptions and commits human-readable.
 - Each commit/message should follow **Conventional Commits** format (e.g. `feat(ui): implement pause menu`, `fix(logic): correct scoring rule`). Include the Agent role and a descriptive summary in the body.
