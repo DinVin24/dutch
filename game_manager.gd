@@ -8,6 +8,7 @@ enum GameState {
 	PLAYER_TURN,
 	CPU_TURN,
 	DRAWN_CARD_PENDING,
+	SPECIAL_MOVE_PENDING,
 	CHECK_DUTCH,
 	GAME_OVER
 }
@@ -20,6 +21,8 @@ signal deck_ready
 signal card_drawn(player_id, card_data)
 signal card_drawn_to_pending(player_id, card_data)
 signal card_discarded(player_id, card_data)
+signal special_move_started(player_id, ability_type)
+signal special_move_ended(player_id)
 
 var current_state: GameState = GameState.INITIALIZING
 var deck_manager: DeckManager
@@ -139,7 +142,12 @@ func player_discard_drawn_card():
 	deck_manager.discard_pile.append(drawn_card_data)
 	card_discarded.emit(current_player_index, drawn_card_data)
 	
+	var discarded_card = drawn_card_data
 	drawn_card_data = null
+	
+	if _check_special_ability(current_player_index, discarded_card):
+		return
+	
 	next_turn()
 
 func player_swap_drawn_card(card_idx: int):
@@ -160,4 +168,26 @@ func player_swap_drawn_card(card_idx: int):
 	card_discarded.emit(current_player_index, old_card)
 	
 	drawn_card_data = null
+	
+	if _check_special_ability(current_player_index, old_card):
+		return
+		
 	next_turn()
+
+func _check_special_ability(player_idx: int, card: CardData) -> bool:
+	if card.rank == "Queen":
+		print("Queen discarded! Triggering PEEK ability.")
+		change_state(GameState.SPECIAL_MOVE_PENDING)
+		special_move_started.emit(player_idx, "PEEK")
+		return true
+	elif card.rank == "Jack":
+		print("Jack discarded! Triggering SWAP ability.")
+		change_state(GameState.SPECIAL_MOVE_PENDING)
+		special_move_started.emit(player_idx, "SWAP")
+		return true
+	return false
+
+func end_special_move():
+	if current_state == GameState.SPECIAL_MOVE_PENDING:
+		special_move_ended.emit(current_player_index)
+		next_turn()

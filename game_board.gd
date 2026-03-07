@@ -14,6 +14,8 @@ var padding = 20.0
 var card_pivot = Vector2(50, 70)
 var pending_card: Node = null
 var pending_card_tween: Tween = null
+var current_ability_type: String = ""
+var swap_sources: Array = [] # Stores [card_node, player_idx, card_idx]
 
 var pause_menu_scene = preload("res://pause_menu.tscn")
 var pause_menu_instance: Node = null
@@ -99,6 +101,125 @@ func _on_player_card_clicked(card_node, _card_data):
 		if card_idx != -1:
 			print("Player swapping drawn card with card ", card_idx)
 			GameManager.player_swap_drawn_card(card_idx)
+
+func _on_special_move_started(player_idx: int, ability_type: String):
+	print("Game Board: Special move started: ", ability_type, " for player ", player_idx)
+	current_ability_type = ability_type
+	
+	if player_idx == 0:
+		# Show instruction label
+		if ability_type == "PEEK":
+			_show_message("Select ANY card to peek at.")
+		elif ability_type == "SWAP":
+			_show_message("Select TWO cards on the board to swap.")
+		
+		# Ensure all cards are clickable
+		for p_hand in player_hands:
+			for card in p_hand:
+				if not card.card_clicked.is_connected(_on_card_clicked_for_ability):
+					card.card_clicked.connect(_on_card_clicked_for_ability)
+
+func _on_special_move_ended(_player_idx: int):
+	print("Game Board: Special move ended.")
+	current_ability_type = ""
+	_hide_message()
+	
+	# Disconnect ability clicks from opponent cards (player 0 cards stay connected for normal play)
+	for i in range(1, player_hands.size()):
+		for card in player_hands[i]:
+			if card.card_clicked.is_connected(_on_card_clicked_for_ability):
+				card.card_clicked.disconnect(_on_card_clicked_for_ability)
+
+func _on_card_clicked_for_ability(card_node, _card_data):
+	if GameManager.current_state != GameManager.GameState.SPECIAL_MOVE_PENDING:
+		return
+		
+	if current_ability_type == "PEEK":
+		_handle_peek_ability(card_node)
+	elif current_ability_type == "SWAP":
+		_handle_swap_ability(card_node)
+
+func _handle_peek_ability(card_node):
+	# Disable further clicks during the peek
+	for p_hand in player_hands:
+		for card in p_hand:
+			card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			
+	card_node.flip()
+	await get_tree().create_timer(3.0).timeout
+	card_node.flip()
+	
+	# Re-enable filter
+	for p_hand in player_hands:
+		for card in p_hand:
+			card.mouse_filter = Control.MOUSE_FILTER_STOP
+			
+	GameManager.end_special_move()
+
+func _handle_swap_ability(card_node):
+	# Find which player/index this card belongs to
+	var p_idx = -1
+	var c_idx = -1
+	for i in range(player_hands.size()):
+		var idx = player_hands[i].find(card_node)
+		if idx != -1:
+			p_idx = i
+			c_idx = idx
+			break
+	
+	if p_idx == -1: return
+	
+	swap_sources.append({"node": card_node, "player": p_idx, "index": c_idx})
+	card_node.set_selected(true)
+	
+	if swap_sources.size() == 2:
+		_perform_jack_swap()
+
+func _perform_jack_swap():
+	var s1 = swap_sources[0]
+	var s2 = swap_sources[1]
+	
+	# Logic swap in GameManager
+	var h1 = GameManager.players_info[s1.player].hand
+	var h2 = GameManager.players_info[s2.player].hand
+	
+	var temp_data = h1[s1.index]
+	h1[s1.index] = h2[s2.index]
+	h2[s2.index] = temp_data
+	
+	# Visual reparenting/swap in GameBoard
+	player_hands[s1.player][s1.index] = s2.node
+	player_hands[s2.player][s2.index] = s1.node
+	
+	s1.node.set_selected(false)
+	s2.node.set_selected(false)
+	
+	swap_sources.clear()
+	
+	# Animate swap
+	reposition_all_cards() 
+	
+	await get_tree().create_timer(0.5).timeout
+	GameManager.end_special_move()
+
+func _show_message(text: String):
+	# Simple label for now, we can add a proper HUD element later
+	var label = get_node_or_null("GameUI/MainHUD/AbilityMessage")
+	if not label:
+		label = Label.new()
+		label.name = "AbilityMessage"
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_KEEP_WIDTH, 100)
+		get_node("GameUI/MainHUD").add_child(label)
+		label.add_theme_font_size_override("font_size", 24)
+	
+	label.text = text
+	label.show()
+
+func _hide_message():
+	var label = get_node_or_null("GameUI/MainHUD/AbilityMessage")
+	if label:
+		label.hide()
 
 func _on_card_discarded(player_idx, card_data):
 	print("Game Board: Card discarded by player ", player_idx)
