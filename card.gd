@@ -111,6 +111,11 @@ func _apply_atlas_textures():
 		print("CardUI Error: Invalid rank/suit mapping: ", data.suit, "/", data.rank)
 		front_face.texture = null
 
+func set_interaction_enabled(enabled: bool):
+	if has_node("Interaction"):
+		$Interaction.mouse_filter = Control.MOUSE_FILTER_STOP if enabled else Control.MOUSE_FILTER_IGNORE
+	mouse_filter = Control.MOUSE_FILTER_STOP if enabled else Control.MOUSE_FILTER_IGNORE
+
 func set_selected(p_selected: bool):
 	is_selected = p_selected
 	_update_visuals()
