@@ -30,7 +30,8 @@ Here, agents act as Full-Stack Developers working on vertical slices (Epics) rat
 - When merging Pull Requests, always use **Squash and Merge** into `develop` or `epic/*` branches to keep the history linear. Direct merges to `main` should only occur for stable releases.
 - **PR Formatting:** Pull Request descriptions and comments must use plain text ONLY. Avoid Markdown formatting (headers, bolding, lists) in GitHub as it may not render correctly in all environments.
 - **Human + AI Pairing:** Each Human+AI pair owns an entire Epic (vertical slice) from start to finish. This eliminates synchronous dependencies (e.g., waiting on someone else to build the UI) and prevents merge conflicts.
-- **Never Work on Completed Stories:** Agents must never work on a story marked as completed (`[x]`) in `user_stories.md`. Once a story is checked, it is considered finalized and locked. Any changes to completed features require an explicit user request or a documented bug fix (mapped to a new task). Adding *new* stories (bullets) to an existing Epic is allowed and encouraged; the restriction only applies to the specific items already marked as done.
+- **Iterating on Completed Stories:** Agents are free to work on any Epic. However, stories marked as completed (`[x]`) in `user_stories.md` have already been verified and should be viewed with high regard. Any further changes to completed features should only be made to refine them with the best possible decisions or to address critical bugs, ensuring the core verified logic remains robust. Adding *new* stories (bullets) to an existing Epic is always encouraged.
+- **Task Notation:** In `user_stories.md` and `task.md`, use `[ ]` for uncompleted, `[/]` for in-progress, and `[x]` for completed tasks.
 - Never change the git email and user name.
 
 ## Coordination
