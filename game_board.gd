@@ -419,7 +419,7 @@ func get_card_transform(p_idx: int, card_idx: int, total_cards: int) -> Dictiona
 			else:
 				# Left: cards laid vertically, spread along Y
 				rot_deg = 90
-				var v_spacing = vp.y * 0.09
+				var v_spacing = vp.x * 0.09
 				var v_spread = v_spacing * (total_cards - 1)
 				var start_y = (vp.y - v_spread) / 2.0
 				target_pos = Vector2(vp.x * h_inset, start_y + card_idx * v_spacing)
