@@ -111,6 +111,9 @@ func _on_player_card_clicked(card_node, _card_data):
 			else:
 				print("FSM Blocked: Cannot swap drawn card into opponent's hand.")
 		GameManager.GameState.TURN_PEEK_ABILITY:
+			if card_node.data.is_face_up:
+				print("FSM Blocked: Cannot peek at a card that is already face-up.")
+				return
 			_handle_peek_ability(card_node)
 		GameManager.GameState.TURN_SWAP_ABILITY:
 			_handle_swap_ability(card_node, p_idx, c_idx)
@@ -129,6 +132,7 @@ func _handle_peek_ability(card_node):
 			card.mouse_filter = Control.MOUSE_FILTER_STOP
 			
 	GameManager.complete_peek_ability()
+	clear_all_highlights()
 
 func _handle_swap_ability(card_node, p_idx, c_idx):
 	# Don't allow clicking the same card twice
@@ -155,6 +159,7 @@ func _perform_jack_swap():
 	s2.node.set_selected(false)
 	
 	swap_sources.clear()
+	clear_all_highlights()
 	reposition_all_cards() 
 
 func _show_message(text: String):
@@ -255,9 +260,22 @@ func _on_game_state_changed(new_state):
 			_start_peek_phase()
 		GameManager.GameState.TURN_PEEK_ABILITY:
 			_show_message("Select ANY card to peek at.")
+			_highlight_selectable_cards()
 		GameManager.GameState.TURN_SWAP_ABILITY:
 			_show_message("Select TWO cards on the board to swap.")
+			_highlight_selectable_cards()
 			swap_sources.clear()
+func _highlight_selectable_cards():
+	for hand in player_hands:
+		for card in hand:
+			if is_instance_valid(card):
+				card.set_highlighted(true)
+
+func clear_all_highlights():
+	for hand in player_hands:
+		for card in hand:
+			if is_instance_valid(card):
+				card.set_highlighted(false)
 
 func _start_peek_phase():
 	var label = Label.new()
@@ -333,8 +351,13 @@ func reposition_all_cards():
 				var final_pos = transform.position - card_pivot.rotated(deg_to_rad(transform.rotation))
 				
 				var tween = create_tween().set_parallel(true)
-				tween.tween_property(card, "rotation_degrees", transform.rotation, 0.3)
-				tween.tween_property(card, "global_position", final_pos, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+				tween.tween_property(card, "rotation_degrees", transform.rotation, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+				tween.tween_property(card, "global_position", final_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+				
+				# Premium "lift" effect
+				var lift_tween = create_tween()
+				lift_tween.tween_property(card, "scale", Vector2(1.1, 1.1), 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+				lift_tween.tween_property(card, "scale", Vector2(1.0, 1.0), 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 
 func get_card_transform(p_idx: int, card_idx: int, total_cards: int) -> Dictionary:
 	var screen_size = get_viewport_rect().size
