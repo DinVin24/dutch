@@ -14,7 +14,7 @@ var is_flipping: bool = false
 var is_selected: bool = false
 
 # Path configuration
-const SPRITE_SHEET_PATH = "res://assets/cards/playing_cards.png"
+const SPRITE_SHEET_PATH = "res://assets/images/cards/playing_cards.png"
 const CARD_WIDTH = 100
 const CARD_HEIGHT = 140
 

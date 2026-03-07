@@ -7,7 +7,7 @@ path="res://.godot/imported/bg_music.ogg-20339edf34a6eddeb029366c65b30741.oggvor
 
 [deps]
 
-source_file="res://bg_music.ogg"
+source_file="res://assets/music/bg_music.ogg"
 dest_files=["res://.godot/imported/bg_music.ogg-20339edf34a6eddeb029366c65b30741.oggvorbisstr"]
 
 [params]
