@@ -86,6 +86,69 @@ func _on_deck_clicked():
 	print("Player drawing card...")
 	GameManager.player_draw_card()
 
+func _on_discard_clicked():
+	if GameManager.current_state == GameManager.GameState.DRAWN_CARD_PENDING and GameManager.current_player_index == 0:
+		print("Player discarding drawn card...")
+		GameManager.player_discard_drawn_card()
+
+func _on_player_card_clicked(card_node, _card_data):
+	if GameManager.current_state == GameManager.GameState.DRAWN_CARD_PENDING and GameManager.current_player_index == 0:
+		var card_idx = player_hands[0].find(card_node)
+		if card_idx != -1:
+			print("Player swapping drawn card with card ", card_idx)
+			GameManager.player_swap_drawn_card(card_idx)
+
+func _on_card_discarded(player_idx, card_data):
+	print("Game Board: Card discarded by player ", player_idx)
+	
+	# If it was a swap, we need to update the hand visual
+	# For now, let's just animate the card to the discard pile
+	
+	var card_to_discard: Node = null
+	
+	# Was it the pending card?
+	if pending_card and pending_card.data == card_data:
+		card_to_discard = pending_card
+		pending_card = null
+	else:
+		# Was it a card from a hand? (During a swap)
+		# We need to find which node it was. 
+		# If it's the player's hand, we replace it with the pending one.
+		if player_idx == GameManager.current_player_index:
+			var hand = player_hands[player_idx]
+			for i in range(hand.size()):
+				if hand[i].data == card_data:
+					card_to_discard = hand[i]
+					# Replace in hand with pending card if it exists
+					if pending_card:
+						hand[i] = pending_card
+						pending_card = null
+						# Clean up signal connection if p_idx == 0
+						if player_idx == 0:
+							hand[i].card_clicked.connect(_on_player_card_clicked)
+						
+						# Reposition the new hand card
+						reposition_all_cards()
+					break
+	
+	if card_to_discard:
+		card_to_discard.z_index = 100 # Move above others
+		var target_pos = discard_area.global_position - card_pivot
+		var tween = create_tween()
+		tween.tween_property(card_to_discard, "global_position", target_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.tween_callback(func():
+			# Keep a few visuals in discard? For now just free or stack.
+			# Let's keep the last one visible.
+			for child in discard_area.get_children():
+				if child.name.begins_with("DiscardVisual"):
+					child.queue_free()
+			
+			card_to_discard.reparent(discard_area)
+			card_to_discard.name = "DiscardVisual"
+			card_to_discard.position = Vector2.ZERO - card_pivot # Center in area
+			card_to_discard.z_index = 0
+		)
+
 func _on_card_drawn_to_pending(player_idx, card_data):
 	print("Game Board: Card drawn to pending for player ", player_idx)
 	
@@ -176,6 +239,9 @@ func _handle_initial_deal():
 			add_child(card_inst)
 			card_inst.setup(card_data)
 			player_hands[p_idx].append(card_inst)
+			
+			if p_idx == 0:
+				card_inst.card_clicked.connect(_on_player_card_clicked)
 			
 			# Get target transform
 			var transform = get_card_transform(p_idx, i, cards_per_player)
