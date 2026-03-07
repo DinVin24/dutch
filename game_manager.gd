@@ -108,17 +108,6 @@ func _handle_game_over():
 func start_game():
 	change_state(GameState.DEAL_CARDS)
 
-func start_main_game():
-	print("GameManager: Starting main game loop. Drawing initial discard.")
-	var card_info = deck_manager.draw_card()
-	if not card_info.is_empty():
-		var start_card = CardData.new(card_info.rank, card_info.suit)
-		start_card.is_face_up = true
-		deck_manager.discard_pile.append(start_card)
-		card_discarded.emit(-1, start_card) # -1 indicates system discard
-	
-	change_state(GameState.PLAYER_TURN)
-
 func call_dutch(player_id: int):
 	if dutch_caller_index == -1:
 		dutch_caller_index = player_id
