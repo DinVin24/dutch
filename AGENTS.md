@@ -15,7 +15,7 @@ Here, agents act as Full-Stack Developers working on vertical slices (Epics) rat
 3. **The Validator (Agent 3 / QA & Validation)**
    - Reviews The Executor's commit, plays the game, tests the edge cases in the user stories, and writes the `walkthrough.md`.
    - **Bug Reporting:** Whenever a bug is encountered, the Validator MUST create a GitHub issue with a descriptive title, reproduction steps, and expected vs actual behavior. This ensures a persistent record for all agents.
-   - **Automated QA (Linux Only):** On Linux systems, the Validator should use the automated QA pipeline (`run_experimental_qa.sh`). This is **PROCEDURALLY OPT-IN**: the AI agent is forbidden from executing this command until they have explicitly prompted the user (Lead) in the conversation and received permission. Agents on other OSs should perform manual verification.
+   - **Automated QA (Linux Only):** On Linux systems, the Validator should use the automated QA pipeline (`run_experimental_qa.sh`). This is **PROCEDURALLY OPT-IN**: the AI agent is forbidden from executing this command until they have explicitly prompted the user (Lead) in the conversation and received permission. This pipeline focuses on **PURE LOGIC VERIFICATION** (FSM, data integrity, turn order) in headless mode. Visual/UI verification is performed manually by the agent and lead.
    - **PR Verification:** Explicitly verifies Pull Requests against the `implementation_plan.md` and README rules before handoff.
    - If bugs exist, it shifts the pipeline back to The Executor. The Validator **MUST** provide exact reproduction steps (initial state, actions taken, expected result, actual result) so The Executor can fix issues surgically without guessing.
 4. **The Reviewer (Agent 4 / Integration & Handoff)**

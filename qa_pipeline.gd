@@ -1,13 +1,11 @@
 extends SceneTree
 
-# qa_pipeline.gd - Granular Multi-Player Testing Pipeline WITH Screenshots
-# Verifies every phase and every player position systematically.
+# qa_pipeline.gd - Pure Logic Verification Pipeline
+# Verifies every phase and every player position systematically without fragile visuals.
 
 const STOP_FILE = "/tmp/STOP_DUTCH_QA"
-const SCREENSHOT_BASE_DIR = "res://qa_screenshots/granular_run/"
 
 var gm: Node = null
-var board: Node = null
 
 func _init():
 	call_deferred("start_pipeline")
@@ -18,20 +16,11 @@ func _input(event):
 		quit()
 
 func start_pipeline():
-	print("\n[QA] STARTING GRANULAR VISUAL PIPELINE...")
+	print("\n[QA] STARTING PURE LOGIC PIPELINE (HEADLESS)...")
 	gm = root.get_node_or_null("GameManager")
-	if not gm: quit()
-	
-	var dir = DirAccess.open("res://")
-	if not dir.dir_exists(SCREENSHOT_BASE_DIR):
-		dir.make_dir_recursive(SCREENSHOT_BASE_DIR)
-
-	# Instantiate the board once for the whole run
-	var board_scene = load("res://game_board.tscn")
-	board = board_scene.instantiate()
-	root.add_child(board)
-	await process_frame
-	await create_timer(1.0).timeout
+	if not gm: 
+		print("[QA FAIL] GameManager singleton not found.")
+		quit()
 	
 	# PHASE 1: INITIALIZATION & DEAL
 	await phase_initialization()
@@ -51,7 +40,7 @@ func start_pipeline():
 	# PHASE 6: DUTCH CYCLE (Each Caller Position)
 	await phase_dutch_calls_all_players()
 	
-	print("\n[QA] ALL GRANULAR PHASES AND PLAYER TURNS VERIFIED WITH VISUALS.")
+	print("\n[QA] ALL GRANULAR LOGIC PHASES AND PLAYER TURNS VERIFIED.")
 	quit()
 
 # --- PHASE MODULES ---
@@ -59,15 +48,12 @@ func start_pipeline():
 func phase_initialization():
 	print("\n>>> PHASE 1: Initialization & Deal Logic <<<")
 	gm.initialize_game(4)
-	await take_screenshot("01_deal_cards")
 	
 	gm.change_state(gm.GameState.INITIAL_PEEK)
-	await take_screenshot("02_initial_peek_start")
-	
 	gm.complete_initial_peek()
+	
 	assert_player(0)
 	assert_state(gm.GameState.TURN_START_DRAW)
-	await take_screenshot("03_p0_turn_start")
 
 func phase_normal_turns_discard():
 	print("\n>>> PHASE 2: Standard Draw/Discard (4 Players) <<<")
@@ -78,15 +64,15 @@ func phase_normal_turns_discard():
 		
 		# Draw
 		gm.player_draw_card()
-		await take_screenshot("p%d_01_draw" % i)
 		
-		# Discard
+		# Discard (Deterministic Ace of Clubs)
 		gm.drawn_card_data = load("res://card_data.gd").new("Ace", "Clubs")
-		if board.pending_card: board.pending_card.setup(gm.drawn_card_data)
 		gm.player_discard_drawn_card()
-		await take_screenshot("p%d_02_discarded" % i)
 		
-		await create_timer(0.5).timeout
+		# In a real game, next_turn() advances the player. 
+		# Our loop sets gm.current_player_index manually for testing specific turns,
+		# but next_turn() would normally increment it.
+		assert_state(gm.GameState.TURN_START_DRAW)
 
 func phase_normal_turns_swap():
 	print("\n>>> PHASE 3: Standard Draw/Swap (4 Players) <<<")
@@ -99,11 +85,15 @@ func phase_normal_turns_swap():
 		
 		gm.player_draw_card()
 		gm.drawn_card_data = load("res://card_data.gd").new("2", "Hearts")
-		if board.pending_card: board.pending_card.setup(gm.drawn_card_data)
 		
 		gm.player_swap_drawn_card(0)
-		await take_screenshot("p%d_03_swapped" % i)
-		await create_timer(0.5).timeout
+		
+		# Verify swap worked
+		var hand_card = gm.players_info[i].hand[0]
+		if hand_card.rank == "2" and hand_card.suit == "Hearts":
+			print("[QA PASS] Player %d: Swap logic verified." % i)
+		else:
+			print("[QA FAIL] Player %d: Swap logic failed." % i)
 
 func phase_queen_abilities_all_players():
 	print("\n>>> PHASE 4: Queen Peek Ability (4 Players) <<<")
@@ -114,14 +104,12 @@ func phase_queen_abilities_all_players():
 		
 		gm.player_draw_card()
 		gm.drawn_card_data = load("res://card_data.gd").new("Queen", "Diamonds")
-		if board.pending_card: board.pending_card.setup(gm.drawn_card_data)
 		gm.player_discard_drawn_card()
 		
 		assert_state(gm.GameState.TURN_PEEK_ABILITY)
-		await take_screenshot("p%d_04_queen_active" % i)
 		
 		gm.complete_peek_ability()
-		await create_timer(0.5).timeout
+		assert_state(gm.GameState.TURN_START_DRAW)
 
 func phase_jack_abilities_all_players():
 	print("\n>>> PHASE 5: Jack Swap Ability (4 Players) <<<")
@@ -132,17 +120,22 @@ func phase_jack_abilities_all_players():
 		
 		gm.player_draw_card()
 		gm.drawn_card_data = load("res://card_data.gd").new("Jack", "Clubs")
-		if board.pending_card: board.pending_card.setup(gm.drawn_card_data)
 		gm.player_discard_drawn_card()
 		
 		assert_state(gm.GameState.TURN_SWAP_ABILITY)
-		await take_screenshot("p%d_05_jack_active" % i)
 		
 		_setup_manual_hand(0, 0, "7", "Hearts")
 		_setup_manual_hand(1, 0, "Ace", "Spades")
 		
 		gm.complete_swap_ability(0, 0, 1, 0)
-		await create_timer(0.5).timeout
+		
+		# Verify swap between players
+		var p0_card = gm.players_info[0].hand[0]
+		var p1_card = gm.players_info[1].hand[0]
+		if p0_card.rank == "Ace" and p1_card.rank == "7":
+			print("[QA PASS] Player %d: Jack swap cross-player verified." % i)
+		else:
+			print("[QA FAIL] Player %d: Jack swap cross-player failed." % i)
 
 func phase_dutch_calls_all_players():
 	print("\n>>> PHASE 6: Dutch Calling Logic <<<")
@@ -153,14 +146,13 @@ func phase_dutch_calls_all_players():
 		gm.change_state(gm.GameState.TURN_START_DRAW)
 		
 		gm.call_dutch(trigger_p)
-		await take_screenshot("dutch_call_p%d" % trigger_p)
 		
+		# 3 other players must take a turn
 		gm.next_turn()
 		gm.next_turn()
 		gm.next_turn()
 		
 		assert_state(gm.GameState.GAME_OVER)
-		await take_screenshot("game_over_from_p%d" % trigger_p)
 
 # --- UTILITIES ---
 
@@ -183,10 +175,3 @@ func _setup_manual_hand(p_idx, c_idx, rank, suit):
 	while gm.players_info[p_idx].hand.size() <= c_idx:
 		gm.players_info[p_idx].hand.append(null)
 	gm.players_info[p_idx].hand[c_idx] = load("res://card_data.gd").new(rank, suit)
-
-func take_screenshot(name: String):
-	for i in range(10): await process_frame
-	if FileAccess.file_exists(STOP_FILE): quit()
-	var image = root.get_texture().get_image()
-	image.save_png(SCREENSHOT_BASE_DIR + name + ".png")
-	print("[QA] Captured %s.png" % name)
