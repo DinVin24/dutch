@@ -164,6 +164,7 @@ func _on_card_discarded(player_idx, card_data):
 			card_to_discard.position = Vector2.ZERO # Center perfectly in area
 			card_to_discard.rotation_degrees = 0
 			card_to_discard.z_index = 0
+			card_to_discard.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		)
 
 func _on_card_drawn_to_pending(player_idx, card_data):
