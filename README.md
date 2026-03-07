@@ -37,3 +37,6 @@
 - The player with the lowest score wins.
 - In case of a tie, the player with fewer cards wins.
 - If you discard all of your cards before the game ends, you win.
+
+## Developer Setup
+- Run `git config core.hooksPath .githooks` after cloning to enable the project git hooks.
