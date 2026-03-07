@@ -13,6 +13,11 @@ var card_spacing = 110.0
 var padding = 20.0
 var card_pivot = Vector2(50, 70)
 
+# Peek Phase state
+var cards_peeked: int = 0
+var max_peeks: int = 2
+var peeked_card_nodes: Array = []
+
 var pause_menu_scene = preload("res://pause_menu.tscn")
 var pause_menu_instance: Node = null
 
@@ -72,27 +77,53 @@ func _start_peek_phase():
 	# Visual feedback for peek phase
 	var label = Label.new()
 	label.name = "PeekInstructions"
-	label.text = "Memorizing your cards..."
+	label.text = "Click 2 of your cards to peek"
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	$GameUI/MainHUD.add_child(label)
 	label.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	label.position.y += 50
 	
-	await get_tree().create_timer(0.5).timeout
+	# Reset peek state
+	cards_peeked = 0
+	peeked_card_nodes.clear()
 	
-	# Automatically reveal the first 2 cards for the player
-	if player_hands[0].size() >= 2:
-		player_hands[0][0].flip()
-		player_hands[0][1].flip()
+	# Log for debug
+	print("Game Board: Waiting for player to select cards to peek.")
+
+func _on_card_clicked(card_node: CardUI, _card_data: CardData):
+	if GameManager.current_state != GameManager.GameState.INITIAL_PEEK:
+		return
+		
+	# Ensure it's a player card (player index 0)
+	if not player_hands[0].has(card_node):
+		print("Initial Peek: You can only peek at your own cards!")
+		return
+		
+	# Check if already peeked this card
+	if peeked_card_nodes.has(card_node):
+		return
+		
+	if cards_peeked < max_peeks:
+		print("Initial Peek: Player peeked at card ", cards_peeked + 1)
+		card_node.flip()
+		peeked_card_nodes.append(card_node)
+		cards_peeked += 1
+		
+		if cards_peeked == max_peeks:
+			_complete_peek_phase()
+
+func _complete_peek_phase():
+	if $GameUI/MainHUD.has_node("PeekInstructions"):
+		$GameUI/MainHUD.get_node("PeekInstructions").text = "Starting game in 3 seconds..."
 		
 	# Wait for 3 seconds for the player to memorize
 	await get_tree().create_timer(3.0).timeout
 	
 	# Flip them back
-	if player_hands[0].size() >= 2:
-		player_hands[0][0].flip()
-		player_hands[0][1].flip()
-		
+	for card in peeked_card_nodes:
+		if is_instance_valid(card):
+			card.flip()
+	
 	# Cleanup label
 	if $GameUI/MainHUD.has_node("PeekInstructions"):
 		$GameUI/MainHUD.get_node("PeekInstructions").queue_free()
@@ -123,6 +154,9 @@ func _handle_initial_deal():
 			add_child(card_inst)
 			card_inst.setup(card_data)
 			player_hands[p_idx].append(card_inst)
+			
+			# Connect click signal for interaction
+			card_inst.card_clicked.connect(_on_card_clicked)
 			
 			# Get target transform
 			var transform = get_card_transform(p_idx, i, cards_per_player)
