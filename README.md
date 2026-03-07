@@ -17,7 +17,7 @@
   - If the card is a match, you get to discard it.
   - If the card isn't a match, you keep it and also draw a new card without looking at it.
 - Special cards:
-  - Queen -> Look at any card on the table
+  - Queen -> Look at any face-down card on the table (yours or an opponent's)
   - Jack -> Swap any two cards on the table
 
 ## Scoring
