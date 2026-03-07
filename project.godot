@@ -19,11 +19,6 @@ config/icon="res://assets/images/icon.svg"
 
 GameManager="*res://game_manager.gd"
 
-[display]
-
-window/stretch/mode="canvas_items"
-window/stretch/aspect="expand"
-
 [physics]
 
 3d/physics_engine="Jolt Physics"

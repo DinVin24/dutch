@@ -130,8 +130,9 @@ func set_highlighted(p_highlighted: bool):
 	
 	if is_highlighted:
 		highlight_tween = create_tween().set_loops()
-		highlight_tween.tween_property(self, "scale", Vector2(1.05, 1.05), 0.6).set_trans(Tween.TRANS_SINE)
-		highlight_tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.6).set_trans(Tween.TRANS_SINE)
+		# Premium "Pulse" effect instead of shaking
+		highlight_tween.tween_property(self , "scale", Vector2(1.08, 1.08), 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		highlight_tween.tween_property(self , "scale", Vector2(1.0, 1.0), 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 		modulate = Color(1.5, 1.5, 1.5) # Brighten
 	else:
 		scale = Vector2(1.0, 1.0)
