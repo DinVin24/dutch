@@ -135,7 +135,7 @@ func player_discard_drawn_card():
 	if current_state != GameState.DRAWN_CARD_PENDING:
 		return
 	
-	print("GameManager: Discarding drawn card: ", discarded_card.rank, " of ", discarded_card.suit)
+	print("GameManager: Discarding drawn card: ", drawn_card_data.rank, " of ", drawn_card_data.suit)
 	# Move pending card to discard pile
 	deck_manager.discard_pile.append(drawn_card_data)
 	card_discarded.emit(current_player_index, drawn_card_data)
