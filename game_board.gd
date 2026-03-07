@@ -237,7 +237,7 @@ func _on_card_discarded(player_idx, card_data):
 	if pending_card and pending_card.data == card_data:
 		card_to_discard = pending_card
 		pending_card = null
-	else if player_idx != -1:
+	elif player_idx != -1:
 		# Was it a card from a hand? (During a swap)
 		# We need to find which node it was. 
 		# We use player_idx directly from the signal to avoid race conditions with next_turn()
