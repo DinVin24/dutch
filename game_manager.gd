@@ -41,7 +41,7 @@ func _ready():
 	
 	# Background Music Setup
 	bg_music_player = AudioStreamPlayer.new()
-	bg_music_player.stream = preload("res://bg_music.ogg")
+	bg_music_player.stream = preload("res://assets/music/bg_music.ogg")
 	if bg_music_player.stream is AudioStreamOggVorbis:
 		bg_music_player.stream.loop = true
 	bg_music_player.volume_db = -10.0
