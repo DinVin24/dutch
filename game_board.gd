@@ -6,6 +6,8 @@ extends Control
 @onready var player_pos_top = $PlayerPositions/Top
 @onready var player_pos_left = $PlayerPositions/Left
 @onready var player_pos_right = $PlayerPositions/Right
+@onready var turn_label = $GameUI/MainHUD/TopLeft/TurnLabel
+@onready var top_center = $GameUI/MainHUD/TopCenter
 
 var player_hands: Array = [[], [], [], []]
 var card_spacing = 110.0
@@ -75,15 +77,8 @@ func _on_turn_started(player_idx):
 	var p_info = GameManager.players_info[player_idx]
 	var label_text = p_info.name + "'s Turn"
 	
-	if not $GameUI/MainHUD.has_node("TurnLabel"):
-		var label = Label.new()
-		label.name = "TurnLabel"
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		$GameUI/MainHUD.add_child(label)
-		label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-		label.position.y += 10
-	
-	$GameUI/MainHUD.get_node("TurnLabel").text = label_text
+	if turn_label:
+		turn_label.text = label_text
 
 func _on_deck_clicked():
 	if GameManager.current_state != GameManager.GameState.TURN_START_DRAW:
@@ -171,22 +166,22 @@ func _perform_jack_swap():
 	reposition_all_cards() 
 
 func _show_message(text: String):
-	var label = get_node_or_null("GameUI/MainHUD/AbilityMessage")
-	if not label:
-		label = Label.new()
-		label.name = "AbilityMessage"
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_KEEP_WIDTH, 100)
-		get_node("GameUI/MainHUD").add_child(label)
-		label.add_theme_font_size_override("font_size", 24)
-	
+	# Clear previous messages if any
+	for child in top_center.get_children():
+		child.queue_free()
+		
+	var label = Label.new()
+	label.name = "AbilityMessage"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	label.text = text
+	label.add_theme_font_size_override("font_size", 24)
+	top_center.add_child(label)
 	label.show()
 
 func _hide_message():
-	var label = get_node_or_null("GameUI/MainHUD/AbilityMessage")
-	if label:
-		label.hide()
+	for child in top_center.get_children():
+		child.queue_free()
 
 func _on_card_discarded(player_idx, card_data):
 	var card_to_discard: Node = null
