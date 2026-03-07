@@ -12,6 +12,8 @@ var player_hands: Array = [[], [], [], []]
 var card_spacing = 110.0
 var padding = 20.0
 var card_pivot = Vector2(50, 70)
+var pending_card: Node = null
+var pending_card_tween: Tween = null
 
 # Peek Phase state
 var cards_peeked: int = 0
@@ -25,15 +27,32 @@ func _ready():
 	print("Game Board: Ready. Connecting signals...")
 	GameManager.stop_menu_music()
 	GameManager.game_state_changed.connect(_on_game_state_changed)
+	GameManager.turn_started.connect(_on_turn_started)
+	GameManager.card_drawn_to_pending.connect(_on_card_drawn_to_pending)
+	GameManager.card_discarded.connect(_on_card_discarded)
+	GameManager.deck_ready.connect(_update_deck_visual)
 	resized.connect(_on_resized)
 	
 	# Connect deck interaction
 	var deck_button = $CenterTable/DeckArea/Slotbg/Interaction
 	if deck_button:
+		print("GameBoard: FOUND DECK BUTTON. Reparenting...")
+		deck_button.reparent(deck_area)
+		deck_button.z_index = 10
 		deck_button.pressed.connect(_on_deck_clicked)
+	
+	var discard_button = $CenterTable/DiscardArea/Slotbg/Interaction
+	if discard_button:
+		print("GameBoard: FOUND DISCARD BUTTON. Reparenting...")
+		discard_button.reparent(discard_area)
+		discard_button.z_index = 10
+		discard_button.pressed.connect(_on_discard_clicked)
 	
 	await get_tree().process_frame
 	_update_deck_visual()
+	
+	print("GameBoard Tree Structure (CenterTable):")
+	$CenterTable.print_tree_pretty()
 	
 	print("Game Board: Starting game...")
 	GameManager.initialize_game(4)
@@ -54,11 +73,149 @@ func _update_deck_visual():
 		card_bg.setup(CardData.new("Ace", "Clubs")) # Data doesn't matter for back
 		card_bg.position = Vector2(-i * 2, -i * 2)
 		card_bg.z_index = -i
-		card_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	
+	# ENSURE INTERACTION IS ON TOP (Last child wins in Godot UI input)
+	if deck_area.has_node("Interaction"):
+		deck_area.move_child(deck_area.get_node("Interaction"), -1)
+		print("GameBoard: Deck Interaction button moved to TOP of stack.")
+
+func _on_turn_started(player_idx):
+	print("Game Board: Player ", player_idx, "'s turn.")
+	
+	# Update HUD message
+	var p_info = GameManager.players_info[player_idx]
+	var label_text = "YOUR TURN" if player_idx == 0 else p_info.name + "'s Turn"
+	
+	if not $GameUI/MainHUD.has_node("TurnLabel"):
+		var label = Label.new()
+		label.name = "TurnLabel"
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		$GameUI/MainHUD.add_child(label)
+		label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		label.position.y += 10
+	
+	$GameUI/MainHUD.get_node("TurnLabel").text = label_text
+	
+	# Enable/Disable deck interaction
+	var deck_button = deck_area.get_node("Interaction")
+	if player_idx == 0:
+		deck_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	else:
+		deck_button.mouse_default_cursor_shape = Control.CURSOR_ARROW
 
 func _on_deck_clicked():
-	print("Deck clicked!")
-	# Logic for drawing will go in next Epic, but for now we just log it.
+	print("GameBoard: Interaction - Deck clicked. Current state: ", GameManager.GameState.keys()[GameManager.current_state])
+	if GameManager.current_state != GameManager.GameState.PLAYER_TURN:
+		print("Warning: It is not your turn!")
+		return
+	
+	print("GameBoard: Drawing card via GameManager...")
+	GameManager.player_draw_card()
+
+func _on_discard_clicked():
+	print("GameBoard: Interaction - Discard clicked. State: ", GameManager.GameState.keys()[GameManager.current_state], " Player: ", GameManager.current_player_index)
+	if GameManager.current_state == GameManager.GameState.DRAWN_CARD_PENDING and GameManager.current_player_index == 0:
+		print("GameBoard: Discarding card via GameManager...")
+		GameManager.player_discard_drawn_card()
+	else:
+		print("GameBoard: Discard ignored. Conditions not met.")
+
+func _on_player_card_clicked(card_node, _card_data):
+	if GameManager.current_state == GameManager.GameState.DRAWN_CARD_PENDING and GameManager.current_player_index == 0:
+		var card_idx = player_hands[0].find(card_node)
+		if card_idx != -1:
+			print("Player swapping drawn card with card ", card_idx)
+			GameManager.player_swap_drawn_card(card_idx)
+
+func _on_card_discarded(player_idx, card_data):
+	print("Game Board: Card discarded by player ", player_idx)
+	
+	# If it was a swap, we need to update the hand visual
+	# For now, let's just animate the card to the discard pile
+	
+	var card_to_discard: Node = null
+	
+	# Was it the pending card?
+	if pending_card and pending_card.data == card_data:
+		card_to_discard = pending_card
+		pending_card = null
+	elif player_idx != -1:
+		# Was it a card from a hand? (During a swap)
+		# We need to find which node it was. 
+		# We use player_idx directly from the signal to avoid race conditions with next_turn()
+		var hand = player_hands[player_idx]
+		for i in range(hand.size()):
+			if hand[i].data == card_data:
+				card_to_discard = hand[i]
+				
+				# If it's the player's hand, disconnect signals so it doesn't click from discard
+				if player_idx == 0:
+					if card_to_discard.card_clicked.is_connected(_on_player_card_clicked):
+						card_to_discard.card_clicked.disconnect(_on_player_card_clicked)
+				
+				# Replace in hand with pending card if it exists
+				if pending_card:
+					if pending_card_tween and pending_card_tween.is_running():
+						pending_card_tween.kill()
+						
+					hand[i] = pending_card
+					
+					# Connect signal for the new card in human hand
+					if player_idx == 0:
+						if not hand[i].card_clicked.is_connected(_on_player_card_clicked):
+							hand[i].card_clicked.connect(_on_player_card_clicked)
+					
+					pending_card = null
+					reposition_all_cards()
+				break
+	
+	if card_to_discard:
+		card_to_discard.z_index = 100 # Move above others
+		# target_pos should be the center of the discard slot
+		var target_pos = discard_area.global_position
+		var tween = create_tween()
+		tween.tween_property(card_to_discard, "global_position", target_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.tween_callback(func():
+			# Keep a few visuals in discard? For now just free or stack.
+			# Let's keep the last one visible.
+			for child in discard_area.get_children():
+				if child.name.begins_with("DiscardVisual"):
+					child.queue_free()
+			
+			card_to_discard.reparent(discard_area)
+			card_to_discard.name = "DiscardVisual"
+			card_to_discard.position = Vector2.ZERO # Center perfectly in area
+			card_to_discard.rotation_degrees = 0
+			card_to_discard.z_index = 0
+			
+			# ENSURE INTERACTION IS ON TOP
+			if discard_area.has_node("Interaction"):
+				discard_area.move_child(discard_area.get_node("Interaction"), -1)
+				print("GameBoard: Discard Interaction button moved to TOP of stack.")
+		)
+
+func _on_card_drawn_to_pending(player_idx, card_data):
+	print("Game Board: Card drawn to pending for player ", player_idx)
+	
+	var card_scene = preload("res://card.tscn")
+	pending_card = card_scene.instantiate()
+	add_child(pending_card)
+	pending_card.setup(card_data)
+	
+	# Start at deck
+	var spawn_pos = deck_area.global_position - card_pivot
+	pending_card.global_position = spawn_pos
+	
+	# Target position: Slightly offset from deck towards player 0 (if human)
+	# Or just center it more prominently
+	# Target position: Slightly offset from deck towards player 0 (if human)
+	var target_pos = deck_area.global_position + Vector2(0, 160) - card_pivot
+	
+	pending_card_tween = create_tween()
+	pending_card_tween.tween_property(pending_card, "global_position", target_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	
+	# Update deck visual (remove one card if we are tracking count)
+	_update_deck_visual()
 
 func _on_resized():
 	# Reposition all cards instantly when window size changes
@@ -154,6 +311,10 @@ func _handle_initial_deal():
 			add_child(card_inst)
 			card_inst.setup(card_data)
 			player_hands[p_idx].append(card_inst)
+			GameManager.players_info[p_idx].hand.append(card_data)
+			
+			if p_idx == 0:
+				card_inst.card_clicked.connect(_on_player_card_clicked)
 			
 			# Connect click signal for interaction
 			card_inst.card_clicked.connect(_on_card_clicked)
@@ -183,9 +344,13 @@ func reposition_all_cards():
 		for i in range(hand.size()):
 			var card = hand[i]
 			if is_instance_valid(card):
+				print("GameBoard: Repositioning card ", i, " for player ", p_idx, " Node: ", card.name)
 				var transform = get_card_transform(p_idx, i, hand.size())
-				card.rotation_degrees = transform.rotation
-				card.global_position = transform.position - card_pivot.rotated(deg_to_rad(transform.rotation))
+				var final_pos = transform.position - card_pivot.rotated(deg_to_rad(transform.rotation))
+				
+				var tween = create_tween().set_parallel(true)
+				tween.tween_property(card, "rotation_degrees", transform.rotation, 0.3)
+				tween.tween_property(card, "global_position", final_pos, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 func get_card_transform(p_idx: int, card_idx: int, total_cards: int) -> Dictionary:
 	var screen_size = get_viewport_rect().size

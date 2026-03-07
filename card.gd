@@ -14,7 +14,7 @@ var is_flipping: bool = false
 var is_selected: bool = false
 
 # Path configuration
-const SPRITE_SHEET_PATH = "res://assets/cards/playing_cards.png"
+const SPRITE_SHEET_PATH = "res://assets/images/cards/playing_cards.png"
 const CARD_WIDTH = 100
 const CARD_HEIGHT = 140
 
@@ -110,6 +110,11 @@ func _apply_atlas_textures():
 	else:
 		print("CardUI Error: Invalid rank/suit mapping: ", data.suit, "/", data.rank)
 		front_face.texture = null
+
+func set_interaction_enabled(enabled: bool):
+	if has_node("Interaction"):
+		$Interaction.mouse_filter = Control.MOUSE_FILTER_STOP if enabled else Control.MOUSE_FILTER_IGNORE
+	mouse_filter = Control.MOUSE_FILTER_STOP if enabled else Control.MOUSE_FILTER_IGNORE
 
 func set_selected(p_selected: bool):
 	is_selected = p_selected
