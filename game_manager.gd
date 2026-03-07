@@ -7,6 +7,7 @@ enum GameState {
 	INITIAL_PEEK,
 	PLAYER_TURN,
 	CPU_TURN,
+	DRAWN_CARD_PENDING,
 	CHECK_DUTCH,
 	GAME_OVER
 }
@@ -17,6 +18,7 @@ signal turn_started(player_id)
 signal game_over(winner_id)
 signal deck_ready
 signal card_drawn(player_id, card_data)
+signal card_drawn_to_pending(player_id, card_data)
 signal card_discarded(player_id, card_data)
 
 var current_state: GameState = GameState.INITIALIZING
@@ -28,6 +30,7 @@ var num_players: int = 4 # Default to 4 players
 var players_info: Array = []
 var current_player_index: int = 0
 var dutch_caller_index: int = -1 # -1 means no one has called Dutch yet
+var drawn_card_data: CardData = null
 
 func _ready():
 	deck_manager = DeckManager.new()
@@ -111,3 +114,49 @@ func call_dutch(player_id: int):
 		print("Player ", player_id, " called DUTCH!")
 		# Game continues until it returns to this player
 		next_turn()
+
+func player_draw_card():
+	if current_state != GameState.PLAYER_TURN:
+		return
+	
+	var card_info = deck_manager.draw_card()
+	if card_info.is_empty():
+		print("Deck is empty!")
+		# In a real game, you might reshuffle the discard pile
+		return
+		
+	drawn_card_data = CardData.new(card_info.rank, card_info.suit)
+	drawn_card_data.is_face_up = true # Drawn card is visible to the drawer
+	
+	change_state(GameState.DRAWN_CARD_PENDING)
+	card_drawn_to_pending.emit(current_player_index, drawn_card_data)
+
+func player_discard_drawn_card():
+	if current_state != GameState.DRAWN_CARD_PENDING:
+		return
+	
+	# Move pending card to discard pile
+	deck_manager.discard_pile.append(drawn_card_data)
+	card_discarded.emit(current_player_index, drawn_card_data)
+	
+	drawn_card_data = null
+	next_turn()
+
+func player_swap_drawn_card(card_idx: int):
+	if current_state != GameState.DRAWN_CARD_PENDING:
+		return
+	
+	var player_h = players_info[current_player_index].hand
+	if card_idx < 0 or card_idx >= player_h.size():
+		return
+		
+	# Swap cards
+	var old_card = player_h[card_idx]
+	player_h[card_idx] = drawn_card_data
+	
+	# Old card goes to discard
+	deck_manager.discard_pile.append(old_card)
+	card_discarded.emit(current_player_index, old_card)
+	
+	drawn_card_data = null
+	next_turn()

@@ -12,6 +12,7 @@ var player_hands: Array = [[], [], [], []]
 var card_spacing = 110.0
 var padding = 20.0
 var card_pivot = Vector2(50, 70)
+var pending_card: Node = null
 
 var pause_menu_scene = preload("res://pause_menu.tscn")
 var pause_menu_instance: Node = null
@@ -21,6 +22,7 @@ func _ready():
 	GameManager.stop_menu_music()
 	GameManager.game_state_changed.connect(_on_game_state_changed)
 	GameManager.turn_started.connect(_on_turn_started)
+	GameManager.card_drawn_to_pending.connect(_on_card_drawn_to_pending)
 	resized.connect(_on_resized)
 	
 	# Connect deck interaction
@@ -82,7 +84,29 @@ func _on_deck_clicked():
 		return
 	
 	print("Player drawing card...")
-	# Logic for drawing card will be implemented next
+	GameManager.player_draw_card()
+
+func _on_card_drawn_to_pending(player_idx, card_data):
+	print("Game Board: Card drawn to pending for player ", player_idx)
+	
+	var card_scene = preload("res://card.tscn")
+	pending_card = card_scene.instantiate()
+	add_child(pending_card)
+	pending_card.setup(card_data)
+	
+	# Start at deck
+	var spawn_pos = deck_area.global_position - card_pivot
+	pending_card.global_position = spawn_pos
+	
+	# Target position: Slightly offset from deck towards player 0 (if human)
+	# Or just center it more prominently
+	var target_pos = deck_area.global_position + Vector2(0, 160) - card_pivot
+	
+	var tween = create_tween()
+	tween.tween_property(pending_card, "global_position", target_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	
+	# Update deck visual (remove one card if we are tracking count)
+	_update_deck_visual()
 
 func _on_resized():
 	# Reposition all cards instantly when window size changes
