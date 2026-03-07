@@ -122,11 +122,10 @@ func player_draw_card():
 	var card_info = deck_manager.draw_card()
 	if card_info.is_empty():
 		print("Deck is empty!")
-		# In a real game, you might reshuffle the discard pile
 		return
 		
 	drawn_card_data = CardData.new(card_info.rank, card_info.suit)
-	drawn_card_data.is_face_up = true # Drawn card is visible to the drawer
+	drawn_card_data.is_face_up = true
 	
 	change_state(GameState.DRAWN_CARD_PENDING)
 	card_drawn_to_pending.emit(current_player_index, drawn_card_data)
@@ -135,7 +134,7 @@ func player_discard_drawn_card():
 	if current_state != GameState.DRAWN_CARD_PENDING:
 		return
 	
-	print("GameManager: Discarding drawn card: ", drawn_card_data.rank, " of ", drawn_card_data.suit)
+	print("GameManager: Discarding drawn card.")
 	# Move pending card to discard pile
 	deck_manager.discard_pile.append(drawn_card_data)
 	card_discarded.emit(current_player_index, drawn_card_data)
@@ -153,7 +152,7 @@ func player_swap_drawn_card(card_idx: int):
 		
 	# Swap cards
 	var old_card = player_h[card_idx]
-	print("GameManager: Swapping drawn card with hand card at idx ", card_idx, " (", old_card.rank, ")")
+	print("GameManager: Swapping drawn card with hand card at idx ", card_idx)
 	player_h[card_idx] = drawn_card_data
 	
 	# Old card goes to discard
