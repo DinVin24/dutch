@@ -27,6 +27,7 @@ func _ready():
 	GameManager.turn_started.connect(_on_turn_started)
 	GameManager.card_drawn_to_pending.connect(_on_card_drawn_to_pending)
 	GameManager.card_discarded.connect(_on_card_discarded)
+	GameManager.deck_ready.connect(_update_deck_visual)
 	resized.connect(_on_resized)
 	
 	# Connect deck interaction
@@ -268,17 +269,6 @@ func _on_card_discarded(player_idx, card_data):
 				break
 	
 	if card_to_discard:
-		pass # Already found a node to animate
-	elif player_idx == -1:
-		# Initial discard from deck
-		var card_scene = preload("res://card.tscn")
-		card_to_discard = card_scene.instantiate()
-		add_child(card_to_discard)
-		card_to_discard.setup(card_data)
-		card_to_discard.global_position = deck_area.global_position - card_pivot
-		_update_deck_visual()
-	
-	if card_to_discard:
 		card_to_discard.z_index = 100 # Move above others
 		# target_pos should be the center of the discard slot
 		var target_pos = discard_area.global_position
@@ -364,8 +354,8 @@ func _start_peek_phase():
 	if $GameUI/MainHUD.has_node("PeekInstructions"):
 		$GameUI/MainHUD.get_node("PeekInstructions").queue_free()
 		
-	print("Game Board: Peek phase complete. Starting Main Game Loop.")
-	GameManager.start_main_game()
+	print("Game Board: Peek phase complete. Starting Player Turn.")
+	GameManager.change_state(GameManager.GameState.PLAYER_TURN)
 
 func _handle_initial_deal():
 	print("Game Board: Dealing responsive cards...")
