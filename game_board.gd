@@ -260,12 +260,12 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	pending_card.name = "PendingCard"
 	
 	# Position at deck in local game_area space
-	var deck_local_pos = game_area.to_local(deck_area.global_position)
+	var deck_local_pos = deck_area.global_position - game_area.global_position
 	pending_card.position = deck_local_pos - card_pivot
 	pending_card.z_index = 200
 	
 	var target_pos = deck_area.global_position + Vector2(0, 160) - card_pivot
-	var target_local_pos = game_area.to_local(target_pos)
+	var target_local_pos = target_pos - game_area.global_position
 	
 	pending_card_tween = create_tween()
 	pending_card_tween.tween_property(pending_card, "position", target_local_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -370,7 +370,7 @@ func _handle_initial_deal():
 			card_inst.rotation_degrees = transform.rotation
 			
 			var final_pos = transform.position - card_pivot.rotated(deg_to_rad(transform.rotation))
-			var deck_local_pos = game_area.to_local(deck_area.global_position)
+			var deck_local_pos = deck_area.global_position - game_area.global_position
 			var spawn_pos = deck_local_pos - card_pivot
 			
 			card_inst.position = spawn_pos
