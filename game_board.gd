@@ -1,10 +1,9 @@
 extends Control
 
-@onready var game_area = $LayoutWrapper/GameArea
-@onready var deck_area = $LayoutWrapper/GameArea/CenterTable/DeckArea
-@onready var discard_area = $LayoutWrapper/GameArea/CenterTable/DiscardArea
-@onready var turn_label = $GameUI/MainHUD/HUDContainer/TopLeft/Panel/TurnLabel
-@onready var top_center = $GameUI/MainHUD/HUDContainer/TopCenter
+@onready var deck_area = $CenterTable/DeckArea
+@onready var discard_area = $CenterTable/DiscardArea
+@onready var turn_label = $GameUI/MainHUD/TopLeft/Panel/TurnLabel
+@onready var top_center = $GameUI/MainHUD/TopCenter
 @onready var dutch_button = $GameUI/MainHUD/BottomRight/Panel/DutchButton
 
 var player_hands: Array = [[], [], [], []]
@@ -33,13 +32,13 @@ func _ready():
 	GameManager.deck_ready.connect(_update_deck_visual)
 	resized.connect(_on_resized)
 	
-	var deck_button = $LayoutWrapper/GameArea/CenterTable/DeckArea/Slotbg/Interaction
+	var deck_button = $CenterTable/DeckArea/Slotbg/Interaction
 	if deck_button:
 		deck_button.reparent(deck_area)
 		deck_button.z_index = 10
 		deck_button.pressed.connect(_on_deck_clicked)
 	
-	var discard_button = $LayoutWrapper/GameArea/CenterTable/DiscardArea/Slotbg/Interaction
+	var discard_button = $CenterTable/DiscardArea/Slotbg/Interaction
 	if discard_button:
 		discard_button.reparent(discard_area)
 		discard_button.z_index = 10
@@ -255,20 +254,17 @@ func _on_card_discarded(player_idx, card_data):
 func _on_card_drawn_to_pending(player_idx, card_data):
 	var card_scene = preload("res://card.tscn")
 	pending_card = card_scene.instantiate()
-	game_area.add_child(pending_card)
+	add_child(pending_card)
 	pending_card.setup(card_data)
 	pending_card.name = "PendingCard"
 	
-	# Position at deck in local game_area space
-	var deck_local_pos = deck_area.global_position - game_area.global_position
-	pending_card.position = deck_local_pos - card_pivot
+	pending_card.global_position = deck_area.global_position - card_pivot
 	pending_card.z_index = 200
 	
 	var target_pos = deck_area.global_position + Vector2(0, 160) - card_pivot
-	var target_local_pos = target_pos - game_area.global_position
 	
 	pending_card_tween = create_tween()
-	pending_card_tween.tween_property(pending_card, "position", target_local_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	pending_card_tween.tween_property(pending_card, "global_position", target_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	
 	_update_deck_visual()
 
@@ -358,25 +354,23 @@ func _handle_initial_deal():
 			var card_data = CardData.new(card_data_dict.rank, card_data_dict.suit)
 			card_data.is_face_up = false
 			
-			game_area.add_child(card_inst)
+			add_child(card_inst)
 			card_inst.setup(card_data)
 			player_hands[p_idx].append(card_inst)
 			GameManager.players_info[p_idx].hand.append(card_data)
 			
 			card_inst.card_clicked.connect(_on_player_card_clicked)
 			
-			# Get target transform (relative to game_area)
 			var transform = get_card_transform(p_idx, i, cards_per_player)
 			card_inst.rotation_degrees = transform.rotation
 			
 			var final_pos = transform.position - card_pivot.rotated(deg_to_rad(transform.rotation))
-			var deck_local_pos = deck_area.global_position - game_area.global_position
-			var spawn_pos = deck_local_pos - card_pivot
+			var spawn_pos = deck_area.global_position - card_pivot
 			
-			card_inst.position = spawn_pos
+			card_inst.global_position = spawn_pos
 			
 			var tween = create_tween()
-			tween.tween_property(card_inst, "position", final_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tween.tween_property(card_inst, "global_position", final_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 			
 			await get_tree().create_timer(0.05).timeout
 	
@@ -393,7 +387,7 @@ func reposition_all_cards():
 				
 				var tween = create_tween().set_parallel(true)
 				tween.tween_property(card, "rotation_degrees", transform.rotation, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-				tween.tween_property(card, "position", final_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+				tween.tween_property(card, "global_position", final_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 				
 				# Premium "lift" effect
 				var lift_tween = create_tween()
@@ -401,44 +395,44 @@ func reposition_all_cards():
 				lift_tween.tween_property(card, "scale", Vector2(1.0, 1.0), 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 
 func get_card_transform(p_idx: int, card_idx: int, total_cards: int) -> Dictionary:
-	# Position relative to GameArea (0,0 to game_size)
-	var game_size = game_area.get_rect().size
-	
-	var card_spacing = game_size.x * relative_card_spacing
+	# All positions are global pixels based on the viewport
+	var vp = get_viewport_rect().size
+	var card_spacing = vp.x * 0.09
 	var total_spread = card_spacing * (total_cards - 1)
 	var target_pos = Vector2.ZERO
 	var rot_deg = 0.0
 	
-	# Uniform Distance Ratio (Symmetry!)
-	var dist_pct = 0.15 # 15% from the boundaries of the GameArea
+	# Edge insets for the 4 sides (% of the viewport dimension)
+	var v_inset = 0.12 # 12% from top/bottom for vertical hands
+	var h_inset = 0.08 # 8% from left/right for side hands
 	
 	match p_idx:
-		0:
-			# Bottom: Mirror of p2
+		0: # Bottom player
 			rot_deg = 0
-			var start_x = (game_size.x - total_spread) / 2.0
-			target_pos = Vector2(start_x + (card_idx * card_spacing), game_size.y * (1.0 - dist_pct))
-		1:
+			var start_x = (vp.x - total_spread) / 2.0
+			target_pos = Vector2(start_x + card_idx * card_spacing, vp.y * (1.0 - v_inset))
+		1: # Top or Left player
 			if GameManager.num_players == 2:
-				# Top: Perfectly mirrored
 				rot_deg = 180
-				var start_x = (game_size.x - total_spread) / 2.0
-				target_pos = Vector2(start_x + (card_idx * card_spacing), game_size.y * dist_pct)
+				var start_x = (vp.x - total_spread) / 2.0
+				target_pos = Vector2(start_x + card_idx * card_spacing, vp.y * v_inset)
 			else:
-				# Left: Mirrored from p3
+				# Left: cards laid vertically, spread along Y
 				rot_deg = 90
-				var start_y = (game_size.y - total_spread) / 2.0
-				target_pos = Vector2(game_size.x * dist_pct, start_y + (card_idx * card_spacing))
-		2:
-			# Top: Perfectly mirrored
+				var v_spacing = vp.y * 0.09
+				var v_spread = v_spacing * (total_cards - 1)
+				var start_y = (vp.y - v_spread) / 2.0
+				target_pos = Vector2(vp.x * h_inset, start_y + card_idx * v_spacing)
+		2: # Top player
 			rot_deg = 180
-			var start_x = (game_size.x - total_spread) / 2.0
-			target_pos = Vector2(start_x + (card_idx * card_spacing), game_size.y * dist_pct)
-		3:
-			# Right: Mirrored from p1
+			var start_x = (vp.x - total_spread) / 2.0
+			target_pos = Vector2(start_x + card_idx * card_spacing, vp.y * v_inset)
+		3: # Right player
 			rot_deg = -90
-			var start_y = (game_size.y - total_spread) / 2.0
-			target_pos = Vector2(game_size.x * (1.0 - dist_pct), start_y + (card_idx * card_spacing))
+			var v_spacing = vp.y * 0.09
+			var v_spread = v_spacing * (total_cards - 1)
+			var start_y = (vp.y - v_spread) / 2.0
+			target_pos = Vector2(vp.x * (1.0 - h_inset), start_y + card_idx * v_spacing)
 	
 	return {"position": target_pos, "rotation": rot_deg}
 
