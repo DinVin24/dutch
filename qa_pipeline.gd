@@ -18,7 +18,7 @@ func _input(event):
 func start_pipeline():
 	print("\n[QA] STARTING PURE LOGIC PIPELINE (HEADLESS)...")
 	gm = root.get_node_or_null("GameManager")
-	if not gm: 
+	if not gm:
 		print("[QA FAIL] GameManager singleton not found.")
 		quit()
 	
@@ -39,6 +39,9 @@ func start_pipeline():
 	
 	# PHASE 6: DUTCH CYCLE (Each Caller Position)
 	await phase_dutch_calls_all_players()
+	
+	# PHASE 7: JUMP IN
+	await phase_jump_in_all_players()
 	
 	print("\n[QA] ALL GRANULAR LOGIC PHASES AND PLAYER TURNS VERIFIED.")
 	quit()
@@ -69,6 +72,9 @@ func phase_normal_turns_discard():
 		gm.drawn_card_data = load("res://card_data.gd").new("Ace", "Clubs")
 		gm.player_discard_drawn_card()
 		
+		assert_state(gm.GameState.TURN_END_CHOICE)
+		gm.end_turn()
+		
 		# In a real game, next_turn() advances the player. 
 		# Our loop sets gm.current_player_index manually for testing specific turns,
 		# but next_turn() would normally increment it.
@@ -87,6 +93,9 @@ func phase_normal_turns_swap():
 		gm.drawn_card_data = load("res://card_data.gd").new("2", "Hearts")
 		
 		gm.player_swap_drawn_card(0)
+		
+		assert_state(gm.GameState.TURN_END_CHOICE)
+		gm.end_turn()
 		
 		# Verify swap worked
 		var hand_card = gm.players_info[i].hand[0]
@@ -109,6 +118,10 @@ func phase_queen_abilities_all_players():
 		assert_state(gm.GameState.TURN_PEEK_ABILITY)
 		
 		gm.complete_peek_ability()
+		
+		assert_state(gm.GameState.TURN_END_CHOICE)
+		gm.end_turn()
+		
 		assert_state(gm.GameState.TURN_START_DRAW)
 
 func phase_jack_abilities_all_players():
@@ -129,6 +142,9 @@ func phase_jack_abilities_all_players():
 		
 		gm.complete_swap_ability(0, 0, 1, 0)
 		
+		assert_state(gm.GameState.TURN_END_CHOICE)
+		gm.end_turn()
+		
 		# Verify swap between players
 		var p0_card = gm.players_info[0].hand[0]
 		var p1_card = gm.players_info[1].hand[0]
@@ -145,19 +161,79 @@ func phase_dutch_calls_all_players():
 		gm.current_player_index = trigger_p
 		gm.change_state(gm.GameState.TURN_START_DRAW)
 		
+		# Must draw and discard before we can call dutch in the end choice phase
+		gm.player_draw_card()
+		gm.drawn_card_data = load("res://card_data.gd").new("Ace", "Clubs")
+		gm.player_discard_drawn_card()
+		
+		assert_state(gm.GameState.TURN_END_CHOICE)
 		gm.call_dutch(trigger_p)
 		
-		# 3 other players must take a turn
-		gm.next_turn()
-		gm.next_turn()
-		gm.next_turn()
+		# 3 other players must take a turn. Since we added TURN_END_CHOICE, 
+		# we must simulate their draws and explicitly end their turns
+		for pass_turn in range(3):
+			gm.player_draw_card()
+			gm.drawn_card_data = load("res://card_data.gd").new("Ace", "Clubs")
+			gm.player_discard_drawn_card()
+			gm.end_turn()
 		
+		assert_state(gm.GameState.TURN_CONFIRM_DUTCH)
+		gm.confirm_dutch()
 		assert_state(gm.GameState.GAME_OVER)
+
+func phase_jump_in_all_players():
+	print("\n>>> PHASE 7: Jump In Mechanics <<<")
+	for i in range(4):
+		print("[QA] Player %d: Triggering Jump In" % i)
+		gm.initialize_game(4)
+		gm.current_player_index = i
+		gm.change_state(gm.GameState.TURN_START_DRAW)
+		
+		# Put a specific card in hand to jump in with
+		_setup_manual_hand(i, 0, "5", "Clubs")
+		
+		# Draw and discard a matching card
+		gm.player_draw_card()
+		gm.drawn_card_data = load("res://card_data.gd").new("5", "Hearts")
+		gm.player_discard_drawn_card()
+		
+		assert_state(gm.GameState.TURN_END_CHOICE)
+		
+		# Start jump in
+		gm.start_jump_in()
+		assert_state(gm.GameState.TURN_JUMP_IN_SELECTION)
+		
+		# Execute jump in
+		var success = gm.validate_jump_in(0)
+		if success:
+			print("[QA PASS] Jump in validated successfully")
+		else:
+			print("[QA FAIL] Jump in failed to validate")
+			
+		assert_state(gm.GameState.TURN_END_CHOICE)
+		
+		# Test Jump In Mismatch Penalty
+		gm.start_jump_in()
+		_setup_manual_hand(i, 0, "King", "Spades")
+		var old_hand_size = gm.players_info[i].hand.size()
+		
+		var mismatch_success = gm.validate_jump_in(0)
+		if not mismatch_success:
+			print("[QA PASS] Jump in correctly rejected mismatched rank")
+			if gm.players_info[i].hand.size() == old_hand_size + 1:
+				print("[QA PASS] Penalty card added to hand successfully")
+			else:
+				print("[QA FAIL] Penalty card not added! Expected %d, got %d" % [old_hand_size + 1, gm.players_info[i].hand.size()])
+		else:
+			print("[QA FAIL] Jump in accepted a mismatched card")
+			
+		assert_state(gm.GameState.TURN_END_CHOICE)
+		gm.end_turn()
 
 # --- UTILITIES ---
 
 func assert_state(expected: int):
-	var states = ["INIT", "DEAL", "PEEK", "START", "RESOLVE", "QUEEN", "JACK", "CHECK", "OVER"]
+	var states = ["INIT", "DEAL", "PEEK", "START", "RESOLVE", "QUEEN", "JACK", "END_CHOICE", "JUMP_IN", "CHECK", "CONFIRM", "OVER"]
 	if gm.current_state != expected:
 		var got = states[gm.current_state] if gm.current_state < states.size() else "ERR"
 		var exp = states[expected] if expected < states.size() else "ERR"

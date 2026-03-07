@@ -21,7 +21,7 @@
 
 ## Epic 5: End Game & Scoring
 - [ ] **Story**: As a player, I want a "Call Dutch" button available during my turn that signals the final round, so that I can attempt to end the game when I believe I have the lowest score.
-- [ ] **Story**: As a player, once my "Dutch" call cycles back to my turn, I want to be able to officially end the game or cancel it, so that the game transitions into the Scoring Phase.
+- [ ] **Story**: As a player, once my "Dutch" call cycles back to my turn, I want to be prompted to either confirm the call (ending the game) or cancel it (forfeiting my right to call Dutch again for the rest of the game), so that the game transitions into the Scoring Phase or safely continues.
 - [ ] **Story**: As a player, when the game ends, I want all cards flipped face up and the points tallied according to the rules (Ace=1, Jack=11, Queen=12, King=13, King of Diamonds=0), so that the lowest scorer is immediately declared the winner.
 
 ## Epic 6: AI Opponents (Bots)

@@ -8,6 +8,12 @@ extends Control
 @onready var player_pos_right = $PlayerPositions/Right
 @onready var turn_label = $GameUI/MainHUD/TopLeft/TurnLabel
 @onready var top_center = $GameUI/MainHUD/TopCenter
+@onready var main_hud_bottom = $GameUI/MainHUD/BottomCenter # Check if standard, else inject in MainHUD
+
+var end_turn_btn: Button
+var jump_in_btn: Button
+var call_dutch_btn: Button
+var confirm_dutch_box: HBoxContainer
 
 var player_hands: Array = [[], [], [], []]
 var card_spacing = 110.0
@@ -32,6 +38,7 @@ func _ready():
 	GameManager.turn_started.connect(_on_turn_started)
 	GameManager.card_drawn_to_pending.connect(_on_card_drawn_to_pending)
 	GameManager.card_discarded.connect(_on_card_discarded)
+	GameManager.jump_in_penalty.connect(_on_jump_in_penalty)
 	GameManager.deck_ready.connect(_update_deck_visual)
 	resized.connect(_on_resized)
 	
@@ -40,6 +47,8 @@ func _ready():
 		deck_button.reparent(deck_area)
 		deck_button.z_index = 10
 		deck_button.pressed.connect(_on_deck_clicked)
+	
+	_create_dutch_ui()
 	
 	var discard_button = $CenterTable/DiscardArea/Slotbg/Interaction
 	if discard_button:
@@ -52,6 +61,72 @@ func _ready():
 	
 	print("Game Board: Starting game...")
 	GameManager.initialize_game(4)
+
+func _create_dutch_ui():
+	# Inject standalone buttons (no containers to prevent layout crashes)
+	end_turn_btn = Button.new()
+	end_turn_btn.text = "END TURN"
+	end_turn_btn.add_theme_font_size_override("font_size", 20)
+	var style_green = StyleBoxFlat.new()
+	style_green.bg_color = Color(0.2, 0.6, 0.2)
+	end_turn_btn.add_theme_stylebox_override("normal", style_green)
+	end_turn_btn.pressed.connect(_on_end_turn_pressed)
+	$GameUI/MainHUD.add_child(end_turn_btn)
+	end_turn_btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	end_turn_btn.offset_left = -270
+	end_turn_btn.offset_right = -110
+	end_turn_btn.offset_top = -250
+	end_turn_btn.offset_bottom = -200
+	end_turn_btn.hide()
+	
+	jump_in_btn = Button.new()
+	jump_in_btn.text = "JUMP IN"
+	jump_in_btn.add_theme_font_size_override("font_size", 20)
+	var style_blue = StyleBoxFlat.new()
+	style_blue.bg_color = Color(0.2, 0.4, 0.8)
+	jump_in_btn.add_theme_stylebox_override("normal", style_blue)
+	jump_in_btn.pressed.connect(_on_jump_in_pressed)
+	$GameUI/MainHUD.add_child(jump_in_btn)
+	jump_in_btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	jump_in_btn.offset_left = -80
+	jump_in_btn.offset_right = 80
+	jump_in_btn.offset_top = -250
+	jump_in_btn.offset_bottom = -200
+	jump_in_btn.hide()
+
+	call_dutch_btn = Button.new()
+	call_dutch_btn.text = "CALL DUTCH!"
+	call_dutch_btn.add_theme_font_size_override("font_size", 20)
+	var style_red = StyleBoxFlat.new()
+	style_red.bg_color = Color(0.8, 0.2, 0.2)
+	call_dutch_btn.add_theme_stylebox_override("normal", style_red)
+	call_dutch_btn.pressed.connect(_on_call_dutch_pressed)
+	$GameUI/MainHUD.add_child(call_dutch_btn)
+	call_dutch_btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	call_dutch_btn.offset_left = 110
+	call_dutch_btn.offset_right = 270
+	call_dutch_btn.offset_top = -250
+	call_dutch_btn.offset_bottom = -200
+	call_dutch_btn.hide()
+	
+	# Inject Confirm/Cancel panel to the center
+	confirm_dutch_box = HBoxContainer.new()
+	confirm_dutch_box.add_theme_constant_override("separation", 20)
+	$GameUI/MainHUD.add_child(confirm_dutch_box)
+	confirm_dutch_box.set_anchors_preset(Control.PRESET_CENTER)
+	confirm_dutch_box.hide()
+	
+	var confirm_btn = Button.new()
+	confirm_btn.text = "CONFIRM (End Game)"
+	confirm_btn.add_theme_font_size_override("font_size", 24)
+	confirm_btn.pressed.connect(_on_confirm_dutch_pressed)
+	confirm_dutch_box.add_child(confirm_btn)
+	
+	var cancel_btn = Button.new()
+	cancel_btn.text = "CANCEL (Keep Playing)"
+	cancel_btn.add_theme_font_size_override("font_size", 24)
+	cancel_btn.pressed.connect(_on_cancel_dutch_pressed)
+	confirm_dutch_box.add_child(cancel_btn)
 
 func _update_deck_visual():
 	for child in deck_area.get_children():
@@ -123,6 +198,14 @@ func _on_player_card_clicked(card_node, _card_data):
 				GameManager.player_swap_drawn_card(c_idx)
 			else:
 				print("FSM Blocked: Cannot swap drawn card into opponent's hand.")
+		GameManager.GameState.TURN_JUMP_IN_SELECTION:
+			if p_idx == GameManager.current_player_index:
+				if GameManager.validate_jump_in(c_idx):
+					print("Player successfully jumped in!")
+				else:
+					print("Jump in failed! Rank does not match.")
+			else:
+				print("FSM Blocked: Cannot jump in cards from other players' hands.")
 		GameManager.GameState.TURN_PEEK_ABILITY:
 			if card_node.data.is_face_up:
 				print("FSM Blocked: Cannot peek at a card that is already face-up.")
@@ -223,6 +306,11 @@ func _on_card_discarded(player_idx, card_data):
 					
 					pending_card = null
 					reposition_all_cards()
+				else:
+					# Pure discard (e.g. from Jump-In or a special effect). 
+					# Shrink the hand array so `reposition_all_cards` gracefully recenters the remaining cards.
+					hand.remove_at(i)
+					reposition_all_cards()
 				break
 	
 	if card_to_discard:
@@ -273,11 +361,32 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	
 	_update_deck_visual()
 
+func _on_jump_in_penalty(player_idx, penalty_card_data):
+	var card_scene = preload("res://card.tscn")
+	var new_card = card_scene.instantiate()
+	add_child(new_card)
+	new_card.setup(penalty_card_data)
+	
+	new_card.card_clicked.connect(_on_player_card_clicked)
+	player_hands[player_idx].append(new_card)
+	
+	var spawn_pos = deck_area.global_position - card_pivot
+	new_card.global_position = spawn_pos
+	
+	# Slide the card down into the updated hand layout
+	reposition_all_cards()
+	_update_deck_visual()
+
 func _on_resized():
 	reposition_all_cards()
 
 func _on_game_state_changed(new_state):
 	_hide_message()
+	
+	if end_turn_btn: end_turn_btn.hide()
+	if jump_in_btn: jump_in_btn.hide()
+	if call_dutch_btn: call_dutch_btn.hide()
+	if confirm_dutch_box: confirm_dutch_box.hide()
 	
 	var deck_button = deck_area.get_node("Interaction")
 	if new_state == GameManager.GameState.TURN_START_DRAW:
@@ -286,6 +395,28 @@ func _on_game_state_changed(new_state):
 		deck_button.mouse_default_cursor_shape = Control.CURSOR_ARROW
 		
 	match new_state:
+		GameManager.GameState.TURN_END_CHOICE:
+			if GameManager.current_player_index == 0:
+				end_turn_btn.show()
+				jump_in_btn.show()
+				if GameManager.dutch_caller_index == -1 and GameManager.players_info[0].can_call_dutch:
+					call_dutch_btn.show()
+			else:
+				# Bot turn: immediately auto-end for now
+				GameManager.end_turn()
+		GameManager.GameState.TURN_JUMP_IN_SELECTION:
+			_show_message("Select a matching card to Jump In, or End Turn.")
+			if GameManager.current_player_index == 0:
+				end_turn_btn.show()
+			else:
+				GameManager.end_turn() # Bots don't jump in yet
+		GameManager.GameState.TURN_CONFIRM_DUTCH:
+			if GameManager.current_player_index == 0:
+				_show_message("You called Dutch! End the game, or Cancel?")
+				confirm_dutch_box.show()
+			else:
+				# Bot auto-logic goes here later, for now just auto-confirm
+				pass
 		GameManager.GameState.DEAL_CARDS:
 			_handle_initial_deal()
 		GameManager.GameState.INITIAL_PEEK:
@@ -463,3 +594,23 @@ func _resume_game() -> void:
 func _go_to_main_menu() -> void:
 	get_tree().paused = false
 	get_tree().change_scene_to_file("res://main_menu.tscn")
+
+func _on_end_turn_pressed():
+	if GameManager.current_player_index == 0:
+		GameManager.end_turn()
+
+func _on_jump_in_pressed():
+	if GameManager.current_player_index == 0:
+		GameManager.start_jump_in()
+
+func _on_call_dutch_pressed():
+	if GameManager.current_player_index == 0:
+		GameManager.call_dutch(0)
+
+func _on_confirm_dutch_pressed():
+	if GameManager.current_player_index == 0:
+		GameManager.confirm_dutch()
+
+func _on_cancel_dutch_pressed():
+	if GameManager.current_player_index == 0:
+		GameManager.cancel_dutch()
