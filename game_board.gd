@@ -8,6 +8,7 @@ extends Control
 @onready var player_pos_right = $PlayerPositions/Right
 @onready var turn_label = $GameUI/MainHUD/TopLeft/Panel/TurnLabel
 @onready var top_center = $GameUI/MainHUD/TopCenter
+@onready var dutch_button = $GameUI/MainHUD/BottomRight/Panel/DutchButton
 
 var player_hands: Array = [[], [], [], []]
 var relative_card_spacing = 0.08 # 8% of window width
@@ -47,6 +48,10 @@ func _ready():
 		discard_button.z_index = 10
 		discard_button.pressed.connect(_on_discard_clicked)
 	
+	if dutch_button:
+		dutch_button.pressed.connect(_on_dutch_clicked)
+		dutch_button.hide()
+	
 	await get_tree().process_frame
 	_update_deck_visual()
 	
@@ -79,6 +84,12 @@ func _on_turn_started(player_idx):
 	
 	if turn_label:
 		turn_label.text = label_text
+		
+	# Only show Dutch button during your own turn start phase
+	if player_idx == 0 and GameManager.dutch_caller_index == -1:
+		dutch_button.show()
+	else:
+		dutch_button.hide()
 
 func _on_deck_clicked():
 	if GameManager.current_state != GameManager.GameState.TURN_START_DRAW:
@@ -90,7 +101,13 @@ func _on_discard_clicked():
 	if GameManager.current_state != GameManager.GameState.TURN_RESOLVE_DRAWN:
 		print("Warning: FSM prevents discarding drawn card right now.")
 		return
+	dutch_button.hide()
 	GameManager.player_discard_drawn_card()
+
+func _on_dutch_clicked():
+	if GameManager.current_state == GameManager.GameState.TURN_START_DRAW:
+		dutch_button.hide()
+		GameManager.call_dutch(0) # Player 0 is the human
 
 func _on_player_card_clicked(card_node, _card_data):
 	var p_idx = -1
@@ -110,6 +127,7 @@ func _on_player_card_clicked(card_node, _card_data):
 				_handle_initial_peek_click(card_node)
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
 			if p_idx == GameManager.current_player_index:
+				dutch_button.hide()
 				GameManager.player_swap_drawn_card(c_idx)
 			else:
 				print("FSM Blocked: Cannot swap drawn card into opponent's hand.")
@@ -386,33 +404,38 @@ func get_card_transform(p_idx: int, card_idx: int, total_cards: int) -> Dictiona
 	var target_pivot = Vector2.ZERO
 	var rot_deg = 0.0
 	
+	# Symmetrical Distance Ratios
+	var hor_dist = 0.12 # 12% from edge for side players
+	var ver_dist_bot = 0.82 # 82% height for bottom
+	var ver_dist_top = 0.30 # 30% height for top (Safety from HUD)
+	
 	match p_idx:
 		0:
-			# Bottom: 82% height
+			# Bottom: Centered on X
 			rot_deg = 0
 			var start_x = (screen_size.x - total_spread) / 2.0
-			target_pivot = Vector2(start_x + (card_idx * card_spacing), screen_size.y * 0.82)
+			target_pivot = Vector2(start_x + (card_idx * card_spacing), screen_size.y * ver_dist_bot)
 		1:
 			if GameManager.num_players == 2:
-				# Top (Opponent): 30% height (Safe from 15% HUD)
+				# Top (Opponent): Centered on X
 				rot_deg = 180
 				var start_x = (screen_size.x - total_spread) / 2.0
-				target_pivot = Vector2(start_x + (card_idx * card_spacing), screen_size.y * 0.30)
+				target_pivot = Vector2(start_x + (card_idx * card_spacing), screen_size.y * ver_dist_top)
 			else:
-				# Left: 12% width
+				# Left Player: Centered on Y
 				rot_deg = 90
 				var start_y = (screen_size.y - total_spread) / 2.0
-				target_pivot = Vector2(screen_size.x * 0.12, start_y + (card_idx * card_spacing))
+				target_pivot = Vector2(screen_size.x * hor_dist, start_y + (card_idx * card_spacing))
 		2:
-			# Top: 30% height
+			# Top: Centered on X
 			rot_deg = 180
 			var start_x = (screen_size.x - total_spread) / 2.0
-			target_pivot = Vector2(start_x + (card_idx * card_spacing), screen_size.y * 0.30)
+			target_pivot = Vector2(start_x + (card_idx * card_spacing), screen_size.y * ver_dist_top)
 		3:
-			# Right: 88% width
+			# Right Player: Centered on Y
 			rot_deg = -90
 			var start_y = (screen_size.y - total_spread) / 2.0
-			target_pivot = Vector2(screen_size.x * 0.88, start_y + (card_idx * card_spacing))
+			target_pivot = Vector2(screen_size.x * (1.0 - hor_dist), start_y + (card_idx * card_spacing))
 	
 	return {"position": target_pivot, "rotation": rot_deg}
 
