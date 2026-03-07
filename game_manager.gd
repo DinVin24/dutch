@@ -1,14 +1,14 @@
 extends Node
 
-# Game States
+# Strict FSM Game States
 enum GameState {
 	INITIALIZING,
 	DEAL_CARDS,
 	INITIAL_PEEK,
-	PLAYER_TURN,
-	CPU_TURN,
-	DRAWN_CARD_PENDING,
-	SPECIAL_MOVE_PENDING,
+	TURN_START_DRAW,
+	TURN_RESOLVE_DRAWN,
+	TURN_PEEK_ABILITY,
+	TURN_SWAP_ABILITY,
 	CHECK_DUTCH,
 	GAME_OVER
 }
@@ -21,15 +21,13 @@ signal deck_ready
 signal card_drawn(player_id, card_data)
 signal card_drawn_to_pending(player_id, card_data)
 signal card_discarded(player_id, card_data)
-signal special_move_started(player_id, ability_type)
-signal special_move_ended(player_id)
 
 var current_state: GameState = GameState.INITIALIZING
 var deck_manager: DeckManager
 var bg_music_player: AudioStreamPlayer
 
 # Match Settings
-var num_players: int = 4 # Default to 4 players
+var num_players: int = 4 # Hotseat local play
 var players_info: Array = []
 var current_player_index: int = 0
 var dutch_caller_index: int = -1 # -1 means no one has called Dutch yet
@@ -65,7 +63,7 @@ func initialize_game(p_count: int = 4):
 	for i in range(num_players):
 		players_info.append({
 			"id": i,
-			"name": "Player " + str(i + 1) if i == 0 else "Bot " + str(i),
+			"name": "Player " + str(i + 1),
 			"score": 0,
 			"hand": [] # CardData objects
 		})
@@ -83,7 +81,7 @@ func change_state(new_state: GameState):
 	match current_state:
 		GameState.DEAL_CARDS:
 			_handle_deal_cards()
-		GameState.PLAYER_TURN, GameState.CPU_TURN:
+		GameState.TURN_START_DRAW:
 			turn_started.emit(current_player_index)
 		GameState.GAME_OVER:
 			_handle_game_over()
@@ -96,10 +94,7 @@ func next_turn():
 		change_state(GameState.GAME_OVER)
 		return
 
-	if current_player_index == 0:
-		change_state(GameState.PLAYER_TURN)
-	else:
-		change_state(GameState.CPU_TURN)
+	change_state(GameState.TURN_START_DRAW)
 
 func _handle_deal_cards():
 	pass
@@ -119,7 +114,8 @@ func call_dutch(player_id: int):
 		next_turn()
 
 func player_draw_card():
-	if current_state != GameState.PLAYER_TURN:
+	if current_state != GameState.TURN_START_DRAW:
+		print("FSM Blocked: Cannot draw card outside of TURN_START_DRAW state")
 		return
 	
 	var card_info = deck_manager.draw_card()
@@ -130,28 +126,26 @@ func player_draw_card():
 	drawn_card_data = CardData.new(card_info.rank, card_info.suit)
 	drawn_card_data.is_face_up = true
 	
-	change_state(GameState.DRAWN_CARD_PENDING)
+	change_state(GameState.TURN_RESOLVE_DRAWN)
 	card_drawn_to_pending.emit(current_player_index, drawn_card_data)
 
 func player_discard_drawn_card():
-	if current_state != GameState.DRAWN_CARD_PENDING:
+	if current_state != GameState.TURN_RESOLVE_DRAWN:
+		print("FSM Blocked: Cannot discard pending card outside of TURN_RESOLVE_DRAWN state")
 		return
 	
 	print("GameManager: Discarding drawn card.")
-	# Move pending card to discard pile
 	deck_manager.discard_pile.append(drawn_card_data)
 	card_discarded.emit(current_player_index, drawn_card_data)
 	
 	var discarded_card = drawn_card_data
 	drawn_card_data = null
 	
-	if _check_special_ability(current_player_index, discarded_card):
-		return
-	
-	next_turn()
+	_resolve_discard_effects(discarded_card)
 
 func player_swap_drawn_card(card_idx: int):
-	if current_state != GameState.DRAWN_CARD_PENDING:
+	if current_state != GameState.TURN_RESOLVE_DRAWN:
+		print("FSM Blocked: Cannot swap outside of TURN_RESOLVE_DRAWN state")
 		return
 	
 	var player_h = players_info[current_player_index].hand
@@ -169,25 +163,36 @@ func player_swap_drawn_card(card_idx: int):
 	
 	drawn_card_data = null
 	
-	if _check_special_ability(current_player_index, old_card):
+	_resolve_discard_effects(old_card)
+
+func _resolve_discard_effects(card: CardData):
+	if card.rank == "Queen":
+		print("Queen discarded! FSM -> TURN_PEEK_ABILITY")
+		change_state(GameState.TURN_PEEK_ABILITY)
+	elif card.rank == "Jack":
+		print("Jack discarded! FSM -> TURN_SWAP_ABILITY")
+		change_state(GameState.TURN_SWAP_ABILITY)
+	else:
+		next_turn()
+
+func complete_peek_ability():
+	if current_state != GameState.TURN_PEEK_ABILITY:
+		print("FSM Blocked: Cannot complete peek outside of TURN_PEEK_ABILITY state")
 		return
-		
 	next_turn()
 
-func _check_special_ability(player_idx: int, card: CardData) -> bool:
-	if card.rank == "Queen":
-		print("Queen discarded! Triggering PEEK ability.")
-		change_state(GameState.SPECIAL_MOVE_PENDING)
-		special_move_started.emit(player_idx, "PEEK")
-		return true
-	elif card.rank == "Jack":
-		print("Jack discarded! Triggering SWAP ability.")
-		change_state(GameState.SPECIAL_MOVE_PENDING)
-		special_move_started.emit(player_idx, "SWAP")
-		return true
-	return false
-
-func end_special_move():
-	if current_state == GameState.SPECIAL_MOVE_PENDING:
-		special_move_ended.emit(current_player_index)
-		next_turn()
+func complete_swap_ability(player1_idx: int, card1_idx: int, player2_idx: int, card2_idx: int):
+	if current_state != GameState.TURN_SWAP_ABILITY:
+		print("FSM Blocked: Cannot complete swap outside of TURN_SWAP_ABILITY state")
+		return
+		
+	var h1 = players_info[player1_idx].hand
+	var h2 = players_info[player2_idx].hand
+	
+	var temp_data = h1[card1_idx]
+	h1[card1_idx] = h2[card2_idx]
+	h2[card2_idx] = temp_data
+	
+	print("GameManager: Swapped card indices ", card1_idx, " and ", card2_idx, " between players ", player1_idx, " and ", player2_idx)
+	
+	next_turn()
