@@ -1,13 +1,10 @@
 extends Control
 
-@onready var deck_area = $CenterTable/DeckArea
-@onready var discard_area = $CenterTable/DiscardArea
-@onready var player_pos_bottom = $PlayerPositions/Bottom
-@onready var player_pos_top = $PlayerPositions/Top
-@onready var player_pos_left = $PlayerPositions/Left
-@onready var player_pos_right = $PlayerPositions/Right
-@onready var turn_label = $GameUI/MainHUD/TopLeft/Panel/TurnLabel
-@onready var top_center = $GameUI/MainHUD/TopCenter
+@onready var game_area = $LayoutWrapper/GameArea
+@onready var deck_area = $LayoutWrapper/GameArea/CenterTable/DeckArea
+@onready var discard_area = $LayoutWrapper/GameArea/CenterTable/DiscardArea
+@onready var turn_label = $GameUI/MainHUD/HUDContainer/TopLeft/Panel/TurnLabel
+@onready var top_center = $GameUI/MainHUD/HUDContainer/TopCenter
 @onready var dutch_button = $GameUI/MainHUD/BottomRight/Panel/DutchButton
 
 var player_hands: Array = [[], [], [], []]
@@ -36,13 +33,13 @@ func _ready():
 	GameManager.deck_ready.connect(_update_deck_visual)
 	resized.connect(_on_resized)
 	
-	var deck_button = $CenterTable/DeckArea/Slotbg/Interaction
+	var deck_button = $LayoutWrapper/GameArea/CenterTable/DeckArea/Slotbg/Interaction
 	if deck_button:
 		deck_button.reparent(deck_area)
 		deck_button.z_index = 10
 		deck_button.pressed.connect(_on_deck_clicked)
 	
-	var discard_button = $CenterTable/DiscardArea/Slotbg/Interaction
+	var discard_button = $LayoutWrapper/GameArea/CenterTable/DiscardArea/Slotbg/Interaction
 	if discard_button:
 		discard_button.reparent(discard_area)
 		discard_button.z_index = 10
@@ -258,16 +255,20 @@ func _on_card_discarded(player_idx, card_data):
 func _on_card_drawn_to_pending(player_idx, card_data):
 	var card_scene = preload("res://card.tscn")
 	pending_card = card_scene.instantiate()
-	add_child(pending_card)
+	game_area.add_child(pending_card)
 	pending_card.setup(card_data)
+	pending_card.name = "PendingCard"
 	
-	var spawn_pos = deck_area.global_position - card_pivot
-	pending_card.global_position = spawn_pos
+	# Position at deck in local game_area space
+	var deck_local_pos = game_area.to_local(deck_area.global_position)
+	pending_card.position = deck_local_pos - card_pivot
+	pending_card.z_index = 200
 	
 	var target_pos = deck_area.global_position + Vector2(0, 160) - card_pivot
+	var target_local_pos = game_area.to_local(target_pos)
 	
 	pending_card_tween = create_tween()
-	pending_card_tween.tween_property(pending_card, "global_position", target_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	pending_card_tween.tween_property(pending_card, "position", target_local_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	
 	_update_deck_visual()
 
@@ -357,23 +358,25 @@ func _handle_initial_deal():
 			var card_data = CardData.new(card_data_dict.rank, card_data_dict.suit)
 			card_data.is_face_up = false
 			
-			add_child(card_inst)
+			game_area.add_child(card_inst)
 			card_inst.setup(card_data)
 			player_hands[p_idx].append(card_inst)
 			GameManager.players_info[p_idx].hand.append(card_data)
 			
 			card_inst.card_clicked.connect(_on_player_card_clicked)
 			
-			# Get target transform
+			# Get target transform (relative to game_area)
 			var transform = get_card_transform(p_idx, i, cards_per_player)
 			card_inst.rotation_degrees = transform.rotation
 			
 			var final_pos = transform.position - card_pivot.rotated(deg_to_rad(transform.rotation))
-			var spawn_pos = deck_area.global_position - card_pivot
-			card_inst.global_position = spawn_pos
+			var deck_local_pos = game_area.to_local(deck_area.global_position)
+			var spawn_pos = deck_local_pos - card_pivot
+			
+			card_inst.position = spawn_pos
 			
 			var tween = create_tween()
-			tween.tween_property(card_inst, "global_position", final_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tween.tween_property(card_inst, "position", final_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 			
 			await get_tree().create_timer(0.05).timeout
 	
@@ -390,7 +393,7 @@ func reposition_all_cards():
 				
 				var tween = create_tween().set_parallel(true)
 				tween.tween_property(card, "rotation_degrees", transform.rotation, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-				tween.tween_property(card, "global_position", final_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+				tween.tween_property(card, "position", final_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 				
 				# Premium "lift" effect
 				var lift_tween = create_tween()
@@ -398,46 +401,46 @@ func reposition_all_cards():
 				lift_tween.tween_property(card, "scale", Vector2(1.0, 1.0), 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 
 func get_card_transform(p_idx: int, card_idx: int, total_cards: int) -> Dictionary:
-	var screen_size = get_viewport_rect().size
-	var card_spacing = screen_size.x * relative_card_spacing
+	# Position relative to GameArea (0,0 to game_size)
+	var game_size = game_area.get_rect().size
+	
+	var card_spacing = game_size.x * relative_card_spacing
 	var total_spread = card_spacing * (total_cards - 1)
-	var target_pivot = Vector2.ZERO
+	var target_pos = Vector2.ZERO
 	var rot_deg = 0.0
 	
-	# Symmetrical Distance Ratios
-	var hor_dist = 0.12 # 12% from edge for side players
-	var ver_dist_bot = 0.82 # 82% height for bottom
-	var ver_dist_top = 0.30 # 30% height for top (Safety from HUD)
+	# Uniform Distance Ratio (Symmetry!)
+	var dist_pct = 0.15 # 15% from the boundaries of the GameArea
 	
 	match p_idx:
 		0:
-			# Bottom: Centered on X
+			# Bottom: Mirror of p2
 			rot_deg = 0
-			var start_x = (screen_size.x - total_spread) / 2.0
-			target_pivot = Vector2(start_x + (card_idx * card_spacing), screen_size.y * ver_dist_bot)
+			var start_x = (game_size.x - total_spread) / 2.0
+			target_pos = Vector2(start_x + (card_idx * card_spacing), game_size.y * (1.0 - dist_pct))
 		1:
 			if GameManager.num_players == 2:
-				# Top (Opponent): Centered on X
+				# Top: Perfectly mirrored
 				rot_deg = 180
-				var start_x = (screen_size.x - total_spread) / 2.0
-				target_pivot = Vector2(start_x + (card_idx * card_spacing), screen_size.y * ver_dist_top)
+				var start_x = (game_size.x - total_spread) / 2.0
+				target_pos = Vector2(start_x + (card_idx * card_spacing), game_size.y * dist_pct)
 			else:
-				# Left Player: Centered on Y
+				# Left: Mirrored from p3
 				rot_deg = 90
-				var start_y = (screen_size.y - total_spread) / 2.0
-				target_pivot = Vector2(screen_size.x * hor_dist, start_y + (card_idx * card_spacing))
+				var start_y = (game_size.y - total_spread) / 2.0
+				target_pos = Vector2(game_size.x * dist_pct, start_y + (card_idx * card_spacing))
 		2:
-			# Top: Centered on X
+			# Top: Perfectly mirrored
 			rot_deg = 180
-			var start_x = (screen_size.x - total_spread) / 2.0
-			target_pivot = Vector2(start_x + (card_idx * card_spacing), screen_size.y * ver_dist_top)
+			var start_x = (game_size.x - total_spread) / 2.0
+			target_pos = Vector2(start_x + (card_idx * card_spacing), game_size.y * dist_pct)
 		3:
-			# Right Player: Centered on Y
+			# Right: Mirrored from p1
 			rot_deg = -90
-			var start_y = (screen_size.y - total_spread) / 2.0
-			target_pivot = Vector2(screen_size.x * (1.0 - hor_dist), start_y + (card_idx * card_spacing))
+			var start_y = (game_size.y - total_spread) / 2.0
+			target_pos = Vector2(game_size.x * (1.0 - dist_pct), start_y + (card_idx * card_spacing))
 	
-	return {"position": target_pivot, "rotation": rot_deg}
+	return {"position": target_pos, "rotation": rot_deg}
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):

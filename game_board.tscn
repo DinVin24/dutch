@@ -12,7 +12,34 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_script")
 
-[node name="Background" type="TextureRect" parent="."]
+[node name="LayoutWrapper" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 0
+
+[node name="HUDArea" type="Control" parent="LayoutWrapper"]
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+size_flags_vertical = 0
+
+[node name="HUDBackground" type="ColorRect" parent="LayoutWrapper/HUDArea"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.470588)
+
+[node name="GameArea" type="Control" parent="LayoutWrapper"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Background" type="TextureRect" parent="LayoutWrapper/GameArea"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -23,32 +50,36 @@ texture = ExtResource("2_bg")
 expand_mode = 1
 stretch_mode = 6
 
-[node name="Tint" type="ColorRect" parent="Background"]
+[node name="Tint" type="ColorRect" parent="LayoutWrapper/GameArea/Background"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0, 0, 0, 0.470588)
+color = Color(0, 0, 0, 0.235294)
 
-[node name="CenterTable" type="HBoxContainer" parent="."]
+[node name="CenterTable" type="HBoxContainer" parent="LayoutWrapper/GameArea"]
 layout_mode = 1
-anchors_preset = -1
-anchor_left = 0.4
-anchor_top = 0.45
-anchor_right = 0.6
-anchor_bottom = 0.55
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -110.0
+offset_top = -75.0
+offset_right = 110.0
+offset_bottom = 75.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 20
 alignment = 1
 
-[node name="DeckArea" type="Control" parent="CenterTable"]
+[node name="DeckArea" type="Control" parent="LayoutWrapper/GameArea/CenterTable"]
 custom_minimum_size = Vector2(100, 140)
 layout_mode = 2
 
-[node name="Slotbg" type="ColorRect" parent="CenterTable/DeckArea"]
+[node name="Slotbg" type="ColorRect" parent="LayoutWrapper/GameArea/CenterTable/DeckArea"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -57,7 +88,7 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(1, 1, 1, 0.0392157)
 
-[node name="Border" type="ReferenceRect" parent="CenterTable/DeckArea/Slotbg"]
+[node name="Border" type="ReferenceRect" parent="LayoutWrapper/GameArea/CenterTable/DeckArea/Slotbg"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -68,7 +99,7 @@ border_color = Color(1, 1, 1, 0.117647)
 border_width = 2.0
 editor_only = false
 
-[node name="Interaction" type="TextureButton" parent="CenterTable/DeckArea/Slotbg"]
+[node name="Interaction" type="TextureButton" parent="LayoutWrapper/GameArea/CenterTable/DeckArea/Slotbg"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -77,11 +108,11 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_default_cursor_shape = 2
 
-[node name="DiscardArea" type="Control" parent="CenterTable"]
+[node name="DiscardArea" type="Control" parent="LayoutWrapper/GameArea/CenterTable"]
 custom_minimum_size = Vector2(100, 140)
 layout_mode = 2
 
-[node name="Slotbg" type="ColorRect" parent="CenterTable/DiscardArea"]
+[node name="Slotbg" type="ColorRect" parent="LayoutWrapper/GameArea/CenterTable/DiscardArea"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -90,7 +121,7 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(1, 1, 1, 0.0392157)
 
-[node name="Border" type="ReferenceRect" parent="CenterTable/DiscardArea/Slotbg"]
+[node name="Border" type="ReferenceRect" parent="LayoutWrapper/GameArea/CenterTable/DiscardArea/Slotbg"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -101,7 +132,7 @@ border_color = Color(1, 1, 1, 0.117647)
 border_width = 2.0
 editor_only = false
 
-[node name="Interaction" type="TextureButton" parent="CenterTable/DiscardArea/Slotbg"]
+[node name="Interaction" type="TextureButton" parent="LayoutWrapper/GameArea/CenterTable/DiscardArea/Slotbg"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -110,7 +141,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_default_cursor_shape = 2
 
-[node name="PlayerPositions" type="Control" parent="."]
+[node name="PlayerPositions" type="Control" parent="LayoutWrapper/GameArea"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -119,16 +150,16 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="Bottom" type="Marker2D" parent="PlayerPositions"]
+[node name="Bottom" type="Marker2D" parent="LayoutWrapper/GameArea/PlayerPositions"]
 position = Vector2(576, 540)
 
-[node name="Top" type="Marker2D" parent="PlayerPositions"]
+[node name="Top" type="Marker2D" parent="LayoutWrapper/GameArea/PlayerPositions"]
 position = Vector2(576, 100)
 
-[node name="Left" type="Marker2D" parent="PlayerPositions"]
+[node name="Left" type="Marker2D" parent="LayoutWrapper/GameArea/PlayerPositions"]
 position = Vector2(150, 324)
 
-[node name="Right" type="Marker2D" parent="PlayerPositions"]
+[node name="Right" type="Marker2D" parent="LayoutWrapper/GameArea/PlayerPositions"]
 position = Vector2(1000, 324)
 
 [node name="GameUI" type="CanvasLayer" parent="."]
@@ -143,35 +174,43 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="TopLeft" type="MarginContainer" parent="GameUI/MainHUD"]
+[node name="HUDContainer" type="Control" parent="GameUI/MainHUD"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 0.12
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="TopLeft" type="MarginContainer" parent="GameUI/MainHUD/HUDContainer"]
 layout_mode = 1
 anchors_preset = -1
 anchor_right = 0.3
-anchor_bottom = 0.1
-offset_top = 20.0
-offset_right = 20.0
+anchor_bottom = 1.0
 theme_override_constants/margin_left = 20
 theme_override_constants/margin_top = 10
 
-[node name="Panel" type="PanelContainer" parent="GameUI/MainHUD/TopLeft"]
+[node name="Panel" type="PanelContainer" parent="GameUI/MainHUD/HUDContainer/TopLeft"]
 layout_mode = 2
 size_flags_horizontal = 0
-size_flags_vertical = 0
+size_flags_vertical = 4
 
-[node name="TurnLabel" type="Label" parent="GameUI/MainHUD/TopLeft/Panel"]
+[node name="TurnLabel" type="Label" parent="GameUI/MainHUD/HUDContainer/TopLeft/Panel"]
 layout_mode = 2
 theme_override_constants/margin_left = 10
 theme_override_constants/margin_right = 10
 text = "Player's Turn"
 
-[node name="TopCenter" type="VBoxContainer" parent="GameUI/MainHUD"]
+[node name="TopCenter" type="VBoxContainer" parent="GameUI/MainHUD/HUDContainer"]
 layout_mode = 1
-anchors_preset = -1
-anchor_left = 0.3
-anchor_right = 0.7
-anchor_bottom = 0.15
-offset_top = 20.0
+anchors_preset = 13
+anchor_left = 0.5
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -200.0
+offset_right = 200.0
 grow_horizontal = 2
+grow_vertical = 2
 theme_override_constants/separation = 10
 alignment = 1
 
@@ -179,7 +218,7 @@ alignment = 1
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.7
-anchor_top = 0.8
+anchor_top = 0.82
 anchor_right = 1.0
 anchor_bottom = 1.0
 theme_override_constants/margin_right = 20
