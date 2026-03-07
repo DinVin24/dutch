@@ -6,12 +6,12 @@ extends Control
 @onready var player_pos_top = $PlayerPositions/Top
 @onready var player_pos_left = $PlayerPositions/Left
 @onready var player_pos_right = $PlayerPositions/Right
-@onready var turn_label = $GameUI/MainHUD/TopLeft/TurnLabel
+@onready var turn_label = $GameUI/MainHUD/TopLeft/Panel/TurnLabel
 @onready var top_center = $GameUI/MainHUD/TopCenter
 
 var player_hands: Array = [[], [], [], []]
-var card_spacing = 110.0
-var padding = 20.0
+var relative_card_spacing = 0.08 # 8% of window width
+var relative_padding = 0.05 # 5% safety margin for edges
 var card_pivot = Vector2(50, 70)
 var pending_card: Node = null
 var pending_card_tween: Tween = null
@@ -170,13 +170,22 @@ func _show_message(text: String):
 	for child in top_center.get_children():
 		child.queue_free()
 		
+	var panel = PanelContainer.new()
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0.75)
+	style.set_corner_radius_all(10)
+	style.expand_margin_left = 15
+	style.expand_margin_right = 15
+	panel.add_theme_stylebox_override("panel", style)
+	top_center.add_child(panel)
+	
 	var label = Label.new()
 	label.name = "AbilityMessage"
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	label.text = text
 	label.add_theme_font_size_override("font_size", 24)
-	top_center.add_child(label)
+	
+	panel.add_child(label)
 	label.show()
 
 func _hide_message():
@@ -372,33 +381,38 @@ func reposition_all_cards():
 
 func get_card_transform(p_idx: int, card_idx: int, total_cards: int) -> Dictionary:
 	var screen_size = get_viewport_rect().size
+	var card_spacing = screen_size.x * relative_card_spacing
 	var total_spread = card_spacing * (total_cards - 1)
-	var half_h = 70.0
 	var target_pivot = Vector2.ZERO
 	var rot_deg = 0.0
 	
 	match p_idx:
 		0:
+			# Bottom: 82% height
 			rot_deg = 0
 			var start_x = (screen_size.x - total_spread) / 2.0
-			target_pivot = Vector2(start_x + (card_idx * card_spacing), screen_size.y - padding - half_h)
+			target_pivot = Vector2(start_x + (card_idx * card_spacing), screen_size.y * 0.82)
 		1:
 			if GameManager.num_players == 2:
+				# Top (Opponent): 30% height (Safe from 15% HUD)
 				rot_deg = 180
 				var start_x = (screen_size.x - total_spread) / 2.0
-				target_pivot = Vector2(start_x + (card_idx * card_spacing), padding + half_h)
+				target_pivot = Vector2(start_x + (card_idx * card_spacing), screen_size.y * 0.30)
 			else:
+				# Left: 12% width
 				rot_deg = 90
 				var start_y = (screen_size.y - total_spread) / 2.0
-				target_pivot = Vector2(padding + half_h, start_y + (card_idx * card_spacing))
+				target_pivot = Vector2(screen_size.x * 0.12, start_y + (card_idx * card_spacing))
 		2:
+			# Top: 30% height
 			rot_deg = 180
 			var start_x = (screen_size.x - total_spread) / 2.0
-			target_pivot = Vector2(start_x + (card_idx * card_spacing), padding + half_h)
+			target_pivot = Vector2(start_x + (card_idx * card_spacing), screen_size.y * 0.30)
 		3:
+			# Right: 88% width
 			rot_deg = -90
 			var start_y = (screen_size.y - total_spread) / 2.0
-			target_pivot = Vector2(screen_size.x - padding - half_h, start_y + (card_idx * card_spacing))
+			target_pivot = Vector2(screen_size.x * 0.88, start_y + (card_idx * card_spacing))
 	
 	return {"position": target_pivot, "rotation": rot_deg}
 
