@@ -79,6 +79,8 @@ func _on_turn_started(player_idx):
 		var label = Label.new()
 		label.name = "TurnLabel"
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		label.z_index = 100 
 		$GameUI/MainHUD.add_child(label)
 		label.set_anchors_preset(Control.PRESET_CENTER_TOP)
 		label.position.y += 10
@@ -176,6 +178,8 @@ func _show_message(text: String):
 		label = Label.new()
 		label.name = "AbilityMessage"
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		label.z_index = 100
 		label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_KEEP_WIDTH, 100)
 		get_node("GameUI/MainHUD").add_child(label)
 		label.add_theme_font_size_override("font_size", 24)
