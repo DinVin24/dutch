@@ -110,6 +110,9 @@ func _on_player_card_clicked(card_node, _card_data):
 	if p_idx == -1: return
 
 	match GameManager.current_state:
+		GameManager.GameState.INITIAL_PEEK:
+			if p_idx == 0: # Only player 0 peeks at start in this version
+				_handle_initial_peek_click(card_node)
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
 			if p_idx == GameManager.current_player_index:
 				GameManager.player_swap_drawn_card(c_idx)
@@ -282,32 +285,7 @@ func clear_all_highlights():
 			if is_instance_valid(card):
 				card.set_highlighted(false)
 
-func _start_peek_phase():
-	var label = Label.new()
-	label.name = "PeekInstructions"
-	label.text = "Click 2 of your cards to peek"
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	$GameUI/MainHUD.add_child(label)
-	label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	label.position.y += 50
-	
-	# Reset peek state
-	cards_peeked = 0
-	peeked_card_nodes.clear()
-	
-	# Log for debug
-	print("Game Board: Waiting for player to select cards to peek.")
-
-func _on_card_clicked(card_node, _card_data):
-	if GameManager.current_state != GameManager.GameState.INITIAL_PEEK:
-		return
-		
-	# Ensure it's a player card (player index 0)
-	if not player_hands[0].has(card_node):
-		print("Initial Peek: You can only peek at your own cards!")
-		return
-		
-	# Check if already peeked this card
+func _handle_initial_peek_click(card_node):
 	if peeked_card_nodes.has(card_node):
 		return
 		
@@ -320,9 +298,15 @@ func _on_card_clicked(card_node, _card_data):
 		if cards_peeked == max_peeks:
 			_complete_peek_phase()
 
+func _start_peek_phase():
+	_show_message("Click 2 of your cards to peek")
+	
+	# Reset peek state
+	cards_peeked = 0
+	peeked_card_nodes.clear()
+
 func _complete_peek_phase():
-	if $GameUI/MainHUD.has_node("PeekInstructions"):
-		$GameUI/MainHUD.get_node("PeekInstructions").text = "Starting game in 3 seconds..."
+	_show_message("Starting game in 3 seconds...")
 		
 	await get_tree().create_timer(3.0).timeout
 	
@@ -331,11 +315,8 @@ func _complete_peek_phase():
 		if is_instance_valid(card):
 			card.flip()
 	
-	# Cleanup label
-	if $GameUI/MainHUD.has_node("PeekInstructions"):
-		$GameUI/MainHUD.get_node("PeekInstructions").queue_free()
-		
-	GameManager.change_state(GameManager.GameState.TURN_START_DRAW)
+	_hide_message()
+	GameManager.complete_initial_peek()
 
 func _handle_initial_deal():
 	var card_scene = preload("res://card.tscn")
@@ -360,9 +341,6 @@ func _handle_initial_deal():
 			GameManager.players_info[p_idx].hand.append(card_data)
 			
 			card_inst.card_clicked.connect(_on_player_card_clicked)
-			
-			# Connect click signal for interaction
-			card_inst.card_clicked.connect(_on_card_clicked)
 			
 			# Get target transform
 			var transform = get_card_transform(p_idx, i, cards_per_player)

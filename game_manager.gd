@@ -97,6 +97,8 @@ func next_turn():
 	change_state(GameState.TURN_START_DRAW)
 
 func _handle_deal_cards():
+	# The board will handle the visual instantiation in its signal handler
+	print("GameManager: Handling Deal Cards state.")
 	pass
 
 func _handle_game_over():
@@ -174,6 +176,11 @@ func _resolve_discard_effects(card: CardData):
 		change_state(GameState.TURN_SWAP_ABILITY)
 	else:
 		next_turn()
+
+func complete_initial_peek():
+	if current_state != GameState.INITIAL_PEEK:
+		return
+	change_state(GameState.TURN_START_DRAW)
 
 func complete_peek_ability():
 	if current_state != GameState.TURN_PEEK_ABILITY:
