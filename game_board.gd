@@ -148,7 +148,8 @@ func _on_card_discarded(player_idx, card_data):
 	
 	if card_to_discard:
 		card_to_discard.z_index = 100 # Move above others
-		var target_pos = discard_area.global_position - card_pivot
+		# target_pos should be the center of the discard slot
+		var target_pos = discard_area.global_position
 		var tween = create_tween()
 		tween.tween_property(card_to_discard, "global_position", target_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tween.tween_callback(func():
@@ -160,7 +161,8 @@ func _on_card_discarded(player_idx, card_data):
 			
 			card_to_discard.reparent(discard_area)
 			card_to_discard.name = "DiscardVisual"
-			card_to_discard.position = Vector2.ZERO - card_pivot # Center in area
+			card_to_discard.position = Vector2.ZERO # Center perfectly in area
+			card_to_discard.rotation_degrees = 0
 			card_to_discard.z_index = 0
 		)
 
