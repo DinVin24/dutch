@@ -14,11 +14,6 @@ var padding = 20.0
 var card_pivot = Vector2(50, 70)
 var pending_card: Node = null
 
-# Peek Phase state
-var cards_peeked: int = 0
-var max_peeks: int = 2
-var peeked_card_nodes: Array = []
-
 var pause_menu_scene = preload("res://pause_menu.tscn")
 var pause_menu_instance: Node = null
 
@@ -91,6 +86,69 @@ func _on_deck_clicked():
 	print("Player drawing card...")
 	GameManager.player_draw_card()
 
+func _on_discard_clicked():
+	if GameManager.current_state == GameManager.GameState.DRAWN_CARD_PENDING and GameManager.current_player_index == 0:
+		print("Player discarding drawn card...")
+		GameManager.player_discard_drawn_card()
+
+func _on_player_card_clicked(card_node, _card_data):
+	if GameManager.current_state == GameManager.GameState.DRAWN_CARD_PENDING and GameManager.current_player_index == 0:
+		var card_idx = player_hands[0].find(card_node)
+		if card_idx != -1:
+			print("Player swapping drawn card with card ", card_idx)
+			GameManager.player_swap_drawn_card(card_idx)
+
+func _on_card_discarded(player_idx, card_data):
+	print("Game Board: Card discarded by player ", player_idx)
+	
+	# If it was a swap, we need to update the hand visual
+	# For now, let's just animate the card to the discard pile
+	
+	var card_to_discard: Node = null
+	
+	# Was it the pending card?
+	if pending_card and pending_card.data == card_data:
+		card_to_discard = pending_card
+		pending_card = null
+	else:
+		# Was it a card from a hand? (During a swap)
+		# We need to find which node it was. 
+		# If it's the player's hand, we replace it with the pending one.
+		if player_idx == GameManager.current_player_index:
+			var hand = player_hands[player_idx]
+			for i in range(hand.size()):
+				if hand[i].data == card_data:
+					card_to_discard = hand[i]
+					# Replace in hand with pending card if it exists
+					if pending_card:
+						hand[i] = pending_card
+						pending_card = null
+						# Clean up signal connection if p_idx == 0
+						if player_idx == 0:
+							hand[i].card_clicked.connect(_on_player_card_clicked)
+						
+						# Reposition the new hand card
+						reposition_all_cards()
+					break
+	
+	if card_to_discard:
+		card_to_discard.z_index = 100 # Move above others
+		var target_pos = discard_area.global_position - card_pivot
+		var tween = create_tween()
+		tween.tween_property(card_to_discard, "global_position", target_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.tween_callback(func():
+			# Keep a few visuals in discard? For now just free or stack.
+			# Let's keep the last one visible.
+			for child in discard_area.get_children():
+				if child.name.begins_with("DiscardVisual"):
+					child.queue_free()
+			
+			card_to_discard.reparent(discard_area)
+			card_to_discard.name = "DiscardVisual"
+			card_to_discard.position = Vector2.ZERO - card_pivot # Center in area
+			card_to_discard.z_index = 0
+		)
+
 func _on_card_drawn_to_pending(player_idx, card_data):
 	print("Game Board: Card drawn to pending for player ", player_idx)
 	
@@ -130,53 +188,27 @@ func _start_peek_phase():
 	# Visual feedback for peek phase
 	var label = Label.new()
 	label.name = "PeekInstructions"
-	label.text = "Click 2 of your cards to peek"
+	label.text = "Memorizing your cards..."
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	$GameUI/MainHUD.add_child(label)
 	label.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	label.position.y += 50
 	
-	# Reset peek state
-	cards_peeked = 0
-	peeked_card_nodes.clear()
+	await get_tree().create_timer(0.5).timeout
 	
-	# Log for debug
-	print("Game Board: Waiting for player to select cards to peek.")
-
-func _on_card_clicked(card_node: CardUI, _card_data: CardData):
-	if GameManager.current_state != GameManager.GameState.INITIAL_PEEK:
-		return
-		
-	# Ensure it's a player card (player index 0)
-	if not player_hands[0].has(card_node):
-		print("Initial Peek: You can only peek at your own cards!")
-		return
-		
-	# Check if already peeked this card
-	if peeked_card_nodes.has(card_node):
-		return
-		
-	if cards_peeked < max_peeks:
-		print("Initial Peek: Player peeked at card ", cards_peeked + 1)
-		card_node.flip()
-		peeked_card_nodes.append(card_node)
-		cards_peeked += 1
-		
-		if cards_peeked == max_peeks:
-			_complete_peek_phase()
-
-func _complete_peek_phase():
-	if $GameUI/MainHUD.has_node("PeekInstructions"):
-		$GameUI/MainHUD.get_node("PeekInstructions").text = "Starting game in 3 seconds..."
+	# Automatically reveal the first 2 cards for the player
+	if player_hands[0].size() >= 2:
+		player_hands[0][0].flip()
+		player_hands[0][1].flip()
 		
 	# Wait for 3 seconds for the player to memorize
 	await get_tree().create_timer(3.0).timeout
 	
 	# Flip them back
-	for card in peeked_card_nodes:
-		if is_instance_valid(card):
-			card.flip()
-	
+	if player_hands[0].size() >= 2:
+		player_hands[0][0].flip()
+		player_hands[0][1].flip()
+		
 	# Cleanup label
 	if $GameUI/MainHUD.has_node("PeekInstructions"):
 		$GameUI/MainHUD.get_node("PeekInstructions").queue_free()
@@ -208,8 +240,8 @@ func _handle_initial_deal():
 			card_inst.setup(card_data)
 			player_hands[p_idx].append(card_inst)
 			
-			# Connect click signal for interaction
-			card_inst.card_clicked.connect(_on_card_clicked)
+			if p_idx == 0:
+				card_inst.card_clicked.connect(_on_player_card_clicked)
 			
 			# Get target transform
 			var transform = get_card_transform(p_idx, i, cards_per_player)
