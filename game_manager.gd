@@ -26,6 +26,8 @@ var bg_music_player: AudioStreamPlayer
 # Match Settings
 var num_players: int = 4 # Default to 4 players
 var players_info: Array = []
+var current_player_index: int = 0
+var dutch_caller_index: int = -1 # -1 means no one has called Dutch yet
 
 func _ready():
 	deck_manager = DeckManager.new()
@@ -52,6 +54,8 @@ func stop_menu_music() -> void:
 func initialize_game(p_count: int = 4):
 	num_players = p_count
 	players_info.clear()
+	current_player_index = 0
+	dutch_caller_index = -1
 	for i in range(num_players):
 		players_info.append({
 			"id": i,
@@ -73,17 +77,25 @@ func change_state(new_state: GameState):
 	match current_state:
 		GameState.DEAL_CARDS:
 			_handle_deal_cards()
-		GameState.PLAYER_TURN:
-			turn_started.emit(0) # 0 for Player
-		GameState.CPU_TURN:
-			turn_started.emit(1) # 1 for CPU (basic for now)
+		GameState.PLAYER_TURN, GameState.CPU_TURN:
+			turn_started.emit(current_player_index)
 		GameState.GAME_OVER:
 			_handle_game_over()
 
+func next_turn():
+	current_player_index = (current_player_index + 1) % num_players
+	
+	# Check if we returned to the Dutch caller
+	if current_player_index == dutch_caller_index:
+		change_state(GameState.GAME_OVER)
+		return
+
+	if current_player_index == 0:
+		change_state(GameState.PLAYER_TURN)
+	else:
+		change_state(GameState.CPU_TURN)
+
 func _handle_deal_cards():
-	# UI/Board will listen for state change and handle visual dealing
-	# For now, we move to player turn after a short delay in a real scenario
-	# But here we just set the state
 	pass
 
 func _handle_game_over():
@@ -94,5 +106,8 @@ func start_game():
 	change_state(GameState.DEAL_CARDS)
 
 func call_dutch(player_id: int):
-	# Handle Dutch logic
-	change_state(GameState.CHECK_DUTCH)
+	if dutch_caller_index == -1:
+		dutch_caller_index = player_id
+		print("Player ", player_id, " called DUTCH!")
+		# Game continues until it returns to this player
+		next_turn()
