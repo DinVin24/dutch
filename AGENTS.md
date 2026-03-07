@@ -26,6 +26,8 @@ Here, agents act as Full-Stack Developers working on vertical slices (Epics) rat
 
 ## Agentic Guidelines
 - **Strict FSM Architecture:** Agents must enforce a strict Finite State Machine (FSM) for game states at all times during the development phase (e.g., `STATE_DRAW_PHASE`, `STATE_WAITING_FOR_PEEK`, `STATE_INTERRUPT`). Avoid loose boolean flags (like `is_player_turn`) to control game logic, to prevent race conditions during interrupts like Jump-Ins.
+- **Issue Prioritization:** Before starting an Epic or vertical slice, agents MUST check the GitHub Issues list. If there are open bugs or tasks related to their current work area, they must prioritize resolving them with **perfect repairs** and closing the issues before proceeding with new features.
+- **GitHub Formatting:** Pull Request descriptions and issue bodies must use professional, beautiful GitHub Markdown formatting. Avoid raw escape characters (like `\n`) in terminal-based creation; prefer clean, multi-line blocks that render perfectly on GitHub.
 - Treat yourself as an agent with foresight: proactively suggest follow-up tests, request missing assets, and double-check README rules before changing gameplay code.
 - Use specialized AI tools (e.g. Gemini for layout tasks, ChatGPT Codex for generic scripts) as appropriate, but always keep descriptions and commits human-readable.
 - Each commit/message should follow **Conventional Commits** format (e.g. `feat(ui): implement pause menu`, `fix(logic): correct scoring rule`). Include the Agent role and a descriptive summary in the body.
