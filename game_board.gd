@@ -411,23 +411,24 @@ func get_card_transform(p_idx: int, card_idx: int, total_cards: int) -> Dictiona
 			rot_deg = 0
 			var start_x = (vp.x - total_spread) / 2.0
 			target_pos = Vector2(start_x + card_idx * card_spacing, vp.y * (1.0 - v_inset))
-		1: # Top or Left player
+		1: # Left player (4-player) OR Top opponent (2-player)
 			if GameManager.num_players == 2:
+				# 2-player: p1 is the Top opponent
 				rot_deg = 180
 				var start_x = (vp.x - total_spread) / 2.0
 				target_pos = Vector2(start_x + card_idx * card_spacing, vp.y * v_inset)
 			else:
-				# Left: cards laid vertically, spread along Y
+				# 4-player: p1 is the Left player
 				rot_deg = 90
 				var v_spacing = vp.x * 0.09
 				var v_spread = v_spacing * (total_cards - 1)
 				var start_y = (vp.y - v_spread) / 2.0
 				target_pos = Vector2(vp.x * h_inset, start_y + card_idx * v_spacing)
-		2: # Top player
+		2: # Top player (4-player only)
 			rot_deg = 180
 			var start_x = (vp.x - total_spread) / 2.0
 			target_pos = Vector2(start_x + card_idx * card_spacing, vp.y * v_inset)
-		3: # Right player
+		3: # Right player (4-player only)
 			rot_deg = -90
 			var v_spacing = vp.x * 0.09
 			var v_spread = v_spacing * (total_cards - 1)
