@@ -9,7 +9,10 @@ enum GameState {
 	TURN_RESOLVE_DRAWN,
 	TURN_PEEK_ABILITY,
 	TURN_SWAP_ABILITY,
+	TURN_END_CHOICE,
+	TURN_JUMP_IN_SELECTION,
 	CHECK_DUTCH,
+	TURN_CONFIRM_DUTCH,
 	GAME_OVER
 }
 
@@ -21,6 +24,7 @@ signal deck_ready
 signal card_drawn(player_id, card_data)
 signal card_drawn_to_pending(player_id, card_data)
 signal card_discarded(player_id, card_data)
+signal jump_in_penalty(player_idx, penalty_card_data)
 
 var current_state: GameState = GameState.INITIALIZING
 var deck_manager: DeckManager
@@ -65,7 +69,8 @@ func initialize_game(p_count: int = 4):
 			"id": i,
 			"name": "Player " + str(i + 1),
 			"score": 0,
-			"hand": [] # CardData objects
+			"hand": [], # CardData objects
+			"can_call_dutch": true
 		})
 	
 	# Ensure a fresh deck is ready for the new match
@@ -91,7 +96,7 @@ func next_turn():
 	
 	# Check if we returned to the Dutch caller
 	if current_player_index == dutch_caller_index:
-		change_state(GameState.GAME_OVER)
+		change_state(GameState.TURN_CONFIRM_DUTCH)
 		return
 
 	change_state(GameState.TURN_START_DRAW)
@@ -109,11 +114,76 @@ func start_game():
 	change_state(GameState.DEAL_CARDS)
 
 func call_dutch(player_id: int):
-	if dutch_caller_index == -1:
+	if current_state != GameState.TURN_END_CHOICE:
+		print("FSM Blocked: Cannot call Dutch outside of TURN_END_CHOICE state")
+		return
+	if dutch_caller_index == -1 and players_info[player_id].can_call_dutch:
 		dutch_caller_index = player_id
 		print("Player ", player_id, " called DUTCH!")
 		# Game continues until it returns to this player
 		next_turn()
+
+func _prompt_turn_end():
+	change_state(GameState.TURN_END_CHOICE)
+
+func end_turn():
+	if current_state != GameState.TURN_END_CHOICE and current_state != GameState.TURN_JUMP_IN_SELECTION:
+		print("FSM Blocked: Cannot end turn outside of END_CHOICE or JUMP_IN state")
+		return
+	next_turn()
+
+func start_jump_in():
+	if current_state != GameState.TURN_END_CHOICE:
+		return
+	change_state(GameState.TURN_JUMP_IN_SELECTION)
+
+func validate_jump_in(card_idx: int) -> bool:
+	if current_state != GameState.TURN_JUMP_IN_SELECTION:
+		return false
+		
+	var h = players_info[current_player_index].hand
+	if card_idx < 0 or card_idx >= h.size():
+		return false
+		
+	var selected_card = h[card_idx]
+	if selected_card == null:
+		return false
+		
+	if deck_manager.discard_pile.size() > 0:
+		var top_discard = deck_manager.discard_pile[-1]
+		if selected_card.rank == top_discard.rank:
+			print("Match! Jump In valid.")
+			h.remove_at(card_idx)
+			deck_manager.discard_pile.append(selected_card)
+			card_discarded.emit(current_player_index, selected_card)
+			_resolve_discard_effects(selected_card)
+			return true
+			
+	print("No match. Jump In invalid. Assigning penalty card.")
+	var penalty_card_dict = deck_manager.draw_card()
+	if not penalty_card_dict.is_empty():
+		var p_card = CardData.new(penalty_card_dict.rank, penalty_card_dict.suit)
+		p_card.is_face_up = false
+		h.append(p_card)
+		jump_in_penalty.emit(current_player_index, p_card)
+	
+	change_state(GameState.TURN_END_CHOICE)
+	return false
+
+func confirm_dutch():
+	if current_state != GameState.TURN_CONFIRM_DUTCH:
+		return
+	print("Player ", current_player_index, " CONFIRMED Dutch. Game Over.")
+	change_state(GameState.GAME_OVER)
+
+func cancel_dutch():
+	if current_state != GameState.TURN_CONFIRM_DUTCH:
+		return
+	print("Player ", current_player_index, " CANCELLED Dutch. Forfeiting right to call again.")
+	players_info[current_player_index].can_call_dutch = false
+	dutch_caller_index = -1
+	# Give them their normal turn back
+	change_state(GameState.TURN_START_DRAW)
 
 func player_draw_card():
 	if current_state != GameState.TURN_START_DRAW:
@@ -129,6 +199,7 @@ func player_draw_card():
 	drawn_card_data.is_face_up = true
 	
 	change_state(GameState.TURN_RESOLVE_DRAWN)
+	print("GameManager: [DRAW SUCCESS] Player ", current_player_index, " state moved to RESOLVE.")
 	card_drawn_to_pending.emit(current_player_index, drawn_card_data)
 
 func player_discard_drawn_card():
@@ -175,7 +246,7 @@ func _resolve_discard_effects(card: CardData):
 		print("Jack discarded! FSM -> TURN_SWAP_ABILITY")
 		change_state(GameState.TURN_SWAP_ABILITY)
 	else:
-		next_turn()
+		_prompt_turn_end()
 
 func complete_initial_peek():
 	if current_state != GameState.INITIAL_PEEK:
@@ -186,7 +257,7 @@ func complete_peek_ability():
 	if current_state != GameState.TURN_PEEK_ABILITY:
 		print("FSM Blocked: Cannot complete peek outside of TURN_PEEK_ABILITY state")
 		return
-	next_turn()
+	_prompt_turn_end()
 
 func complete_swap_ability(player1_idx: int, card1_idx: int, player2_idx: int, card2_idx: int):
 	if current_state != GameState.TURN_SWAP_ABILITY:
@@ -202,4 +273,4 @@ func complete_swap_ability(player1_idx: int, card1_idx: int, player2_idx: int, c
 	
 	print("GameManager: Swapped card indices ", card1_idx, " and ", card2_idx, " between players ", player1_idx, " and ", player2_idx)
 	
-	next_turn()
+	_prompt_turn_end()

@@ -27,10 +27,11 @@
   - King of Diamonds = 0.
 
 ## Calling Dutch
-- On your turn, you may call "Dutch" if you believe you have a low score.
-- The game continues until it's your turn again.
-- When it's your turn again, you may end the game or cancel the Dutch to continue the game.
-- Each player may only call Dutch once per game.
+- On your turn, you may call "Dutch" if you believe you have the lowest score on the table.
+- When you call Dutch, everybody gets notified, and the game progresses one more full turn for everyone.
+- When it is your turn again, you have two choices:
+  - **Confirm**: End the game immediately. All cards are flipped face-up and the player with the lowest score wins.
+  - **Cancel**: Continue the game. However, if you cancel, you cannot call Dutch again for the remainder of the game.
 
 ## Winning
 - When the game ends, all player reveal their cards.
