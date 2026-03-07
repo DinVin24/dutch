@@ -5,8 +5,8 @@ enum GameState {
 	INITIALIZING,
 	DEAL_CARDS,
 	INITIAL_PEEK,
-	TURN_START_DRAW,
-	TURN_RESOLVE_DRAWN,
+	PLAYER_TURN,
+	DRAWN_CARD_PENDING,
 	TURN_PEEK_ABILITY,
 	TURN_SWAP_ABILITY,
 	CHECK_DUTCH,
@@ -81,7 +81,7 @@ func change_state(new_state: GameState):
 	match current_state:
 		GameState.DEAL_CARDS:
 			_handle_deal_cards()
-		GameState.TURN_START_DRAW:
+		GameState.PLAYER_TURN:
 			turn_started.emit(current_player_index)
 		GameState.GAME_OVER:
 			_handle_game_over()
@@ -94,7 +94,7 @@ func next_turn():
 		change_state(GameState.GAME_OVER)
 		return
 
-	change_state(GameState.TURN_START_DRAW)
+	change_state(GameState.PLAYER_TURN)
 
 func _handle_deal_cards():
 	# The board will handle the visual instantiation in its signal handler
@@ -116,8 +116,8 @@ func call_dutch(player_id: int):
 		next_turn()
 
 func player_draw_card():
-	if current_state != GameState.TURN_START_DRAW:
-		print("FSM Blocked: Cannot draw card outside of TURN_START_DRAW state")
+	if current_state != GameState.PLAYER_TURN:
+		print("FSM Blocked: Cannot draw card outside of PLAYER_TURN state")
 		return
 	
 	var card_info = deck_manager.draw_card()
@@ -128,12 +128,12 @@ func player_draw_card():
 	drawn_card_data = CardData.new(card_info.rank, card_info.suit)
 	drawn_card_data.is_face_up = true
 	
-	change_state(GameState.TURN_RESOLVE_DRAWN)
+	change_state(GameState.DRAWN_CARD_PENDING)
 	card_drawn_to_pending.emit(current_player_index, drawn_card_data)
 
 func player_discard_drawn_card():
-	if current_state != GameState.TURN_RESOLVE_DRAWN:
-		print("FSM Blocked: Cannot discard pending card outside of TURN_RESOLVE_DRAWN state")
+	if current_state != GameState.DRAWN_CARD_PENDING:
+		print("FSM Blocked: Cannot discard pending card outside of DRAWN_CARD_PENDING state")
 		return
 	
 	print("GameManager: Discarding drawn card.")
@@ -146,8 +146,8 @@ func player_discard_drawn_card():
 	_resolve_discard_effects(discarded_card)
 
 func player_swap_drawn_card(card_idx: int):
-	if current_state != GameState.TURN_RESOLVE_DRAWN:
-		print("FSM Blocked: Cannot swap outside of TURN_RESOLVE_DRAWN state")
+	if current_state != GameState.DRAWN_CARD_PENDING:
+		print("FSM Blocked: Cannot swap outside of DRAWN_CARD_PENDING state")
 		return
 	
 	var player_h = players_info[current_player_index].hand
@@ -180,7 +180,7 @@ func _resolve_discard_effects(card: CardData):
 func complete_initial_peek():
 	if current_state != GameState.INITIAL_PEEK:
 		return
-	change_state(GameState.TURN_START_DRAW)
+	change_state(GameState.PLAYER_TURN)
 
 func complete_peek_ability():
 	if current_state != GameState.TURN_PEEK_ABILITY:
