@@ -13,6 +13,7 @@ var card_spacing = 110.0
 var padding = 20.0
 var card_pivot = Vector2(50, 70)
 var pending_card: Node = null
+var pending_card_tween: Tween = null
 
 var pause_menu_scene = preload("res://pause_menu.tscn")
 var pause_menu_instance: Node = null
@@ -121,12 +122,17 @@ func _on_card_discarded(player_idx, card_data):
 					card_to_discard = hand[i]
 					# Replace in hand with pending card if it exists
 					if pending_card:
+						if pending_card_tween and pending_card_tween.is_running():
+							pending_card_tween.kill()
+							
 						hand[i] = pending_card
-						pending_card = null
+						
 						# Clean up signal connection if p_idx == 0
 						if player_idx == 0:
-							hand[i].card_clicked.connect(_on_player_card_clicked)
+							if not hand[i].card_clicked.is_connected(_on_player_card_clicked):
+								hand[i].card_clicked.connect(_on_player_card_clicked)
 						
+						pending_card = null
 						# Reposition the new hand card
 						reposition_all_cards()
 					break
@@ -163,10 +169,11 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	
 	# Target position: Slightly offset from deck towards player 0 (if human)
 	# Or just center it more prominently
+	# Target position: Slightly offset from deck towards player 0 (if human)
 	var target_pos = deck_area.global_position + Vector2(0, 160) - card_pivot
 	
-	var tween = create_tween()
-	tween.tween_property(pending_card, "global_position", target_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	pending_card_tween = create_tween()
+	pending_card_tween.tween_property(pending_card, "global_position", target_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	
 	# Update deck visual (remove one card if we are tracking count)
 	_update_deck_visual()
@@ -269,8 +276,11 @@ func reposition_all_cards():
 			var card = hand[i]
 			if is_instance_valid(card):
 				var transform = get_card_transform(p_idx, i, hand.size())
-				card.rotation_degrees = transform.rotation
-				card.global_position = transform.position - card_pivot.rotated(deg_to_rad(transform.rotation))
+				var final_pos = transform.position - card_pivot.rotated(deg_to_rad(transform.rotation))
+				
+				var tween = create_tween()
+				tween.tween_property(card, "rotation_degrees", transform.rotation, 0.3)
+				tween.tween_property(card, "global_position", final_pos, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 func get_card_transform(p_idx: int, card_idx: int, total_cards: int) -> Dictionary:
 	var screen_size = get_viewport_rect().size
