@@ -237,7 +237,7 @@ func _on_card_discarded(player_idx, card_data):
 	if pending_card and pending_card.data == card_data:
 		card_to_discard = pending_card
 		pending_card = null
-	else:
+	else if player_idx != -1:
 		# Was it a card from a hand? (During a swap)
 		# We need to find which node it was. 
 		# We use player_idx directly from the signal to avoid race conditions with next_turn()
@@ -266,6 +266,17 @@ func _on_card_discarded(player_idx, card_data):
 					pending_card = null
 					reposition_all_cards()
 				break
+	
+	if card_to_discard:
+		pass # Already found a node to animate
+	elif player_idx == -1:
+		# Initial discard from deck
+		var card_scene = preload("res://card.tscn")
+		card_to_discard = card_scene.instantiate()
+		add_child(card_to_discard)
+		card_to_discard.setup(card_data)
+		card_to_discard.global_position = deck_area.global_position - card_pivot
+		_update_deck_visual()
 	
 	if card_to_discard:
 		card_to_discard.z_index = 100 # Move above others
@@ -353,8 +364,8 @@ func _start_peek_phase():
 	if $GameUI/MainHUD.has_node("PeekInstructions"):
 		$GameUI/MainHUD.get_node("PeekInstructions").queue_free()
 		
-	print("Game Board: Peek phase complete. Starting Player Turn.")
-	GameManager.change_state(GameManager.GameState.PLAYER_TURN)
+	print("Game Board: Peek phase complete. Starting Main Game Loop.")
+	GameManager.start_main_game()
 
 func _handle_initial_deal():
 	print("Game Board: Dealing responsive cards...")
