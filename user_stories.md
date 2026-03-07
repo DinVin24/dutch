@@ -16,7 +16,7 @@
 
 ## Epic 4: The Jump-In System
 - [ ] **Story**: As a player, I want the game to allow me to drag one of my cards to the discard pile at any point (even if it's not my turn) to attempt a Jump-In.
-- [ ] **Story**: As a player, if my Jump-In card matches the rank of the current top discard card, I want the game to accept the discard and shift the turn order to the player immediately after me, so that I am rewarded for my memory.
+- [ ] **Story**: As a player, if my Jump-In card matches the rank of the current top discard card, I want the game to accept the discard while maintaining the original turn order (it remains the turn of the player who was originally next), so that I am rewarded for my memory without disrupting the game flow.
 - [ ] **Story**: As a player, if my Jump-In card *does not* match the current top discard card, I want my card returned to its original position and the game to automatically deal me an extra penalty card, so that guessing is discouraged.
 
 ## Epic 5: End Game & Scoring
