@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+# .githooks/commit-msg
+# Git hook to enforce Conventional Commits format
+
+commit_msg_file=$1
+commit_msg=$(cat "$commit_msg_file")
+
+# Allow merge commits
+if [[ "$commit_msg" == Merge* ]]; then
+    exit 0
+fi
+
+# Regex for Conventional Commits
+# Format: type(scope): description
+# Types allowed: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+regex="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-zA-Z0-9_-]+\))?: .+"
+
+if [[ ! $commit_msg =~ $regex ]]; then
+    echo ""
+    echo "❌ ERROR: Commit message does not follow Conventional Commits format."
+    echo "Format should be: <type>(<optional scope>): <description>"
+    echo "Allowed types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+    echo ""
+    echo "Examples:"
+    echo "  feat(ui): add new button"
+    echo "  fix: resolve crash on startup"
+    echo "  docs(readme): update setup instructions"
+    echo ""
+    echo "Your message was:"
+    echo "-------------------------"
+    echo "$commit_msg"
+    echo "-------------------------"
+    exit 1
+fi
+
+exit 0
