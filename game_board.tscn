@@ -136,6 +136,7 @@ position = Vector2(150, 324)
 position = Vector2(1000, 324)
 
 [node name="GameUI" type="CanvasLayer" parent="."]
+layer = 128
 
 [node name="MainHUD" type="Control" parent="GameUI"]
 layout_mode = 3
