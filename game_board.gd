@@ -33,10 +33,14 @@ func _ready():
 	# Connect deck interaction
 	var deck_button = $CenterTable/DeckArea/Slotbg/Interaction
 	if deck_button:
+		deck_button.reparent(deck_area)
+		deck_button.z_index = 10
 		deck_button.pressed.connect(_on_deck_clicked)
 	
 	var discard_button = $CenterTable/DiscardArea/Slotbg/Interaction
 	if discard_button:
+		discard_button.reparent(discard_area)
+		discard_button.z_index = 10
 		discard_button.pressed.connect(_on_discard_clicked)
 	
 	await get_tree().process_frame
@@ -61,7 +65,6 @@ func _update_deck_visual():
 		card_bg.setup(CardData.new("Ace", "Clubs")) # Data doesn't matter for back
 		card_bg.position = Vector2(-i * 2, -i * 2)
 		card_bg.z_index = -i
-		card_bg.set_interaction_enabled(false)
 
 func _on_turn_started(player_idx):
 	print("Game Board: Player ", player_idx, "'s turn.")
@@ -81,7 +84,7 @@ func _on_turn_started(player_idx):
 	$GameUI/MainHUD.get_node("TurnLabel").text = label_text
 	
 	# Enable/Disable deck interaction
-	var deck_button = $CenterTable/DeckArea/Slotbg/Interaction
+	var deck_button = deck_area.get_node("Interaction")
 	if player_idx == 0:
 		deck_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	else:
@@ -290,7 +293,6 @@ func _on_card_discarded(player_idx, card_data):
 			card_to_discard.position = Vector2.ZERO # Center perfectly in area
 			card_to_discard.rotation_degrees = 0
 			card_to_discard.z_index = 0
-			card_to_discard.set_interaction_enabled(false)
 		)
 
 func _on_card_drawn_to_pending(player_idx, card_data):
