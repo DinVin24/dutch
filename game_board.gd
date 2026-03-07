@@ -31,18 +31,23 @@ func _ready():
 	# Connect deck interaction
 	var deck_button = $CenterTable/DeckArea/Slotbg/Interaction
 	if deck_button:
+		print("GameBoard: FOUND DECK BUTTON. Reparenting...")
 		deck_button.reparent(deck_area)
 		deck_button.z_index = 10
 		deck_button.pressed.connect(_on_deck_clicked)
 	
 	var discard_button = $CenterTable/DiscardArea/Slotbg/Interaction
 	if discard_button:
+		print("GameBoard: FOUND DISCARD BUTTON. Reparenting...")
 		discard_button.reparent(discard_area)
 		discard_button.z_index = 10
 		discard_button.pressed.connect(_on_discard_clicked)
 	
 	await get_tree().process_frame
 	_update_deck_visual()
+	
+	print("GameBoard Tree Structure (CenterTable):")
+	$CenterTable.print_tree_pretty()
 	
 	print("Game Board: Starting game...")
 	GameManager.initialize_game(4)
@@ -63,6 +68,11 @@ func _update_deck_visual():
 		card_bg.setup(CardData.new("Ace", "Clubs")) # Data doesn't matter for back
 		card_bg.position = Vector2(-i * 2, -i * 2)
 		card_bg.z_index = -i
+	
+	# ENSURE INTERACTION IS ON TOP (Last child wins in Godot UI input)
+	if deck_area.has_node("Interaction"):
+		deck_area.move_child(deck_area.get_node("Interaction"), -1)
+		print("GameBoard: Deck Interaction button moved to TOP of stack.")
 
 func _on_turn_started(player_idx):
 	print("Game Board: Player ", player_idx, "'s turn.")
@@ -172,6 +182,11 @@ func _on_card_discarded(player_idx, card_data):
 			card_to_discard.position = Vector2.ZERO # Center perfectly in area
 			card_to_discard.rotation_degrees = 0
 			card_to_discard.z_index = 0
+			
+			# ENSURE INTERACTION IS ON TOP
+			if discard_area.has_node("Interaction"):
+				discard_area.move_child(discard_area.get_node("Interaction"), -1)
+				print("GameBoard: Discard Interaction button moved to TOP of stack.")
 		)
 
 func _on_card_drawn_to_pending(player_idx, card_data):
