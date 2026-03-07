@@ -28,6 +28,7 @@ Here, agents act as Full-Stack Developers working on vertical slices (Epics) rat
 - Each commit/message should follow **Conventional Commits** format (e.g. `feat(ui): implement pause menu`, `fix(logic): correct scoring rule`). Include the Agent role and a descriptive summary in the body.
 - When merging Pull Requests, always use **Squash and Merge** into `develop` or `epic/*` branches to keep the history linear. Direct merges to `main` should only occur for stable releases.
 - **Human + AI Pairing:** Each Human+AI pair owns an entire Epic (vertical slice) from start to finish. This eliminates synchronous dependencies (e.g., waiting on someone else to build the UI) and prevents merge conflicts.
+- **Never Work on Completed Stories:** Agents must never work on a story marked as completed (`[x]`) in `user_stories.md`. Once a story is checked, it is considered finalized and locked. Any changes to completed features require an explicit user request or a documented bug fix (mapped to a new task).
 - Never change the git email and user name.
 
 ## Coordination
