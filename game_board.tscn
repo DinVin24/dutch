@@ -146,3 +146,27 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+
+[node name="TopLeft" type="MarginContainer" parent="GameUI/MainHUD"]
+layout_mode = 1
+offset_right = 200.0
+offset_bottom = 60.0
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+
+[node name="TurnLabel" type="Label" parent="GameUI/MainHUD/TopLeft"]
+layout_mode = 2
+text = "Player's Turn"
+
+[node name="TopCenter" type="VBoxContainer" parent="GameUI/MainHUD"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -250.0
+offset_top = 20.0
+offset_right = 250.0
+offset_bottom = 120.0
+grow_horizontal = 2
+theme_override_constants/separation = 10
+alignment = 1

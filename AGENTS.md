@@ -14,7 +14,7 @@ Here, agents act as Full-Stack Developers working on vertical slices (Epics) rat
    - Owns the `task.md` execution flow. 
 3. **The Validator (Agent 3 / QA & Validation)**
    - Reviews The Executor's commit, plays the game, tests the edge cases in the user stories, and writes the `walkthrough.md`.
-   - **Bug Reporting:** Whenever a bug is encountered, the Validator MUST create a GitHub issue with a descriptive title, reproduction steps, and expected vs actual behavior. This ensures a persistent record for all agents.
+   - **Bug Reporting:** Whenever a bug is encountered, the Validator MUST create a GitHub issue with a descriptive title, reproduction steps, and expected vs actual behavior. This ensures a persistent record for all agents. **IMPORTANT: Agents are strictly forbidden from closing issues without the Lead's explicit intervention and verification. Always prompt the Lead for verification before considering a task finished.**
    - **Automated QA (Linux Only):** On Linux systems, the Validator should use the automated QA pipeline (`run_experimental_qa.sh`). This is **PROCEDURALLY OPT-IN**: the AI agent is forbidden from executing this command until they have explicitly prompted the user (Lead) in the conversation and received permission. This pipeline focuses on **PURE LOGIC VERIFICATION** (FSM, data integrity, turn order) in headless mode. Visual/UI verification is performed manually by the agent and lead.
    - **PR Verification:** Explicitly verifies Pull Requests against the `implementation_plan.md` and README rules before handoff.
    - If bugs exist, it shifts the pipeline back to The Executor. The Validator **MUST** provide exact reproduction steps (initial state, actions taken, expected result, actual result) so The Executor can fix issues surgically without guessing.
@@ -26,8 +26,9 @@ Here, agents act as Full-Stack Developers working on vertical slices (Epics) rat
 
 ## Agentic Guidelines
 - **Strict FSM Architecture:** Agents must enforce a strict Finite State Machine (FSM) for game states at all times during the development phase (e.g., `STATE_DRAW_PHASE`, `STATE_WAITING_FOR_PEEK`, `STATE_INTERRUPT`). Avoid loose boolean flags (like `is_player_turn`) to control game logic, to prevent race conditions during interrupts like Jump-Ins.
-- **Issue Prioritization:** Before starting an Epic or vertical slice, agents MUST check the GitHub Issues list. If there are open bugs or tasks related to their current work area, they must prioritize resolving them with **perfect repairs** and closing the issues before proceeding with new features.
+- **Issue Prioritization:** Before starting an Epic or vertical slice, agents MUST check the GitHub Issues list. If there are open bugs or tasks related to their current work area, they must prioritize resolving them with **perfect repairs** and closing them only after Lead approval.
 - **GitHub Formatting:** Pull Request descriptions and issue bodies must use professional, beautiful GitHub Markdown formatting. Avoid raw escape characters (like `\n`) in terminal-based creation; prefer clean, multi-line blocks that render perfectly on GitHub.
+- **Responsive UI Design:** UI elements must be designed using Godot's Container system (VBox, HBox, etc.) to ensure they respond gracefully to window resizing. Avoid hardcoded offsets or fixed positions for critical HUD text.
 - Treat yourself as an agent with foresight: proactively suggest follow-up tests, request missing assets, and double-check README rules before changing gameplay code.
 - Use specialized AI tools (e.g. Gemini for layout tasks, ChatGPT Codex for generic scripts) as appropriate, but always keep descriptions and commits human-readable.
 - Each commit/message should follow **Conventional Commits** format (e.g. `feat(ui): implement pause menu`, `fix(logic): correct scoring rule`). Include the Agent role and a descriptive summary in the body.
