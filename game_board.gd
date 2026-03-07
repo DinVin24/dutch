@@ -25,6 +25,7 @@ func _ready():
 	print("Game Board: Ready. Connecting signals...")
 	GameManager.stop_menu_music()
 	GameManager.game_state_changed.connect(_on_game_state_changed)
+	GameManager.turn_started.connect(_on_turn_started)
 	resized.connect(_on_resized)
 	
 	# Connect deck interaction
@@ -56,9 +57,37 @@ func _update_deck_visual():
 		card_bg.z_index = -i
 		card_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
+func _on_turn_started(player_idx):
+	print("Game Board: Player ", player_idx, "'s turn.")
+	
+	# Update HUD message
+	var p_info = GameManager.players_info[player_idx]
+	var label_text = "YOUR TURN" if player_idx == 0 else p_info.name + "'s Turn"
+	
+	if not $GameUI/MainHUD.has_node("TurnLabel"):
+		var label = Label.new()
+		label.name = "TurnLabel"
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		$GameUI/MainHUD.add_child(label)
+		label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		label.position.y += 10
+	
+	$GameUI/MainHUD.get_node("TurnLabel").text = label_text
+	
+	# Enable/Disable deck interaction
+	var deck_button = $CenterTable/DeckArea/Slotbg/Interaction
+	if player_idx == 0:
+		deck_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	else:
+		deck_button.mouse_default_cursor_shape = Control.CURSOR_ARROW
+
 func _on_deck_clicked():
-	print("Deck clicked!")
-	# Logic for drawing will go in next Epic, but for now we just log it.
+	if GameManager.current_state != GameManager.GameState.PLAYER_TURN:
+		print("Warning: It is not your turn!")
+		return
+	
+	print("Player drawing card...")
+	# Logic for drawing card will be implemented next
 
 func _on_resized():
 	# Reposition all cards instantly when window size changes
