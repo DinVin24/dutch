@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cfnfr675ri7sc"
-path="res://.godot/imported/grid.png-a40908aaaf59b99e352aecf845f0693a.ctex"
+uid="uid://c518prmqikd4n"
+path="res://.godot/imported/bg_rave.png-20ab02a306943ec5170409bbf69c2648.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/cards/grid.png"
-dest_files=["res://.godot/imported/grid.png-a40908aaaf59b99e352aecf845f0693a.ctex"]
+source_file="res://assets/images/bg_rave.png"
+dest_files=["res://.godot/imported/bg_rave.png-20ab02a306943ec5170409bbf69c2648.ctex"]
 
 [params]
 

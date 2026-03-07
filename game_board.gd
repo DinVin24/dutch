@@ -27,15 +27,29 @@ func _ready():
 	GameManager.turn_started.connect(_on_turn_started)
 	GameManager.card_drawn_to_pending.connect(_on_card_drawn_to_pending)
 	GameManager.card_discarded.connect(_on_card_discarded)
+	GameManager.deck_ready.connect(_update_deck_visual)
 	resized.connect(_on_resized)
 	
 	# Connect deck interaction
 	var deck_button = $CenterTable/DeckArea/Slotbg/Interaction
 	if deck_button:
+		print("GameBoard: FOUND DECK BUTTON. Reparenting...")
+		deck_button.reparent(deck_area)
+		deck_button.z_index = 10
 		deck_button.pressed.connect(_on_deck_clicked)
+	
+	var discard_button = $CenterTable/DiscardArea/Slotbg/Interaction
+	if discard_button:
+		print("GameBoard: FOUND DISCARD BUTTON. Reparenting...")
+		discard_button.reparent(discard_area)
+		discard_button.z_index = 10
+		discard_button.pressed.connect(_on_discard_clicked)
 	
 	await get_tree().process_frame
 	_update_deck_visual()
+	
+	print("GameBoard Tree Structure (CenterTable):")
+	$CenterTable.print_tree_pretty()
 	
 	print("Game Board: Starting game...")
 	GameManager.initialize_game(4)
@@ -56,7 +70,11 @@ func _update_deck_visual():
 		card_bg.setup(CardData.new("Ace", "Clubs")) # Data doesn't matter for back
 		card_bg.position = Vector2(-i * 2, -i * 2)
 		card_bg.z_index = -i
-		card_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	
+	# ENSURE INTERACTION IS ON TOP (Last child wins in Godot UI input)
+	if deck_area.has_node("Interaction"):
+		deck_area.move_child(deck_area.get_node("Interaction"), -1)
+		print("GameBoard: Deck Interaction button moved to TOP of stack.")
 
 func _on_turn_started(player_idx):
 	print("Game Board: Player ", player_idx, "'s turn.")
@@ -76,24 +94,28 @@ func _on_turn_started(player_idx):
 	$GameUI/MainHUD.get_node("TurnLabel").text = label_text
 	
 	# Enable/Disable deck interaction
-	var deck_button = $CenterTable/DeckArea/Slotbg/Interaction
+	var deck_button = deck_area.get_node("Interaction")
 	if player_idx == 0:
 		deck_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	else:
 		deck_button.mouse_default_cursor_shape = Control.CURSOR_ARROW
 
 func _on_deck_clicked():
+	print("GameBoard: Interaction - Deck clicked. Current state: ", GameManager.GameState.keys()[GameManager.current_state])
 	if GameManager.current_state != GameManager.GameState.PLAYER_TURN:
 		print("Warning: It is not your turn!")
 		return
 	
-	print("Player drawing card...")
+	print("GameBoard: Drawing card via GameManager...")
 	GameManager.player_draw_card()
 
 func _on_discard_clicked():
+	print("GameBoard: Interaction - Discard clicked. State: ", GameManager.GameState.keys()[GameManager.current_state], " Player: ", GameManager.current_player_index)
 	if GameManager.current_state == GameManager.GameState.DRAWN_CARD_PENDING and GameManager.current_player_index == 0:
-		print("Player discarding drawn card...")
+		print("GameBoard: Discarding card via GameManager...")
 		GameManager.player_discard_drawn_card()
+	else:
+		print("GameBoard: Discard ignored. Conditions not met.")
 
 func _on_player_card_clicked(card_node, _card_data):
 	if GameManager.current_state == GameManager.GameState.DRAWN_CARD_PENDING and GameManager.current_player_index == 0:
@@ -233,7 +255,7 @@ func _on_card_discarded(player_idx, card_data):
 	if pending_card and pending_card.data == card_data:
 		card_to_discard = pending_card
 		pending_card = null
-	else:
+	elif player_idx != -1:
 		# Was it a card from a hand? (During a swap)
 		# We need to find which node it was. 
 		# We use player_idx directly from the signal to avoid race conditions with next_turn()
@@ -265,7 +287,8 @@ func _on_card_discarded(player_idx, card_data):
 	
 	if card_to_discard:
 		card_to_discard.z_index = 100 # Move above others
-		var target_pos = discard_area.global_position - card_pivot
+		# target_pos should be the center of the discard slot
+		var target_pos = discard_area.global_position
 		var tween = create_tween()
 		tween.tween_property(card_to_discard, "global_position", target_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tween.tween_callback(func():
@@ -277,8 +300,14 @@ func _on_card_discarded(player_idx, card_data):
 			
 			card_to_discard.reparent(discard_area)
 			card_to_discard.name = "DiscardVisual"
-			card_to_discard.position = Vector2.ZERO - card_pivot # Center in area
+			card_to_discard.position = Vector2.ZERO # Center perfectly in area
+			card_to_discard.rotation_degrees = 0
 			card_to_discard.z_index = 0
+			
+			# ENSURE INTERACTION IS ON TOP
+			if discard_area.has_node("Interaction"):
+				discard_area.move_child(discard_area.get_node("Interaction"), -1)
+				print("GameBoard: Discard Interaction button moved to TOP of stack.")
 		)
 
 func _on_card_drawn_to_pending(player_idx, card_data):
