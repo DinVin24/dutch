@@ -12,6 +12,8 @@ signal card_flipped(card_node, card_data)
 var data: CardData
 var is_flipping: bool = false
 var is_selected: bool = false
+var is_highlighted: bool = false
+var highlight_tween: Tween = null
 
 # Path configuration
 const SPRITE_SHEET_PATH = "res://assets/images/cards/playing_cards.png"
@@ -118,6 +120,23 @@ func set_interaction_enabled(enabled: bool):
 
 func set_selected(p_selected: bool):
 	is_selected = p_selected
+	_update_visuals()
+
+func set_highlighted(p_highlighted: bool):
+	is_highlighted = p_highlighted
+	
+	if highlight_tween:
+		highlight_tween.kill()
+	
+	if is_highlighted:
+		highlight_tween = create_tween().set_loops()
+		highlight_tween.tween_property(self, "scale", Vector2(1.05, 1.05), 0.6).set_trans(Tween.TRANS_SINE)
+		highlight_tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.6).set_trans(Tween.TRANS_SINE)
+		modulate = Color(1.5, 1.5, 1.5) # Brighten
+	else:
+		scale = Vector2(1.0, 1.0)
+		modulate = Color(1.0, 1.0, 1.0)
+	
 	_update_visuals()
 
 func flip() -> void:
