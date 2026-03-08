@@ -25,6 +25,8 @@ signal card_drawn(player_id, card_data)
 signal card_drawn_to_pending(player_id, card_data)
 signal card_discarded(player_id, card_data)
 signal jump_in_penalty(player_idx, penalty_card_data)
+signal bot_action(message: String)
+signal memory_shift_required(player_idx, removed_card_idx)
 
 var current_state: GameState = GameState.INITIALIZING
 var deck_manager: DeckManager
@@ -35,6 +37,7 @@ var num_players: int = 4 # Hotseat local play
 var players_info: Array = []
 var current_player_index: int = 0
 var dutch_caller_index: int = -1 # -1 means no one has called Dutch yet
+var jump_in_player_idx: int = -1 # who is currently attempting the jump-in
 var drawn_card_data: CardData = null
 
 func _ready():
@@ -64,13 +67,17 @@ func initialize_game(p_count: int = 4):
 	players_info.clear()
 	current_player_index = 0
 	dutch_caller_index = -1
+	jump_in_player_idx = -1
 	for i in range(num_players):
 		players_info.append({
 			"id": i,
 			"name": "Player " + str(i + 1),
 			"score": 0,
 			"hand": [], # CardData objects
-			"can_call_dutch": true
+			"can_call_dutch": true,
+			# bot_memory: { player_idx: { card_idx: CardData } }
+			# Populated by BotController during INITIAL_PEEK.
+			"bot_memory": {}
 		})
 	
 	# Ensure a fresh deck is ready for the new match
@@ -132,43 +139,70 @@ func end_turn():
 		return
 	next_turn()
 
-func start_jump_in():
+## player_idx: who is jumping in. -1 defaults to current_player_index (bot use).
+func start_jump_in(player_idx: int = -1) -> void:
 	if current_state != GameState.TURN_END_CHOICE:
 		return
+	jump_in_player_idx = player_idx if player_idx != -1 else current_player_index
 	change_state(GameState.TURN_JUMP_IN_SELECTION)
 
 func validate_jump_in(card_idx: int) -> bool:
 	if current_state != GameState.TURN_JUMP_IN_SELECTION:
 		return false
-		
-	var h = players_info[current_player_index].hand
+	if jump_in_player_idx < 0 or jump_in_player_idx >= num_players:
+		return false
+
+	var h: Array = players_info[jump_in_player_idx].hand
 	if card_idx < 0 or card_idx >= h.size():
 		return false
-		
-	var selected_card = h[card_idx]
+
+	var selected_card: CardData = h[card_idx]
 	if selected_card == null:
 		return false
-		
+
 	if deck_manager.discard_pile.size() > 0:
-		var top_discard = deck_manager.discard_pile[-1]
+		var top_discard: CardData = deck_manager.discard_pile[-1]
 		if selected_card.rank == top_discard.rank:
-			print("Match! Jump In valid.")
+			# Build the message before clearing jump_in_player_idx.
+			var msg := "Player %d: %s of %s matches the %s of %s — JUMP IN!" % [
+				jump_in_player_idx,
+				selected_card.rank, selected_card.suit,
+				top_discard.rank, top_discard.suit
+			]
+			print("[JUMP-IN] Player %d jumped in with %s of %s over a %s of %s" % [
+				jump_in_player_idx,
+				selected_card.rank, selected_card.suit,
+				top_discard.rank, top_discard.suit
+			])
 			h.remove_at(card_idx)
+			memory_shift_required.emit(jump_in_player_idx, card_idx)
 			deck_manager.discard_pile.append(selected_card)
-			card_discarded.emit(current_player_index, selected_card)
+			card_discarded.emit(jump_in_player_idx, selected_card)
+			jump_in_player_idx = -1
 			_resolve_discard_effects(selected_card)
+			# Emit AFTER _resolve_discard_effects so the message outlasts the
+			# _hide_message() call triggered by the state change above.
+			bot_action.emit(msg)
 			return true
-			
-	print("No match. Jump In invalid. Assigning penalty card.")
-	var penalty_card_dict = deck_manager.draw_card()
+
+	print("No match. Jump In invalid. Assigning penalty card to player ", jump_in_player_idx)
+	var penalty_card_dict: Dictionary = deck_manager.draw_card()
 	if not penalty_card_dict.is_empty():
-		var p_card = CardData.new(penalty_card_dict.rank, penalty_card_dict.suit)
+		var p_card := CardData.new(penalty_card_dict.rank, penalty_card_dict.suit)
 		p_card.is_face_up = false
 		h.append(p_card)
-		jump_in_penalty.emit(current_player_index, p_card)
-	
+		jump_in_penalty.emit(jump_in_player_idx, p_card)
+
+	jump_in_player_idx = -1
 	change_state(GameState.TURN_END_CHOICE)
 	return false
+
+## Human opted out of a jump-in: return to TURN_END_CHOICE without penalty.
+func cancel_jump_in() -> void:
+	if current_state != GameState.TURN_JUMP_IN_SELECTION:
+		return
+	jump_in_player_idx = -1
+	change_state(GameState.TURN_END_CHOICE)
 
 func confirm_dutch():
 	if current_state != GameState.TURN_CONFIRM_DUTCH:

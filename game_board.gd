@@ -10,6 +10,8 @@ extends Control
 @onready var top_center = $GameUI/MainHUD/TopCenter
 
 
+var bot_controller: BotController = null
+
 var end_turn_btn: Button
 var jump_in_btn: Button
 var call_dutch_btn: Button
@@ -40,6 +42,7 @@ func _ready():
 	GameManager.card_discarded.connect(_on_card_discarded)
 	GameManager.jump_in_penalty.connect(_on_jump_in_penalty)
 	GameManager.deck_ready.connect(_update_deck_visual)
+	GameManager.bot_action.connect(_on_bot_action)
 	resized.connect(_on_resized)
 	
 	var deck_button = $CenterTable/DeckArea/Slotbg/Interaction
@@ -55,6 +58,11 @@ func _ready():
 		discard_button.reparent(discard_area)
 		discard_button.z_index = 10
 		discard_button.pressed.connect(_on_discard_clicked)
+	
+	# Instantiate and wire the BotController.
+	bot_controller = BotController.new()
+	bot_controller.gm = GameManager
+	add_child(bot_controller)
 	
 	await get_tree().process_frame
 	_update_deck_visual()
@@ -92,7 +100,7 @@ func _create_dutch_ui():
 	jump_in_btn.offset_right = 80
 	jump_in_btn.offset_top = -250
 	jump_in_btn.offset_bottom = -200
-	jump_in_btn.hide()
+	jump_in_btn.show() # Always visible — player can attempt a jump-in any time a card is discarded.
 
 	call_dutch_btn = Button.new()
 	call_dutch_btn.text = "CALL DUTCH!"
@@ -154,6 +162,10 @@ func _on_turn_started(player_idx):
 	
 	if turn_label:
 		turn_label.text = label_text
+	
+	# Show a brief message so humans can track bot turns.
+	if player_idx != 0:
+		_show_message(p_info.name + " is drawing…")
 
 func _on_deck_clicked():
 	if GameManager.current_player_index != 0:
@@ -185,7 +197,10 @@ func _on_player_card_clicked(card_node, _card_data):
 			
 	if p_idx == -1: return
 	
-	if GameManager.current_player_index != 0 and GameManager.current_state != GameManager.GameState.INITIAL_PEEK:
+	# Guard: during jump-in selection player 0 can always interact even on a bot's turn.
+	var is_jump_in_phase := GameManager.current_state == GameManager.GameState.TURN_JUMP_IN_SELECTION
+	var player_0_acts := (GameManager.current_player_index == 0 or (is_jump_in_phase and GameManager.jump_in_player_idx == 0))
+	if not player_0_acts and GameManager.current_state != GameManager.GameState.INITIAL_PEEK:
 		print("FSM Blocked: Not your turn. Cannot interact with cards.")
 		return
 
@@ -199,13 +214,15 @@ func _on_player_card_clicked(card_node, _card_data):
 			else:
 				print("FSM Blocked: Cannot swap drawn card into opponent's hand.")
 		GameManager.GameState.TURN_JUMP_IN_SELECTION:
-			if p_idx == GameManager.current_player_index:
+			# Only the current jump-in player can select a card.
+			var ji := GameManager.jump_in_player_idx
+			if ji == 0 and p_idx == 0:
 				if GameManager.validate_jump_in(c_idx):
 					print("Player successfully jumped in!")
 				else:
 					print("Jump in failed! Rank does not match.")
 			else:
-				print("FSM Blocked: Cannot jump in cards from other players' hands.")
+				print("Not your jump-in turn.")
 		GameManager.GameState.TURN_PEEK_ABILITY:
 			if card_node.data.is_face_up:
 				print("FSM Blocked: Cannot peek at a card that is already face-up.")
@@ -257,6 +274,15 @@ func _perform_jack_swap():
 	swap_sources.clear()
 	clear_all_highlights()
 	reposition_all_cards()
+
+func _on_bot_action(message: String) -> void:
+	_show_message(message)
+	# Auto-hide the bot-action message after 2 seconds.
+	var timer := get_tree().create_timer(2.0)
+	timer.timeout.connect(func():
+		# Only clear if no other message replaced it.
+		_hide_message()
+	)
 
 func _show_message(text: String):
 	# Clear previous messages if any
@@ -349,6 +375,11 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	var card_scene = preload("res://card.tscn")
 	pending_card = card_scene.instantiate()
 	add_child(pending_card)
+	
+	# Bots draw face-down — only their memory knows the value, not the table.
+	if player_idx != 0:
+		card_data.is_face_up = false
+	
 	pending_card.setup(card_data)
 	
 	var spawn_pos = deck_area.global_position - card_pivot
@@ -384,7 +415,7 @@ func _on_game_state_changed(new_state):
 	_hide_message()
 	
 	if end_turn_btn: end_turn_btn.hide()
-	if jump_in_btn: jump_in_btn.hide()
+	# jump_in_btn is intentionally NOT hidden — it stays visible at all times.
 	if call_dutch_btn: call_dutch_btn.hide()
 	if confirm_dutch_box: confirm_dutch_box.hide()
 	
@@ -395,15 +426,21 @@ func _on_game_state_changed(new_state):
 		deck_button.mouse_default_cursor_shape = Control.CURSOR_ARROW
 		
 	match new_state:
+		GameManager.GameState.TURN_RESOLVE_DRAWN:
+			# Show a status for bot turns so the human can follow along.
+			if GameManager.current_player_index != 0:
+				var name: String = GameManager.players_info[GameManager.current_player_index].name
+				_show_message(name + " is deciding…")
 		GameManager.GameState.TURN_END_CHOICE:
 			if GameManager.current_player_index == 0:
 				end_turn_btn.show()
-				jump_in_btn.show()
 				if GameManager.dutch_caller_index == -1 and GameManager.players_info[0].can_call_dutch:
 					call_dutch_btn.show()
 		GameManager.GameState.TURN_JUMP_IN_SELECTION:
-			_show_message("Select a matching card to Jump In, or End Turn.")
-			if GameManager.current_player_index == 0:
+			var ji_name: String = GameManager.players_info[GameManager.jump_in_player_idx].name if GameManager.jump_in_player_idx >= 0 else "Someone"
+			_show_message(ji_name + ": pick a matching card, or cancel.")
+			# Only player 0 gets a visible cancel button.
+			if GameManager.jump_in_player_idx == 0:
 				end_turn_btn.show()
 		GameManager.GameState.TURN_CONFIRM_DUTCH:
 			if GameManager.current_player_index == 0:
@@ -588,12 +625,19 @@ func _go_to_main_menu() -> void:
 	get_tree().change_scene_to_file("res://main_menu.tscn")
 
 func _on_end_turn_pressed():
-	if GameManager.current_player_index == 0:
-		GameManager.end_turn()
+	match GameManager.current_state:
+		GameManager.GameState.TURN_END_CHOICE:
+			if GameManager.current_player_index == 0:
+				GameManager.end_turn()
+		GameManager.GameState.TURN_JUMP_IN_SELECTION:
+			# Player 0 cancels their own jump-in attempt — no penalty, no turn advance.
+			if GameManager.jump_in_player_idx == 0:
+				GameManager.cancel_jump_in()
 
 func _on_jump_in_pressed():
-	if GameManager.current_player_index == 0:
-		GameManager.start_jump_in()
+	# Available any time there's a discard pile and we're in TURN_END_CHOICE.
+	if GameManager.current_state == GameManager.GameState.TURN_END_CHOICE:
+		GameManager.start_jump_in(0) # 0 = human player
 
 func _on_call_dutch_pressed():
 	if GameManager.current_player_index == 0:
