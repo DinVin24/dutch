@@ -17,11 +17,11 @@ func _input(event):
 
 func start_pipeline():
 	print("\n[QA] STARTING PURE LOGIC PIPELINE (HEADLESS)...")
-	gm = root.get_node_or_null("GameManager")
-	if not gm:
-		print("[QA FAIL] GameManager singleton not found.")
-		quit()
+	gm = load("res://game_manager.gd").new()
+	gm.name = "GameManager"
+	root.add_child(gm)
 	
+	await self.process_frame
 	# PHASE 1: INITIALIZATION & DEAL
 	await phase_initialization()
 	

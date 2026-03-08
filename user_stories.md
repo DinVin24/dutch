@@ -25,7 +25,7 @@
 - [ ] **Story**: As a player, when the game ends, I want all cards flipped face up and the points tallied according to the rules (Ace=1, Jack=11, Queen=12, King=13, King of Diamonds=0), so that the lowest scorer is immediately declared the winner.
 
 ## Epic 6: AI Opponents (Bots)
-- [ ] **Story**: As a system, I want the bot to have a simulated "memory" of cards it has peeked at, so that it can make rational decisions about which cards to swap or keep.
-- [ ] **Story**: As a system, I want the bot to evaluate the top discarded card against its known high-value cards, so that it attempts to Jump-In when advantageous.
-- [ ] **Story**: As a player, I want the bots' turns to take 1-2 seconds with clear visual cues summarizing their actions (e.g., "Bot 2 swapped a card"), so that the pacing feels natural and I can follow the state of the game.
-- [ ] **Story**: As a system, I want the bot to track the number of cards its opponents have and their visible score potential, so that it can strategically decide when to call "Dutch".
+- [x] **Story**: As a system, I want the bot to have a simulated "memory" of cards it has peeked at, so that it can make rational decisions about which cards to swap or keep.
+- [x] **Story**: As a system, I want the bot to strategically evaluate the card it draws from the deck and appropriately discard unknown cards for low-value drawn cards, or discard high-value drawn cards, so that it attempts to win.
+- [x] **Story**: As a system, I want the bot to purposefully use its Queen and Jack abilities strategically (peeking at opponents or swapping worst/best cards) when available, rather than playing them randomly, so that it feels like a competitive player.
+- [x] **Story**: As a system, I want the bot to recognize when an opponent discards a matching card, and automatically trigger a "Jump In" if the bot knows it possesses the match, so that it can utilize all valid game mechanics.

@@ -8,7 +8,7 @@ extends Control
 @onready var player_pos_right = $PlayerPositions/Right
 @onready var turn_label = $GameUI/MainHUD/TopLeft/TurnLabel
 @onready var top_center = $GameUI/MainHUD/TopCenter
-@onready var main_hud_bottom = $GameUI/MainHUD/BottomCenter # Check if standard, else inject in MainHUD
+
 
 var end_turn_btn: Button
 var jump_in_btn: Button
@@ -401,22 +401,14 @@ func _on_game_state_changed(new_state):
 				jump_in_btn.show()
 				if GameManager.dutch_caller_index == -1 and GameManager.players_info[0].can_call_dutch:
 					call_dutch_btn.show()
-			else:
-				# Bot turn: immediately auto-end for now
-				GameManager.end_turn()
 		GameManager.GameState.TURN_JUMP_IN_SELECTION:
 			_show_message("Select a matching card to Jump In, or End Turn.")
 			if GameManager.current_player_index == 0:
 				end_turn_btn.show()
-			else:
-				GameManager.end_turn() # Bots don't jump in yet
 		GameManager.GameState.TURN_CONFIRM_DUTCH:
 			if GameManager.current_player_index == 0:
 				_show_message("You called Dutch! End the game, or Cancel?")
 				confirm_dutch_box.show()
-			else:
-				# Bot auto-logic goes here later, for now just auto-confirm
-				pass
 		GameManager.GameState.DEAL_CARDS:
 			_handle_initial_deal()
 		GameManager.GameState.INITIAL_PEEK:
