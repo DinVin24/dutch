@@ -114,23 +114,8 @@ func _handle_deal_cards():
 	pass
 
 func _handle_game_over():
-	print("GameManager: Game Over! Calculating scores...")
-	var lowest_score := 9999
-	var winner_idx := -1
-	
-	for i in range(num_players):
-		var score := 0
-		for card in players_info[i].hand:
-			score += card.recalc_point_value()
-		players_info[i].score = score
-		print("Player ", i, " score: ", score)
-		
-		if score < lowest_score:
-			lowest_score = score
-			winner_idx = i
-			
-	print("GameManager: Player ", winner_idx, " wins with score ", lowest_score)
-	game_over.emit(winner_idx)
+	# Logic to calculate scores will go here
+	game_over.emit(-1) # Placeholder
 
 func start_game():
 	change_state(GameState.DEAL_CARDS)
@@ -161,15 +146,14 @@ func start_jump_in(player_idx: int = -1) -> void:
 	var resolved_idx := player_idx if player_idx != -1 else current_player_index
 	
 	if resolved_idx == 0:
-		# Human player: allow jump-in from any state EXCEPT when they are already
-		# holding a drawn card.
+		# Human player: allow jump-in from any state EXCEPT their own active draw/resolve.
 		var blocked_states := [
 			GameState.INITIALIZING, GameState.DEAL_CARDS, GameState.INITIAL_PEEK,
 			GameState.TURN_JUMP_IN_SELECTION, GameState.TURN_CONFIRM_DUTCH, GameState.GAME_OVER
 		]
-		# Block if player has a drawn card they must resolve.
+		# Also block if it is literally the human's own draw or resolve turn.
 		if (current_state in blocked_states) or \
-		   (current_player_index == 0 and current_state == GameState.TURN_RESOLVE_DRAWN):
+		   (current_player_index == 0 and current_state in [GameState.TURN_START_DRAW, GameState.TURN_RESOLVE_DRAWN]):
 			return
 		# Require a non-empty discard pile to jump into.
 		if deck_manager.discard_pile.is_empty():

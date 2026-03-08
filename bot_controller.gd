@@ -471,7 +471,7 @@ func _execute_end_choice(bot_idx: int) -> void:
 
 	if hand_size > 0 and known_cnt == hand_size:
 		var score := _known_score(bot_idx)
-		if score <= 7 and gm.dutch_caller_index == -1 and gm.players_info[bot_idx].can_call_dutch:
+		if score < 7 and gm.dutch_caller_index == -1 and gm.players_info[bot_idx].can_call_dutch:
 			gm.bot_action.emit("Bot %d calls DUTCH! (score: %d)" % [bot_idx, score])
 			gm.call_dutch(bot_idx)
 			return
