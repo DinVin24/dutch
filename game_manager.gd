@@ -140,10 +140,30 @@ func end_turn():
 	next_turn()
 
 ## player_idx: who is jumping in. -1 defaults to current_player_index (bot use).
+## Bots may only call this during TURN_END_CHOICE.
+## Player 0 may call this during any bot-turn state to interrupt and select a card.
 func start_jump_in(player_idx: int = -1) -> void:
-	if current_state != GameState.TURN_END_CHOICE:
-		return
-	jump_in_player_idx = player_idx if player_idx != -1 else current_player_index
+	var resolved_idx := player_idx if player_idx != -1 else current_player_index
+	
+	if resolved_idx == 0:
+		# Human player: allow jump-in from any state EXCEPT their own active draw/resolve.
+		var blocked_states := [
+			GameState.INITIALIZING, GameState.DEAL_CARDS, GameState.INITIAL_PEEK,
+			GameState.TURN_JUMP_IN_SELECTION, GameState.TURN_CONFIRM_DUTCH, GameState.GAME_OVER
+		]
+		# Also block if it is literally the human's own draw or resolve turn.
+		if (current_state in blocked_states) or \
+		   (current_player_index == 0 and current_state in [GameState.TURN_START_DRAW, GameState.TURN_RESOLVE_DRAWN]):
+			return
+		# Require a non-empty discard pile to jump into.
+		if deck_manager.discard_pile.is_empty():
+			return
+	else:
+		# Bots may only jump in during TURN_END_CHOICE.
+		if current_state != GameState.TURN_END_CHOICE:
+			return
+	
+	jump_in_player_idx = resolved_idx
 	change_state(GameState.TURN_JUMP_IN_SELECTION)
 
 func validate_jump_in(card_idx: int) -> bool:

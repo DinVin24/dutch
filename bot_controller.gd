@@ -97,7 +97,11 @@ func _on_game_state_changed(new_state: int) -> void:
 	if new_state == GameManager.GameState.INITIAL_PEEK:
 		_execute_initial_peek()
 		return
-
+	
+	# If the human player is mid jump-in selection, don't interfere.
+	if new_state == GameManager.GameState.TURN_JUMP_IN_SELECTION and gm.jump_in_player_idx == 0:
+		return
+	
 	# All other states: only act when it is a bot's turn.
 	var idx: int = gm.current_player_index
 	if idx == 0:
@@ -160,33 +164,39 @@ func _on_memory_shift_required(target_player_idx: int, removed_card_idx: int) ->
 
 ## Check every bot to see if any of them know a card that matches the
 ## discarded rank. The first one with a known match attempts to jump in.
+## Each bot gets a staggered delay so animations fully resolve before the next one fires.
 func _try_bot_jump_ins(card_data: CardData) -> void:
 	# We need to wait for _resolve_discard_effects to fire and push state
-	# to TURN_END_CHOICE. One process frame is usually enough, but use a
-	# tiny timer to be safe.
-	await _wait(0.2)
-
+	# to TURN_END_CHOICE. Give the discard animation time to land first.
+	await _wait(0.6)
+	
 	# After the wait, verify the state is TURN_END_CHOICE before proceeding.
 	if gm.current_state != GameManager.GameState.TURN_END_CHOICE:
 		return
-
+	
 	for bot_idx in range(1, gm.num_players):
-		# A bot cannot jump in on its own discard.
-		# Also skip if the game state already moved on (another bot jumped in).
+		# Skip if the game state already moved on (another bot jumped in, or
+		# the human pressed Jump-In).
 		if gm.current_state != GameManager.GameState.TURN_END_CHOICE:
 			break
-
+		
 		var own_mem := _own_memory(bot_idx)
 		var match_idx := -1
 		for c_idx in own_mem:
 			if own_mem[c_idx].rank == card_data.rank:
 				match_idx = c_idx
 				break
-
+		
 		if match_idx != -1:
 			await _attempt_jump_in(bot_idx, match_idx)
-			# Only one bot jumps in per discard event.
+			# After a successful jump-in a new discard fires, which starts a
+			# fresh _try_bot_jump_ins chain. Stop here so only one bot acts per
+			# discard event.
 			break
+		
+		# No match for this bot — add a small gap before checking the next bot
+		# so it doesn't feel instantaneous even when skipping.
+		await _wait(0.5)
 
 ## Attempt a jump-in for [bot_idx] with the card at [card_idx] in its hand.
 func _attempt_jump_in(bot_idx: int, card_idx: int) -> void:

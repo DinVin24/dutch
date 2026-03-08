@@ -100,7 +100,7 @@ func _create_dutch_ui():
 	jump_in_btn.offset_right = 80
 	jump_in_btn.offset_top = -250
 	jump_in_btn.offset_bottom = -200
-	jump_in_btn.show() # Always visible — player can attempt a jump-in any time a card is discarded.
+	jump_in_btn.hide() # Hidden until a card lands in the discard pile.
 
 	call_dutch_btn = Button.new()
 	call_dutch_btn.text = "CALL DUTCH!"
@@ -117,22 +117,32 @@ func _create_dutch_ui():
 	call_dutch_btn.offset_bottom = -200
 	call_dutch_btn.hide()
 	
-	# Inject Confirm/Cancel panel to the center
+	# Inject Confirm/Cancel panel at the bottom-center, replacing End Turn / Call Dutch.
 	confirm_dutch_box = HBoxContainer.new()
 	confirm_dutch_box.add_theme_constant_override("separation", 20)
 	$GameUI/MainHUD.add_child(confirm_dutch_box)
-	confirm_dutch_box.set_anchors_preset(Control.PRESET_CENTER)
+	confirm_dutch_box.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	confirm_dutch_box.offset_left = -270
+	confirm_dutch_box.offset_right = 270
+	confirm_dutch_box.offset_top = -250
+	confirm_dutch_box.offset_bottom = -200
 	confirm_dutch_box.hide()
 	
 	var confirm_btn = Button.new()
-	confirm_btn.text = "CONFIRM (End Game)"
-	confirm_btn.add_theme_font_size_override("font_size", 24)
+	confirm_btn.text = "CONFIRM DUTCH"
+	confirm_btn.add_theme_font_size_override("font_size", 20)
+	var style_confirm = StyleBoxFlat.new()
+	style_confirm.bg_color = Color(0.2, 0.6, 0.2)
+	confirm_btn.add_theme_stylebox_override("normal", style_confirm)
 	confirm_btn.pressed.connect(_on_confirm_dutch_pressed)
 	confirm_dutch_box.add_child(confirm_btn)
 	
 	var cancel_btn = Button.new()
-	cancel_btn.text = "CANCEL (Keep Playing)"
-	cancel_btn.add_theme_font_size_override("font_size", 24)
+	cancel_btn.text = "FORFEIT DUTCH"
+	cancel_btn.add_theme_font_size_override("font_size", 20)
+	var style_cancel = StyleBoxFlat.new()
+	style_cancel.bg_color = Color(0.8, 0.2, 0.2)
+	cancel_btn.add_theme_stylebox_override("normal", style_cancel)
 	cancel_btn.pressed.connect(_on_cancel_dutch_pressed)
 	confirm_dutch_box.add_child(cancel_btn)
 
@@ -306,6 +316,10 @@ func _hide_message():
 		child.queue_free()
 
 func _on_card_discarded(player_idx, card_data):
+	# Show the jump-in button as soon as there's something to jump into.
+	if jump_in_btn and not GameManager.deck_manager.discard_pile.is_empty():
+		jump_in_btn.show()
+	
 	var card_to_discard: Node = null
 	
 	if pending_card and pending_card.data == card_data:
@@ -372,25 +386,28 @@ func _on_card_discarded(player_idx, card_data):
 		)
 
 func _on_card_drawn_to_pending(player_idx, card_data):
+	# Bots: silent draw — no card visual on the table.
+	if player_idx != 0:
+		_update_deck_visual()
+		return
+	
+	# Player: spawn face-down at the deck and flip in place so it looks
+	# like the top card of the deck is being turned over.
 	var card_scene = preload("res://card.tscn")
 	pending_card = card_scene.instantiate()
 	add_child(pending_card)
 	
-	# Bots draw face-down — only their memory knows the value, not the table.
-	if player_idx != 0:
-		card_data.is_face_up = false
-	
+	card_data.is_face_up = false # Start face-down…
 	pending_card.setup(card_data)
 	
-	var spawn_pos = deck_area.global_position - card_pivot
-	pending_card.global_position = spawn_pos
-	
-	var target_pos = deck_area.global_position + Vector2(0, 160) - card_pivot
-	
-	pending_card_tween = create_tween()
-	pending_card_tween.tween_property(pending_card, "global_position", target_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	var deck_pos = deck_area.global_position - card_pivot
+	pending_card.global_position = deck_pos
 	
 	_update_deck_visual()
+	
+	# …then flip to reveal it in place (0.3 s tween inside card.flip()).
+	await get_tree().create_timer(0.1).timeout
+	pending_card.flip()
 
 func _on_jump_in_penalty(player_idx, penalty_card_data):
 	var card_scene = preload("res://card.tscn")
@@ -415,19 +432,48 @@ func _on_game_state_changed(new_state):
 	_hide_message()
 	
 	if end_turn_btn: end_turn_btn.hide()
-	# jump_in_btn is intentionally NOT hidden — it stays visible at all times.
 	if call_dutch_btn: call_dutch_btn.hide()
 	if confirm_dutch_box: confirm_dutch_box.hide()
 	
+	# ── Deck / discard interaction lockout ───────────────────────────────────
+	# Deck is clickable ONLY when it's the player's draw turn.
+	# Discard is clickable ONLY when the player has a pending drawn card.
 	var deck_button = deck_area.get_node("Interaction")
-	if new_state == GameManager.GameState.TURN_START_DRAW:
-		deck_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	else:
-		deck_button.mouse_default_cursor_shape = Control.CURSOR_ARROW
-		
+	var discard_button = discard_area.get_node("Interaction")
+	var player_can_draw: bool = (new_state == GameManager.GameState.TURN_START_DRAW
+		and GameManager.current_player_index == 0)
+	var player_can_discard: bool = (new_state == GameManager.GameState.TURN_RESOLVE_DRAWN
+		and GameManager.current_player_index == 0)
+	deck_button.mouse_default_cursor_shape = (
+		Control.CURSOR_POINTING_HAND if player_can_draw else Control.CURSOR_ARROW)
+	deck_button.mouse_filter = (
+		Control.MOUSE_FILTER_STOP if player_can_draw else Control.MOUSE_FILTER_IGNORE)
+	discard_button.mouse_filter = (
+		Control.MOUSE_FILTER_STOP if player_can_discard else Control.MOUSE_FILTER_IGNORE)
+	
+	# ── Card click lockout — disable all hand cards during bot turns and
+	#   special states that don't need card interaction from the player ──────
+	var block_cards := false
+	match new_state:
+		GameManager.GameState.TURN_START_DRAW, \
+		GameManager.GameState.TURN_RESOLVE_DRAWN, \
+		GameManager.GameState.TURN_END_CHOICE, \
+		GameManager.GameState.TURN_CONFIRM_DUTCH:
+			# Block when it's a bot acting; player can still click their own cards
+			# in RESOLVE_DRAWN to swap.
+			block_cards = (GameManager.current_player_index != 0)
+		GameManager.GameState.TURN_PEEK_ABILITY, \
+		GameManager.GameState.TURN_SWAP_ABILITY, \
+		GameManager.GameState.TURN_JUMP_IN_SELECTION:
+			# Never block — player must click cards in these states.
+			block_cards = false
+		_:
+			block_cards = true
+	_set_all_cards_interactive(not block_cards)
+	
+	# ── Per-state UI & messages ────────────────────────────────────────────
 	match new_state:
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
-			# Show a status for bot turns so the human can follow along.
 			if GameManager.current_player_index != 0:
 				var name: String = GameManager.players_info[GameManager.current_player_index].name
 				_show_message(name + " is deciding…")
@@ -438,13 +484,16 @@ func _on_game_state_changed(new_state):
 					call_dutch_btn.show()
 		GameManager.GameState.TURN_JUMP_IN_SELECTION:
 			var ji_name: String = GameManager.players_info[GameManager.jump_in_player_idx].name if GameManager.jump_in_player_idx >= 0 else "Someone"
-			_show_message(ji_name + ": pick a matching card, or cancel.")
-			# Only player 0 gets a visible cancel button.
+			var top_rank: String = ""
+			if GameManager.deck_manager.discard_pile.size() > 0:
+				top_rank = GameManager.deck_manager.discard_pile[-1].rank
+			var rank_hint := (" — needs a " + top_rank) if top_rank != "" else ""
+			_show_message(ji_name + ": pick a matching card%s, or cancel." % rank_hint)
 			if GameManager.jump_in_player_idx == 0:
 				end_turn_btn.show()
 		GameManager.GameState.TURN_CONFIRM_DUTCH:
 			if GameManager.current_player_index == 0:
-				_show_message("You called Dutch! End the game, or Cancel?")
+				_show_message("You called Dutch! Confirm or Forfeit?")
 				confirm_dutch_box.show()
 		GameManager.GameState.DEAL_CARDS:
 			_handle_initial_deal()
@@ -457,6 +506,12 @@ func _on_game_state_changed(new_state):
 			_show_message("Select TWO cards on the board to swap.")
 			_highlight_selectable_cards(true) # Pass true to highlight ALL cards
 			swap_sources.clear()
+func _set_all_cards_interactive(enabled: bool) -> void:
+	for hand in player_hands:
+		for card in hand:
+			if is_instance_valid(card):
+				card.mouse_filter = Control.MOUSE_FILTER_STOP if enabled else Control.MOUSE_FILTER_IGNORE
+
 func _highlight_selectable_cards(include_others: bool = false):
 	if GameManager.current_state == GameManager.GameState.INITIAL_PEEK:
 		# Only highlight player 0 cards at start
@@ -635,9 +690,10 @@ func _on_end_turn_pressed():
 				GameManager.cancel_jump_in()
 
 func _on_jump_in_pressed():
-	# Available any time there's a discard pile and we're in TURN_END_CHOICE.
-	if GameManager.current_state == GameManager.GameState.TURN_END_CHOICE:
-		GameManager.start_jump_in(0) # 0 = human player
+	# Player 0 can jump in during any bot-turn state.
+	# GameManager.start_jump_in handles all the guards internally.
+	# Requires: it's NOT the player's own turn start/resolve, and there IS a discard pile.
+	GameManager.start_jump_in(0) # 0 = human player
 
 func _on_call_dutch_pressed():
 	if GameManager.current_player_index == 0:
