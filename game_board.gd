@@ -15,7 +15,8 @@ var bot_controller: BotController = null
 var end_turn_btn: Button
 var jump_in_btn: Button
 var call_dutch_btn: Button
-var confirm_dutch_box: HBoxContainer
+var confirm_dutch_btn: Button
+var forfeit_dutch_btn: Button
 
 var player_hands: Array = [[], [], [], []]
 var card_spacing = 110.0
@@ -43,6 +44,7 @@ func _ready():
 	GameManager.jump_in_penalty.connect(_on_jump_in_penalty)
 	GameManager.deck_ready.connect(_update_deck_visual)
 	GameManager.bot_action.connect(_on_bot_action)
+	GameManager.game_over.connect(_on_game_over)
 	resized.connect(_on_resized)
 	
 	var deck_button = $CenterTable/DeckArea/Slotbg/Interaction
@@ -117,34 +119,36 @@ func _create_dutch_ui():
 	call_dutch_btn.offset_bottom = -200
 	call_dutch_btn.hide()
 	
-	# Inject Confirm/Cancel panel at the bottom-center, replacing End Turn / Call Dutch.
-	confirm_dutch_box = HBoxContainer.new()
-	confirm_dutch_box.add_theme_constant_override("separation", 20)
-	$GameUI/MainHUD.add_child(confirm_dutch_box)
-	confirm_dutch_box.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	confirm_dutch_box.offset_left = -270
-	confirm_dutch_box.offset_right = 270
-	confirm_dutch_box.offset_top = -250
-	confirm_dutch_box.offset_bottom = -200
-	confirm_dutch_box.hide()
-	
-	var confirm_btn = Button.new()
-	confirm_btn.text = "CONFIRM DUTCH"
-	confirm_btn.add_theme_font_size_override("font_size", 20)
+	# Inject Confirm/Forfeit buttons at the bottom-center, exactly mirroring End Turn / Call Dutch.
+	confirm_dutch_btn = Button.new()
+	confirm_dutch_btn.text = "CONFIRM DUTCH"
+	confirm_dutch_btn.add_theme_font_size_override("font_size", 20)
 	var style_confirm = StyleBoxFlat.new()
 	style_confirm.bg_color = Color(0.2, 0.6, 0.2)
-	confirm_btn.add_theme_stylebox_override("normal", style_confirm)
-	confirm_btn.pressed.connect(_on_confirm_dutch_pressed)
-	confirm_dutch_box.add_child(confirm_btn)
+	confirm_dutch_btn.add_theme_stylebox_override("normal", style_confirm)
+	confirm_dutch_btn.pressed.connect(_on_confirm_dutch_pressed)
+	$GameUI/MainHUD.add_child(confirm_dutch_btn)
+	confirm_dutch_btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	confirm_dutch_btn.offset_left = -270
+	confirm_dutch_btn.offset_right = -110
+	confirm_dutch_btn.offset_top = -250
+	confirm_dutch_btn.offset_bottom = -200
+	confirm_dutch_btn.hide()
 	
-	var cancel_btn = Button.new()
-	cancel_btn.text = "FORFEIT DUTCH"
-	cancel_btn.add_theme_font_size_override("font_size", 20)
+	forfeit_dutch_btn = Button.new()
+	forfeit_dutch_btn.text = "FORFEIT DUTCH"
+	forfeit_dutch_btn.add_theme_font_size_override("font_size", 20)
 	var style_cancel = StyleBoxFlat.new()
 	style_cancel.bg_color = Color(0.8, 0.2, 0.2)
-	cancel_btn.add_theme_stylebox_override("normal", style_cancel)
-	cancel_btn.pressed.connect(_on_cancel_dutch_pressed)
-	confirm_dutch_box.add_child(cancel_btn)
+	forfeit_dutch_btn.add_theme_stylebox_override("normal", style_cancel)
+	forfeit_dutch_btn.pressed.connect(_on_cancel_dutch_pressed)
+	$GameUI/MainHUD.add_child(forfeit_dutch_btn)
+	forfeit_dutch_btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	forfeit_dutch_btn.offset_left = 110
+	forfeit_dutch_btn.offset_right = 270
+	forfeit_dutch_btn.offset_top = -250
+	forfeit_dutch_btn.offset_bottom = -200
+	forfeit_dutch_btn.hide()
 
 func _update_deck_visual():
 	for child in deck_area.get_children():
@@ -400,7 +404,9 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	card_data.is_face_up = false # Start face-down…
 	pending_card.setup(card_data)
 	
-	var deck_pos = deck_area.global_position - card_pivot
+	# Spawn exactly on top of the visual stack at the deck.
+	# Deck area already positions cards correctly, so we don't offset.
+	var deck_pos = deck_area.global_position
 	pending_card.global_position = deck_pos
 	
 	_update_deck_visual()
@@ -433,7 +439,8 @@ func _on_game_state_changed(new_state):
 	
 	if end_turn_btn: end_turn_btn.hide()
 	if call_dutch_btn: call_dutch_btn.hide()
-	if confirm_dutch_box: confirm_dutch_box.hide()
+	if confirm_dutch_btn: confirm_dutch_btn.hide()
+	if forfeit_dutch_btn: forfeit_dutch_btn.hide()
 	
 	# ── Deck / discard interaction lockout ───────────────────────────────────
 	# Deck is clickable ONLY when it's the player's draw turn.
@@ -494,7 +501,8 @@ func _on_game_state_changed(new_state):
 		GameManager.GameState.TURN_CONFIRM_DUTCH:
 			if GameManager.current_player_index == 0:
 				_show_message("You called Dutch! Confirm or Forfeit?")
-				confirm_dutch_box.show()
+				confirm_dutch_btn.show()
+				forfeit_dutch_btn.show()
 		GameManager.GameState.DEAL_CARDS:
 			_handle_initial_deal()
 		GameManager.GameState.INITIAL_PEEK:
@@ -664,6 +672,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _pause_game() -> void:
 	get_tree().paused = true
+	$GameUI.hide()
 	pause_menu_instance = pause_menu_scene.instantiate()
 	add_child(pause_menu_instance)
 	pause_menu_instance.resumed.connect(_resume_game)
@@ -674,10 +683,73 @@ func _resume_game() -> void:
 	if pause_menu_instance:
 		pause_menu_instance.queue_free()
 		pause_menu_instance = null
+	$GameUI.show()
 
 func _go_to_main_menu() -> void:
 	get_tree().paused = false
 	get_tree().change_scene_to_file("res://main_menu.tscn")
+
+func _on_game_over(winner_idx: int) -> void:
+	# Build the Game Over UI dynamically.
+	var panel = Panel.new()
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0.8)
+	style.corner_radius_top_left = 20
+	style.corner_radius_top_right = 20
+	style.corner_radius_bottom_left = 20
+	style.corner_radius_bottom_right = 20
+	panel.add_theme_stylebox_override("panel", style)
+	
+	add_child(panel)
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.size = Vector2(500, 300)
+	panel.position = (get_viewport_rect().size - panel.size) / 2.0
+	panel.z_index = 1000
+	
+	var vbox = VBoxContainer.new()
+	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 30)
+	panel.add_child(vbox)
+	
+	var label = Label.new()
+	label.text = "Player " + str(winner_idx + 1) + " Won!"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 40)
+	vbox.add_child(label)
+	
+	var hbox = HBoxContainer.new()
+	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	hbox.add_theme_constant_override("separation", 20)
+	vbox.add_child(hbox)
+	
+	var new_game_btn = Button.new()
+	new_game_btn.text = "NEW GAME"
+	new_game_btn.add_theme_font_size_override("font_size", 24)
+	new_game_btn.custom_minimum_size = Vector2(200, 60)
+	new_game_btn.pressed.connect(func():
+		get_tree().paused = false
+		get_tree().reload_current_scene()
+	)
+	hbox.add_child(new_game_btn)
+	
+	var main_menu_btn = Button.new()
+	main_menu_btn.text = "MAIN MENU"
+	main_menu_btn.add_theme_font_size_override("font_size", 24)
+	main_menu_btn.custom_minimum_size = Vector2(200, 60)
+	main_menu_btn.pressed.connect(func():
+		get_tree().paused = false
+		get_tree().change_scene_to_file("res://main_menu.tscn")
+	)
+	hbox.add_child(main_menu_btn)
+	
+	# Reveal all cards to show everyone's hands.
+	for hand in player_hands:
+		for card in hand:
+			if is_instance_valid(card) and not card.data.is_face_up:
+				card.flip()
+	
+	get_tree().paused = true
 
 func _on_end_turn_pressed():
 	match GameManager.current_state:
