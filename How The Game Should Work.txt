@@ -1,0 +1,370 @@
+==============================================================================
+DUTCH — HOW THE GAME SHOULD WORK
+(Design reference for AI/human agents; keep this in sync with README.md)
+==============================================================================
+
+COMPONENTS
+----------
+Scenes / systems currently in the project:
+  main_menu.tscn / main_menu.gd
+  settings_menu.tscn / settings_menu.gd
+  pause_menu.tscn / pause_menu.gd
+  game_board.tscn / game_board.gd   ← main gameplay scene
+  game_manager.gd                   ← Autoload (singleton); owns the FSM
+  deck_manager.gd                   ← Autoload; owns deck + discard pile
+  card.tscn / card.gd               ← single card node (front/back face)
+  card_data.gd                      ← CardData resource (rank, suit, is_face_up)
+  bot_controller.gd                 ← attached to game_board at runtime
+
+==============================================================================
+1. MAIN MENU
+==============================================================================
+Scene: main_menu.tscn
+Script: main_menu.gd
+
+Buttons (in a CenterContainer so they never overlap):
+  [Play]      → calls get_tree().change_scene_to_file("res://game_board.tscn")
+  [Settings]  → instantiates settings_menu.tscn as a child, hides the
+                CenterContainer; on settings back_pressed signal, shows
+                CenterContainer again and frees the settings instance.
+  [Exit]      → calls get_tree().quit()
+
+Additional behaviour:
+  - On _ready(), GameManager.play_menu_music() is called.
+  - Music uses the "Music" AudioServer bus (controlled by the Settings volume
+    slider). The AudioStreamPlayer lives on GameManager (Autoload) so it persists
+    across scene changes.
+
+==============================================================================
+2. SETTINGS MENU
+==============================================================================
+Scene: settings_menu.tscn
+Script: settings_menu.gd
+
+Controls (all wired via @onready, inside a GridContainer):
+  MusicSlider  (HSlider, range 0.0–1.0)
+    → AudioServer.set_bus_volume_db("Music", linear_to_db(value))
+  SFXSlider    (HSlider, range 0.0–1.0)
+    → AudioServer.set_bus_volume_db("SFX", linear_to_db(value))
+    NOTE: SFX bus exists in the layout but no SFX assets are wired yet.
+  ResolutionOption (OptionButton)
+    → Supported: 1152×648, 1280×720, 1920×1080, 2560×1440
+    → On select: DisplayServer.window_set_size(resolutions[index])
+    → If windowed, re-centers the window on the screen.
+  WindowModeOption (OptionButton)
+    → Items: "Windowed" (id=WINDOW_MODE_WINDOWED), "Fullscreen"
+             (id=WINDOW_MODE_FULLSCREEN)
+    → On select: DisplayServer.window_set_mode(mode)
+
+The Settings Menu is used in two contexts:
+  a) From the Main Menu — instantiated as a child of main_menu.tscn.
+  b) From the Pause Menu — instantiated as a child of pause_menu; the match
+     remains fully paused (get_tree().paused = true) the entire time.
+
+In both contexts a [Back] button emits back_pressed, then calls queue_free().
+Nothing in the match state is reset when entering/exiting Settings.
+
+==============================================================================
+3. EXIT
+==============================================================================
+Triggered by the [Exit] button in the Main Menu.
+Implementation: get_tree().quit()
+No confirmation dialog is required.
+
+==============================================================================
+4. PAUSE MENU
+==============================================================================
+Scene: pause_menu.tscn (extends CanvasLayer)
+Script: pause_menu.gd
+Triggered by: pressing Escape (ui_cancel action) during a match.
+
+On pause:
+  get_tree().paused = true
+  pause_menu.tscn is instantiated and added as a child of game_board.
+  The pause menu is a CanvasLayer so it renders on top of all gameplay nodes.
+  Gameplay buttons (End Turn, Jump In, Call Dutch, Confirm Dutch box) are still
+  in the scene tree but are hidden BEFORE pause is triggered (they are only
+  shown/hidden by FSM state transitions, so they stay hidden while paused).
+
+Buttons in the Pause Menu:
+  [Resume]
+    → emits resumed signal
+    → game_board calls: get_tree().paused = false, queue_free() on the instance
+    → the match continues exactly where it left off (FSM state unchanged)
+
+  [Settings]
+    → instantiates settings_menu.tscn as a child of the pause_menu node
+    → match remains paused; GameManager music player uses
+      PROCESS_MODE_ALWAYS so it keeps playing through the pause
+
+  [Main Menu]
+    → emits main_menu_requested signal
+    → game_board calls: get_tree().paused = false,
+      get_tree().change_scene_to_file("res://main_menu.tscn")
+    → This forfeits the current match. No save or score is recorded.
+
+Pressing Escape again while the pause menu is open resumes the game
+(i.e., _unhandled_input toggles between _pause_game and _resume_game).
+
+==============================================================================
+5. DEBUG MODE
+==============================================================================
+Keybind: L (KEY_L, handled in game_board._unhandled_input)
+Toggle: press L once to reveal, press L again to hide.
+
+What it does:
+  - Iterates over all card nodes in player_hands[][] that have
+    card.data.is_face_up == false.
+  - Shows card.front_face, hides card.back_face, calls card._apply_atlas_textures()
+    so the sprite shows the correct card face.
+  - Stores affected nodes in _debug_flipped_nodes[].
+  - Does NOT change CardData.is_face_up (GameManager and BotController see no
+    change — bot memory and turn logic are completely unaffected).
+  - Shows a top-center message: "[DEBUG] All cards revealed (press L to hide)".
+
+On toggle-off:
+  - For each card in _debug_flipped_nodes where card.data.is_face_up is still
+    false: hides front_face, shows back_face.
+  - Clears _debug_flipped_nodes[].
+
+==============================================================================
+6. GAMEPLAY
+==============================================================================
+Player layout (clockwise, always 4 players for now):
+  Index 0 = human player, bottom of screen, cards face-down, 0° rotation.
+  Index 1 = bot, left side, 90° rotation.
+  Index 2 = bot, top of screen, 180° rotation.
+  Index 3 = bot, right side, -90° rotation.
+
+Cards are positioned using get_card_transform(p_idx, card_idx, total_cards)
+which calculates spread based on viewport size and card_spacing (110 px).
+Cards reposition with a 0.4 s tween + brief scale pulse on every hand change.
+
+----------------------------------------------------------------------
+6.1 SETUP
+----------------------------------------------------------------------
+GameManager.initialize_game(4) is called from game_board._ready().
+  - Creates a fresh 52-card deck (DeckManager.create_deck()).
+  - Sets FSM to DEAL_CARDS.
+
+Dealing (game_board._handle_initial_deal()):
+  - Draws 4 cards per player (16 total) from the top of the deck.
+  - Each card is instantiated as a card.tscn node with is_face_up = false.
+  - Cards animate from deck_area to their final hand positions (0.05 s stagger).
+  - After dealing finishes, FSM transitions to INITIAL_PEEK.
+
+----------------------------------------------------------------------
+6.2 INITIAL PEEK PHASE  (FSM: INITIAL_PEEK)
+----------------------------------------------------------------------
+  - A message "Click 2 of your cards to peek" is shown.
+  - Player 0's cards are highlighted (pulsing outline).
+  - Player 0 clicks any 2 of their own 4 cards to flip them face-up.
+  - Each click calls card.flip() (0.3 s tween inside card.gd).
+    After 2 peeks, _complete_peek_phase() fires:
+      → clears all highlights
+      → shows "Starting game in 3 seconds..."
+      → waits 3 s
+      → flips the 2 peeked cards back face-down
+      → calls GameManager.complete_initial_peek()
+      → FSM → TURN_START_DRAW (player 0's first turn)
+
+  Bots' peek: BotController handles their own peek logic internally
+  (populates bot_memory) during INITIAL_PEEK; no visual feedback is shown
+  for bot peeks in the current implementation.
+
+----------------------------------------------------------------------
+6.3 TURN CYCLE
+----------------------------------------------------------------------
+Turn order: 0 → 1 → 2 → 3 → 0 → … (round-robin, wrapping with modulo).
+
+Each turn is a strict FSM sequence:
+
+  TURN_START_DRAW
+    Human: Deck is clickable. Player must click the deck to draw.
+           game_board._on_deck_clicked() → GameManager.player_draw_card()
+    Bot:   BotController.do_turn() is called (with a short delay for UX).
+
+  TURN_RESOLVE_DRAWN
+    A drawn card (CardData.is_face_up = true) is shown near the deck.
+    Human choices:
+      a) Click the discard button/area → GameManager.player_discard_drawn_card()
+      b) Click one of their own face-down hand cards →
+         GameManager.player_swap_drawn_card(card_idx)
+         (drawn card takes that slot; old card goes to discard pile)
+
+  TURN_PEEK_ABILITY  (only if a Queen was just discarded)
+    Human: All cards are highlighted. Player clicks any one card to peek at it
+           for 3 s, then it flips back. Calls GameManager.complete_peek_ability().
+    Bot:   BotController handles automatically.
+
+  TURN_SWAP_ABILITY  (only if a Jack was just discarded)
+    Human: All cards are highlighted. Player clicks 2 cards anywhere on the
+           board (any player's hand). The two cards swap positions in both
+           GameManager.players_info[].hand and player_hands[][] visually.
+           Calls GameManager.complete_swap_ability().
+    Bot:   BotController handles automatically.
+
+  TURN_END_CHOICE
+    Buttons shown to human (bottom-center, never overlapping):
+      [END TURN]   → GameManager.end_turn() → next_turn() → next TURN_START_DRAW
+      [JUMP IN]    → see section 6.4
+      [CALL DUTCH] → see section 6.5   (hidden if player has forfeited Dutch)
+
+----------------------------------------------------------------------
+6.4 JUMP-IN  (FSM: TURN_JUMP_IN_SELECTION)
+----------------------------------------------------------------------
+Jump-in can be triggered by the human at any point EXCEPT:
+  - During their own TURN_START_DRAW (before they've drawn yet)
+    UNLESS they have already drawn and are in TURN_RESOLVE_DRAWN — blocked.
+  - During INITIALIZING, DEAL_CARDS, INITIAL_PEEK, TURN_JUMP_IN_SELECTION,
+    TURN_CONFIRM_DUTCH, or GAME_OVER states.
+  - When the discard pile is empty (no target card).
+
+  Exception: If the human presses [JUMP IN] at the very start of their own
+  TURN_START_DRAW, jump_in_was_own_draw_phase is set to true; on resolution
+  (pass or fail) the FSM returns to TURN_START_DRAW so they still get to draw.
+
+Bots may only jump in during TURN_END_CHOICE (via BotController logic).
+
+Flow when JUMP IN is triggered for the human (player 0):
+  1. GameManager.start_jump_in(0) → FSM → TURN_JUMP_IN_SELECTION.
+  2. Message: "<player name>: pick a matching card — needs a <rank>, or cancel."
+     [END TURN] button is shown as "Cancel" for the jump-in.
+  3. Human clicks one of their own hand cards.
+  4. GameManager.validate_jump_in(card_idx):
+     a) If card.rank == discard_pile.back().rank:
+          SUCCESS: card is removed from hand (hand shrinks by 1).
+                   Card is appended to the discard pile.
+                   card_discarded signal fires → visual animation to discard area.
+                   memory_shift_required emitted (bots adjust memory indices).
+                   If discarded card was a Queen/Jack, PEEK/SWAP ability fires.
+                   Turn order is NOT disrupted (original next player draws next).
+     b) If ranks do not match:
+          FAIL: A penalty card is drawn from the deck face-down.
+                It is appended to the jumping player's hand (hand grows by 1).
+                jump_in_penalty signal fires → new card node added to player_hands[].
+                The selected card is briefly revealed (visual flip for ~1 s) so
+                the player can see it — NOTE: this visual reveal is specified but
+                may not be fully implemented yet; verify in card.gd / game_board.gd.
+                FSM returns to TURN_END_CHOICE (or TURN_START_DRAW if own-draw
+                phase flag was set).
+  5. Cancelling: clicking [END TURN] during TURN_JUMP_IN_SELECTION calls
+     GameManager.cancel_jump_in() → FSM → TURN_END_CHOICE, no penalty.
+
+----------------------------------------------------------------------
+6.5 CALLING DUTCH  (FSM states: TURN_END_CHOICE → TURN_CONFIRM_DUTCH)
+----------------------------------------------------------------------
+Dutch can only be called during TURN_END_CHOICE and only if:
+  - dutch_caller_index == -1 (no one has already called Dutch), AND
+  - players_info[player_id].can_call_dutch == true.
+
+When a player calls Dutch:
+  1. dutch_caller_index = player_id.
+  2. GameManager.next_turn() continues normally — one full round proceeds.
+     All other players take their turns as usual (draw, resolve, end).
+  3. When next_turn() reaches current_player_index == dutch_caller_index again:
+     FSM → TURN_CONFIRM_DUTCH.
+
+TURN_CONFIRM_DUTCH:
+  The Dutch caller MUST still draw a card and resolve it normally
+  (TURN_START_DRAW → TURN_RESOLVE_DRAWN) before reaching TURN_CONFIRM_DUTCH.
+
+  NOTE: Looking at current code, TURN_CONFIRM_DUTCH is triggered by next_turn()
+  BEFORE the draw phase. This means the player currently skips their draw step
+  on the confirm turn. This is a known discrepancy with the README spec and
+  should be fixed: the correct flow is TURN_START_DRAW → TURN_RESOLVE_DRAWN →
+  TURN_CONFIRM_DUTCH (draw first, then confirm/forfeit).
+
+  Buttons shown (confirm_dutch_box HBoxContainer replaces End Turn / Call Dutch):
+    [CONFIRM DUTCH]
+      → GameManager.confirm_dutch() → FSM → GAME_OVER
+      → All cards flip face-up (not yet fully implemented).
+      → Scores are tallied: Ace=1, 2–10=face value, Jack=11, Queen=12, King=13,
+        King of Diamonds=0. Lowest total score wins.
+      → In a tie: player with fewer cards wins.
+      → If a player has discarded all cards before game end, they win immediately.
+    [FORFEIT DUTCH]
+      → GameManager.cancel_dutch()
+      → players_info[current_player_index].can_call_dutch = false (permanent for
+        this match).
+      → dutch_caller_index = -1 (Dutch is cancelled; anyone else can still call).
+      → FSM → TURN_START_DRAW (the forfeiting player gets a normal draw turn).
+    [JUMP IN] button remains available during TURN_CONFIRM_DUTCH (same rules).
+
+----------------------------------------------------------------------
+6.6 SCORING & GAME OVER  (FSM: GAME_OVER)
+----------------------------------------------------------------------
+Card point values (per README.md):
+  Ace = 1
+  2–10 = face value
+  Jack = 11
+  Queen = 12
+  King = 13
+  King of Diamonds = 0   ← only this specific king is 0
+
+On GAME_OVER:
+  - All cards in every player's hand are flipped face-up (visual only;
+    is_face_up should be set to true on each CardData).
+  - Scores are calculated: sum of card point values for each player.
+  - Winner = player with lowest score.
+  - Tiebreak: player with fewer cards.
+  - Edge case: a player who discarded ALL their cards wins outright.
+  - A results screen or overlay must display each player's name, their hand
+    (cards visible), and their score, with the winner clearly highlighted.
+  NOTE: The GAME_OVER state handler in game_manager.gd is a placeholder
+  (emits game_over(-1)). Full scoring + results UI must still be implemented.
+
+==============================================================================
+7. SPECIAL CARDS
+==============================================================================
+Queen (discarded by any player):
+  → FSM → TURN_PEEK_ABILITY
+  → The acting player selects exactly ONE face-down card from any player's hand.
+  → That card is visually flipped face-up for 3 seconds, then flipped back.
+  → CardData.is_face_up is NOT permanently changed.
+  → BotController updates the bot's memory entry for that card.
+  → Calls GameManager.complete_peek_ability() to resume turn flow.
+
+Jack (discarded by any player):
+  → FSM → TURN_SWAP_ABILITY
+  → The acting player selects exactly TWO cards from anywhere on the board
+    (can be own, opponent, or any combination; no restriction).
+  → The two cards swap both in GameManager.players_info[].hand (data layer)
+    and in game_board.player_hands[][] (visual node layer).
+  → Faces are NOT revealed during or after the swap.
+  → BotController._update_memory_on_swap() is called so bots adjust their
+    known card positions.
+  → Calls GameManager.complete_swap_ability() to resume turn flow.
+
+King of Diamonds:
+  → No special ability; it is simply valued at 0 points.
+  → CardData.get_points() must return 0 for rank="King", suit="Diamonds".
+  → All other Kings are worth 13.
+
+==============================================================================
+8. UI RULES
+==============================================================================
+- Buttons must NEVER visually overlap. Use Godot Container nodes (HBox, VBox,
+  GridContainer) for all multi-button layouts.
+- During a bot's turn, all gameplay buttons for the human (End Turn, Jump In,
+  Call Dutch) are hidden EXCEPT Jump In, which remains visible and functional
+  so the human can interrupt at any time.
+- During INITIAL_PEEK, DEAL_CARDS, INITIALIZING: no action buttons are shown.
+- The top-center message label (_show_message / _hide_message) is used for:
+    • "Click 2 of your cards to peek"
+    • "Starting game in 3 seconds..."
+    • "<Bot name> is drawing…" / "<Bot name> is deciding…"
+    • Ability prompts ("Select ANY card to peek at.", "Select TWO cards…")
+    • Jump-in prompts ("<name>: pick a matching card — needs a <rank>, or cancel.")
+    • "[DEBUG] All cards revealed (press L to hide)"
+  Only one message is shown at a time; calling _show_message() clears the
+  previous message automatically.
+- All UI elements must respond to window resize; use anchor presets and
+  Container-based layouts instead of hardcoded pixel offsets where possible.
+  (Known issue: Dutch action buttons currently use hardcoded offset_* values;
+  these should be migrated to a proper Container layout.)
+- The Turn label (top-left, TurnLabel) always shows "<name>'s Turn".
+- The discard pile area shows the most-recently discarded card face-up.
+  Previous discard cards are removed (queue_free) when a new card lands.
+- The deck area shows a stack of up to 5 face-down card visuals (DeckVisual_*)
+  representing the remaining deck depth. This is updated after every draw.
