@@ -37,6 +37,10 @@ var pause_menu_instance: Node = null
 var _debug_reveal := false
 var _debug_flipped_nodes: Array = []
 
+# Bug 5: persist the last ability/state message so debug reveal can restore it.
+var _current_ability_message: String = ""
+
+
 func _ready():
 	print("Game Board: Ready. Connecting signals...")
 	GameManager.stop_menu_music()
@@ -45,9 +49,12 @@ func _ready():
 	GameManager.card_drawn_to_pending.connect(_on_card_drawn_to_pending)
 	GameManager.card_discarded.connect(_on_card_discarded)
 	GameManager.jump_in_penalty.connect(_on_jump_in_penalty)
+	GameManager.jump_in_failed.connect(_on_jump_in_failed)      # Bug 2
 	GameManager.deck_ready.connect(_update_deck_visual)
 	GameManager.bot_action.connect(_on_bot_action)
 	GameManager.jack_swap_resolved.connect(_on_jack_swap_resolved)
+	GameManager.all_cards_revealed.connect(_on_all_cards_revealed) # Bug 3
+	GameManager.scores_ready.connect(_on_scores_ready)            # Bug 3
 	resized.connect(_on_resized)
 	
 	var deck_button = $CenterTable/DeckArea/Slotbg/Interaction
@@ -232,7 +239,8 @@ func _on_player_card_clicked(card_node, _card_data):
 			# Only the current jump-in player can select a card.
 			var ji := GameManager.jump_in_player_idx
 			if ji == 0 and p_idx == 0:
-				if GameManager.validate_jump_in(c_idx):
+				# validate_jump_in is now a coroutine (it awaits the reveal delay).
+				if await GameManager.validate_jump_in(c_idx):
 					print("Player successfully jumped in!")
 				else:
 					print("Jump in failed! Rank does not match.")
@@ -312,6 +320,8 @@ func _on_bot_action(message: String) -> void:
 	)
 
 func _show_message(text: String):
+	# Bug 5: persist the message so debug reveal can restore it.
+	_current_ability_message = text
 	# Clear previous messages if any
 	for child in top_center.get_children():
 		child.queue_free()
@@ -329,6 +339,7 @@ func _show_message(text: String):
 	label.show()
 
 func _hide_message():
+	_current_ability_message = ""
 	for child in top_center.get_children():
 		child.queue_free()
 func _on_card_discarded(player_idx, card_data):
@@ -520,8 +531,8 @@ func _on_game_state_changed(new_state):
 	match new_state:
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
 			if GameManager.current_player_index != 0:
-				var name: String = GameManager.players_info[GameManager.current_player_index].name
-				_show_message(name + " is deciding…")
+				var player_name: String = GameManager.players_info[GameManager.current_player_index].name
+				_show_message(player_name + " is deciding…")
 		GameManager.GameState.TURN_END_CHOICE:
 			if GameManager.current_player_index == 0:
 				end_turn_btn.show()
@@ -728,7 +739,17 @@ func _toggle_debug_reveal() -> void:
 					card._apply_atlas_textures()
 					_debug_flipped_nodes.append(card)
 		_debug_reveal = true
-		_show_message("[DEBUG] All cards revealed (press L to hide)")
+		# Bug 5: use raw label insert so we don't wipe _current_ability_message.
+		for child in top_center.get_children(): child.queue_free()
+		var dbg_lbl := Label.new()
+		dbg_lbl.name = "DebugMessage"
+		dbg_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		dbg_lbl.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		dbg_lbl.text = "[DEBUG] All cards revealed (press L to hide)"
+		dbg_lbl.add_theme_font_size_override("font_size", 24)
+		top_center.add_child(dbg_lbl)
+		top_center.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		top_center.offset_top = 220
 	else:
 		# Hide the cards we revealed, restoring the back-face
 		for card in _debug_flipped_nodes:
@@ -737,7 +758,104 @@ func _toggle_debug_reveal() -> void:
 				card.back_face.show()
 		_debug_flipped_nodes.clear()
 		_debug_reveal = false
-		_hide_message()
+		# Bug 5: restore the ability message instead of blanking the display.
+		if _current_ability_message != "":
+			_show_message(_current_ability_message)
+		else:
+			_hide_message()
+
+# ── Bug 2: briefly show the failed jump-in card then hide it ────────────────
+func _on_jump_in_failed(player_idx: int, card_idx: int, _card_data: CardData) -> void:
+	if player_idx < 0 or player_idx >= player_hands.size():
+		return
+	var hand: Array = player_hands[player_idx]
+	if card_idx < 0 or card_idx >= hand.size():
+		return
+	var card_node: CardUI = hand[card_idx]
+	if not is_instance_valid(card_node) or card_node.data.is_face_up:
+		return
+	# Reveal visually (do NOT change CardData.is_face_up so bots stay blind).
+	card_node.front_face.show()
+	card_node.back_face.hide()
+	card_node._apply_atlas_textures()
+	await get_tree().create_timer(1.0).timeout
+	if is_instance_valid(card_node) and not card_node.data.is_face_up:
+		card_node.front_face.hide()
+		card_node.back_face.show()
+
+# ── Bug 3: flip all cards face-up when the game ends ────────────────────────
+func _on_all_cards_revealed() -> void:
+	for hand in player_hands:
+		for card in hand:
+			if is_instance_valid(card) and not card.data.is_face_up:
+				card.data.is_face_up = true
+				card._update_visuals()
+
+# ── Bug 3: show results overlay ─────────────────────────────────────────────
+func _on_scores_ready(results: Array) -> void:
+	# Disable all interactivity.
+	_set_all_cards_interactive(false)
+	if end_turn_btn: end_turn_btn.hide()
+	if jump_in_btn: jump_in_btn.hide()
+	if call_dutch_btn: call_dutch_btn.hide()
+	if confirm_dutch_box: confirm_dutch_box.hide()
+
+	var overlay := CanvasLayer.new()
+	add_child(overlay)
+
+	var bg := ColorRect.new()
+	bg.anchors_preset = Control.PRESET_FULL_RECT
+	bg.color = Color(0.0, 0.0, 0.0, 0.75)
+	overlay.add_child(bg)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 16)
+	center.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "Game Over!"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 48)
+	vbox.add_child(title)
+
+	for i in range(results.size()):
+		var entry: Dictionary = results[i]
+		var row := Label.new()
+		var score_str := str(entry.score) if entry.score >= 0 else "0 (empty hand — wins!)"
+		var place := str(i + 1) + "."
+		row.text = "%s %s — %s pts" % [place, entry.name, score_str]
+		row.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		row.add_theme_font_size_override("font_size", 28)
+		if i == 0:
+			row.add_theme_color_override("font_color", Color(1.0, 0.85, 0.0)) # gold for winner
+		vbox.add_child(row)
+
+	var btn_box := HBoxContainer.new()
+	btn_box.add_theme_constant_override("separation", 20)
+	btn_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(btn_box)
+
+	var play_again_btn := Button.new()
+	play_again_btn.text = "Play Again"
+	play_again_btn.add_theme_font_size_override("font_size", 24)
+	play_again_btn.custom_minimum_size = Vector2(160, 55)
+	play_again_btn.pressed.connect(func():
+		get_tree().change_scene_to_file("res://game_board.tscn")
+	)
+	btn_box.add_child(play_again_btn)
+
+	var main_menu_btn := Button.new()
+	main_menu_btn.text = "Main Menu"
+	main_menu_btn.add_theme_font_size_override("font_size", 24)
+	main_menu_btn.custom_minimum_size = Vector2(160, 55)
+	main_menu_btn.pressed.connect(func():
+		get_tree().change_scene_to_file("res://main_menu.tscn")
+	)
+	btn_box.add_child(main_menu_btn)
 
 func _pause_game() -> void:
 	get_tree().paused = true

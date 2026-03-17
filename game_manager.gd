@@ -20,11 +20,14 @@ enum GameState {
 signal game_state_changed(new_state)
 signal turn_started(player_id)
 signal game_over(winner_id)
+signal scores_ready(results: Array)      # Bug 3: carries sorted leaderboard
+signal all_cards_revealed                 # Bug 3: tells board to flip all cards face-up
 signal deck_ready
 signal card_drawn(player_id, card_data)
 signal card_drawn_to_pending(player_id, card_data)
 signal card_discarded(player_id, card_data)
 signal jump_in_penalty(player_idx, penalty_card_data)
+signal jump_in_failed(player_idx: int, card_idx: int, card_data: CardData) # Bug 2
 signal bot_action(message: String)
 signal memory_shift_required(player_idx, removed_card_idx)
 signal jack_swap_resolved(p1: int, c1: int, p2: int, c2: int)
@@ -102,12 +105,8 @@ func change_state(new_state: GameState):
 
 func next_turn():
 	current_player_index = (current_player_index + 1) % num_players
-	
-	# Check if we returned to the Dutch caller
-	if current_player_index == dutch_caller_index:
-		change_state(GameState.TURN_CONFIRM_DUTCH)
-		return
-
+	# Bug 1 fix: always go to TURN_START_DRAW; the Dutch-caller check now lives
+	# in _prompt_turn_end() so the caller still draws before confirming.
 	change_state(GameState.TURN_START_DRAW)
 
 func _handle_deal_cards():
@@ -116,8 +115,34 @@ func _handle_deal_cards():
 	pass
 
 func _handle_game_over():
-	# Logic to calculate scores will go here
-	game_over.emit(-1) # Placeholder
+	# Bug 3: flip all cards, calculate scores, emit results.
+	all_cards_revealed.emit()
+	var results := _calculate_scores()
+	var winner_id: int = results[0].id if results.size() > 0 else -1
+	game_over.emit(winner_id)
+	scores_ready.emit(results)
+
+func _calculate_scores() -> Array:
+	# Build result entries.
+	var entries: Array = []
+	for i in range(num_players):
+		var info = players_info[i]
+		var hand: Array = info.hand
+		# Edge case: player with 0 cards wins outright.
+		if hand.size() == 0:
+			entries.append({"id": i, "name": info.name, "score": -1, "card_count": 0})
+			continue
+		var total := 0
+		for card in hand:
+			total += (card as CardData).recalc_point_value()
+		entries.append({"id": i, "name": info.name, "score": total, "card_count": hand.size()})
+	# Sort: lowest score first; tiebreak by fewer cards.
+	entries.sort_custom(func(a, b):
+		if a.score != b.score:
+			return a.score < b.score
+		return a.card_count < b.card_count
+	)
+	return entries
 
 func start_game():
 	change_state(GameState.DEAL_CARDS)
@@ -133,13 +158,17 @@ func call_dutch(player_id: int):
 		next_turn()
 
 func _prompt_turn_end():
-	# If player 0 jumped in at the very start of their own turn, give them
+	# If player 0 jumped in at the very start of their own draw turn, give them
 	# their draw back instead of ending the turn.
 	if jump_in_was_own_draw_phase:
 		jump_in_was_own_draw_phase = false
 		change_state(GameState.TURN_START_DRAW)
-	else:
-		change_state(GameState.TURN_END_CHOICE)
+		return
+	# Bug 1 fix: Dutch-caller check moved here so the caller always draws first.
+	if current_player_index == dutch_caller_index:
+		change_state(GameState.TURN_CONFIRM_DUTCH)
+		return
+	change_state(GameState.TURN_END_CHOICE)
 
 func end_turn():
 	if current_state != GameState.TURN_END_CHOICE and current_state != GameState.TURN_JUMP_IN_SELECTION:
@@ -217,6 +246,9 @@ func validate_jump_in(card_idx: int) -> bool:
 			deck_manager.discard_pile.append(selected_card)
 			card_discarded.emit(jump_in_player_idx, selected_card)
 			jump_in_player_idx = -1
+			# Bug 6 fix: clear own-draw flag BEFORE resolving effects so
+			# _prompt_turn_end() doesn't grant a free draw after an ability.
+			jump_in_was_own_draw_phase = false
 			_resolve_discard_effects(selected_card)
 			# Emit AFTER _resolve_discard_effects so the message outlasts the
 			# _hide_message() call triggered by the state change above.
@@ -224,6 +256,12 @@ func validate_jump_in(card_idx: int) -> bool:
 			return true
 
 	print("No match. Jump In invalid. Assigning penalty card to player ", jump_in_player_idx)
+	# Bug 2 fix: emit failed signal BEFORE the penalty so the board can briefly
+	# reveal the attempted card to the player.
+	jump_in_failed.emit(jump_in_player_idx, card_idx, selected_card)
+	# Small delay so the board has time to show the reveal animation.
+	await get_tree().create_timer(1.2).timeout
+
 	var penalty_card_dict: Dictionary = deck_manager.draw_card()
 	if not penalty_card_dict.is_empty():
 		var p_card := CardData.new(penalty_card_dict.rank, penalty_card_dict.suit)
@@ -231,10 +269,10 @@ func validate_jump_in(card_idx: int) -> bool:
 		h.append(p_card)
 		jump_in_penalty.emit(jump_in_player_idx, p_card)
 
+	var was_own_draw := jump_in_was_own_draw_phase
 	jump_in_player_idx = -1
-	# Clear the own-draw-phase flag and decide the next state
-	if jump_in_was_own_draw_phase:
-		jump_in_was_own_draw_phase = false
+	jump_in_was_own_draw_phase = false
+	if was_own_draw:
 		change_state(GameState.TURN_START_DRAW)
 	else:
 		change_state(GameState.TURN_END_CHOICE)
