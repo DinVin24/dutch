@@ -15,7 +15,8 @@ var bot_controller: BotController = null
 var end_turn_btn: Button
 var jump_in_btn: Button
 var call_dutch_btn: Button
-var confirm_dutch_box: HBoxContainer
+var confirm_dutch_btn: Button
+var forfeit_dutch_btn: Button
 
 var player_hands: Array = [[], [], [], []]
 var card_spacing = 110.0
@@ -33,6 +34,14 @@ var peeked_card_nodes: Array = []
 var pause_menu_scene = preload("res://pause_menu.tscn")
 var pause_menu_instance: Node = null
 
+# Debug: track which card nodes we flipped manually so we can toggle them back
+var _debug_reveal := false
+var _debug_flipped_nodes: Array = []
+
+# Bug 5: persist the last ability/state message so debug reveal can restore it.
+var _current_ability_message: String = ""
+
+
 func _ready():
 	print("Game Board: Ready. Connecting signals...")
 	GameManager.stop_menu_music()
@@ -41,8 +50,12 @@ func _ready():
 	GameManager.card_drawn_to_pending.connect(_on_card_drawn_to_pending)
 	GameManager.card_discarded.connect(_on_card_discarded)
 	GameManager.jump_in_penalty.connect(_on_jump_in_penalty)
+	GameManager.jump_in_failed.connect(_on_jump_in_failed)      # Bug 2
 	GameManager.deck_ready.connect(_update_deck_visual)
 	GameManager.bot_action.connect(_on_bot_action)
+	GameManager.jack_swap_resolved.connect(_on_jack_swap_resolved)
+	GameManager.all_cards_revealed.connect(_on_all_cards_revealed) # Bug 3
+	GameManager.scores_ready.connect(_on_scores_ready)            # Bug 3
 	resized.connect(_on_resized)
 	
 	var deck_button = $CenterTable/DeckArea/Slotbg/Interaction
@@ -117,34 +130,37 @@ func _create_dutch_ui():
 	call_dutch_btn.offset_bottom = -200
 	call_dutch_btn.hide()
 	
-	# Inject Confirm/Cancel panel at the bottom-center, replacing End Turn / Call Dutch.
-	confirm_dutch_box = HBoxContainer.new()
-	confirm_dutch_box.add_theme_constant_override("separation", 20)
-	$GameUI/MainHUD.add_child(confirm_dutch_box)
-	confirm_dutch_box.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	confirm_dutch_box.offset_left = -270
-	confirm_dutch_box.offset_right = 270
-	confirm_dutch_box.offset_top = -250
-	confirm_dutch_box.offset_bottom = -200
-	confirm_dutch_box.hide()
-	
-	var confirm_btn = Button.new()
-	confirm_btn.text = "CONFIRM DUTCH"
-	confirm_btn.add_theme_font_size_override("font_size", 20)
+	# Bug 7 fix: Separate Confirm and Forfeit buttons to outer slots
+	# to leave the middle slot (Slot 2) for Jump In.
+	confirm_dutch_btn = Button.new()
+	confirm_dutch_btn.text = "CONFIRM DUTCH"
+	confirm_dutch_btn.add_theme_font_size_override("font_size", 20)
 	var style_confirm = StyleBoxFlat.new()
 	style_confirm.bg_color = Color(0.2, 0.6, 0.2)
-	confirm_btn.add_theme_stylebox_override("normal", style_confirm)
-	confirm_btn.pressed.connect(_on_confirm_dutch_pressed)
-	confirm_dutch_box.add_child(confirm_btn)
+	confirm_dutch_btn.add_theme_stylebox_override("normal", style_confirm)
+	confirm_dutch_btn.pressed.connect(_on_confirm_dutch_pressed)
+	$GameUI/MainHUD.add_child(confirm_dutch_btn)
+	confirm_dutch_btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	confirm_dutch_btn.offset_left = -270 # Slot 1
+	confirm_dutch_btn.offset_right = -110
+	confirm_dutch_btn.offset_top = -250
+	confirm_dutch_btn.offset_bottom = -200
+	confirm_dutch_btn.hide()
 	
-	var cancel_btn = Button.new()
-	cancel_btn.text = "FORFEIT DUTCH"
-	cancel_btn.add_theme_font_size_override("font_size", 20)
-	var style_cancel = StyleBoxFlat.new()
-	style_cancel.bg_color = Color(0.8, 0.2, 0.2)
-	cancel_btn.add_theme_stylebox_override("normal", style_cancel)
-	cancel_btn.pressed.connect(_on_cancel_dutch_pressed)
-	confirm_dutch_box.add_child(cancel_btn)
+	forfeit_dutch_btn = Button.new()
+	forfeit_dutch_btn.text = "FORFEIT DUTCH"
+	forfeit_dutch_btn.add_theme_font_size_override("font_size", 20)
+	var style_forfeit = StyleBoxFlat.new()
+	style_forfeit.bg_color = Color(0.8, 0.2, 0.2)
+	forfeit_dutch_btn.add_theme_stylebox_override("normal", style_forfeit)
+	forfeit_dutch_btn.pressed.connect(_on_cancel_dutch_pressed)
+	$GameUI/MainHUD.add_child(forfeit_dutch_btn)
+	forfeit_dutch_btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	forfeit_dutch_btn.offset_left = 110 # Slot 3
+	forfeit_dutch_btn.offset_right = 270
+	forfeit_dutch_btn.offset_top = -250
+	forfeit_dutch_btn.offset_bottom = -200
+	forfeit_dutch_btn.hide()
 
 func _update_deck_visual():
 	for child in deck_area.get_children():
@@ -227,7 +243,8 @@ func _on_player_card_clicked(card_node, _card_data):
 			# Only the current jump-in player can select a card.
 			var ji := GameManager.jump_in_player_idx
 			if ji == 0 and p_idx == 0:
-				if GameManager.validate_jump_in(c_idx):
+				# validate_jump_in is now a coroutine (it awaits the reveal delay).
+				if await GameManager.validate_jump_in(c_idx):
 					print("Player successfully jumped in!")
 				else:
 					print("Jump in failed! Rank does not match.")
@@ -273,16 +290,28 @@ func _perform_jack_swap():
 	var s1 = swap_sources[0]
 	var s2 = swap_sources[1]
 	
+	# GameManager handles the GM-data swap and emits jack_swap_resolved,
+	# which _on_jack_swap_resolved handles for visual node swapping.
 	GameManager.complete_swap_ability(s1.player, s1.index, s2.player, s2.index)
 	
-	player_hands[s1.player][s1.index] = s2.node
-	player_hands[s2.player][s2.index] = s1.node
+	# Notify bots their memory may be stale for swapped slots.
+	if bot_controller:
+		bot_controller._update_memory_on_swap(0, s1.player, s1.index, s2.player, s2.index)
 	
 	s1.node.set_selected(false)
 	s2.node.set_selected(false)
 	
 	swap_sources.clear()
 	clear_all_highlights()
+
+## Handles visual node swapping for Jack ability — works for both human and bot swaps.
+func _on_jack_swap_resolved(p1: int, c1: int, p2: int, c2: int) -> void:
+	if c1 >= player_hands[p1].size() or c2 >= player_hands[p2].size():
+		return
+	var node1 = player_hands[p1][c1]
+	var node2 = player_hands[p2][c2]
+	player_hands[p1][c1] = node2
+	player_hands[p2][c2] = node1
 	reposition_all_cards()
 
 func _on_bot_action(message: String) -> void:
@@ -295,6 +324,8 @@ func _on_bot_action(message: String) -> void:
 	)
 
 func _show_message(text: String):
+	# Bug 5: persist the message so debug reveal can restore it.
+	_current_ability_message = text
 	# Clear previous messages if any
 	for child in top_center.get_children():
 		child.queue_free()
@@ -312,9 +343,9 @@ func _show_message(text: String):
 	label.show()
 
 func _hide_message():
+	_current_ability_message = ""
 	for child in top_center.get_children():
 		child.queue_free()
-
 func _on_card_discarded(player_idx, card_data):
 	# Show the jump-in button as soon as there's something to jump into.
 	if jump_in_btn and not GameManager.deck_manager.discard_pile.is_empty():
@@ -347,12 +378,41 @@ func _on_card_discarded(player_idx, card_data):
 					pending_card = null
 					reposition_all_cards()
 				else:
-					# Pure discard (e.g. from Jump-In or a special effect). 
-					# Shrink the hand array so `reposition_all_cards` gracefully recenters the remaining cards.
-					hand.remove_at(i)
-					reposition_all_cards()
+					# Distinguish BOT SWAP from pure discard / jump-in.
+					# For a swap: GM replaced hand[i] with drawn card → gm_hand.size() == hand.size()
+					# For a discard/jump-in: GM called remove_at(i) first → gm_hand.size() == hand.size()-1
+					var gm_hand: Array = GameManager.players_info[player_idx].hand
+					if gm_hand.size() == hand.size():
+						# BOT SWAP: spawn a temporary card node for the discard animation.
+						# The existing hand node stays, updated in-place to the new drawn card.
+						var card_scene = preload("res://card.tscn")
+						var temp_discard = card_scene.instantiate()
+						add_child(temp_discard)
+						temp_discard.setup(card_data)
+						temp_discard.global_position = hand[i].global_position
+						card_to_discard = temp_discard
+
+						# Update the existing hand node to show the swapped-in card (face-down)
+						hand[i].setup(gm_hand[i])
+						if hand[i].data.is_face_up:
+							hand[i].data.is_face_up = false
+							hand[i]._update_visuals()
+					else:
+						# Pure discard: Jump-In or bot discarded the drawn card directly.
+						hand.remove_at(i)
+						reposition_all_cards()
 				break
 	
+	# Fallback: the card was never in player_hands (bot discarded its drawn card directly).
+	# Spawn a temporary node at the deck to animate it to the discard pile.
+	if card_to_discard == null and player_idx >= 0:
+		var card_scene = preload("res://card.tscn")
+		var temp = card_scene.instantiate()
+		add_child(temp)
+		temp.setup(card_data)
+		temp.global_position = deck_area.global_position
+		card_to_discard = temp
+
 	if card_to_discard:
 		card_to_discard.z_index = 100
 		var target_pos = discard_area.global_position
@@ -433,7 +493,8 @@ func _on_game_state_changed(new_state):
 	
 	if end_turn_btn: end_turn_btn.hide()
 	if call_dutch_btn: call_dutch_btn.hide()
-	if confirm_dutch_box: confirm_dutch_box.hide()
+	if confirm_dutch_btn: confirm_dutch_btn.hide()
+	if forfeit_dutch_btn: forfeit_dutch_btn.hide()
 	
 	# ── Deck / discard interaction lockout ───────────────────────────────────
 	# Deck is clickable ONLY when it's the player's draw turn.
@@ -475,8 +536,8 @@ func _on_game_state_changed(new_state):
 	match new_state:
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
 			if GameManager.current_player_index != 0:
-				var name: String = GameManager.players_info[GameManager.current_player_index].name
-				_show_message(name + " is deciding…")
+				var player_name: String = GameManager.players_info[GameManager.current_player_index].name
+				_show_message(player_name + " is deciding…")
 		GameManager.GameState.TURN_END_CHOICE:
 			if GameManager.current_player_index == 0:
 				end_turn_btn.show()
@@ -494,17 +555,20 @@ func _on_game_state_changed(new_state):
 		GameManager.GameState.TURN_CONFIRM_DUTCH:
 			if GameManager.current_player_index == 0:
 				_show_message("You called Dutch! Confirm or Forfeit?")
-				confirm_dutch_box.show()
+				confirm_dutch_btn.show()
+				forfeit_dutch_btn.show()
 		GameManager.GameState.DEAL_CARDS:
 			_handle_initial_deal()
 		GameManager.GameState.INITIAL_PEEK:
 			_start_peek_phase()
 		GameManager.GameState.TURN_PEEK_ABILITY:
-			_show_message("Select ANY card to peek at.")
-			_highlight_selectable_cards()
+			if GameManager.current_player_index == 0:
+				_show_message("Select ANY card to peek at.")
+				_highlight_selectable_cards()
 		GameManager.GameState.TURN_SWAP_ABILITY:
-			_show_message("Select TWO cards on the board to swap.")
-			_highlight_selectable_cards(true) # Pass true to highlight ALL cards
+			if GameManager.current_player_index == 0:
+				_show_message("Select TWO cards on the board to swap.")
+				_highlight_selectable_cards(true) # Pass true to highlight ALL cards
 			swap_sources.clear()
 func _set_all_cards_interactive(enabled: bool) -> void:
 	for hand in player_hands:
@@ -662,8 +726,160 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			_resume_game()
 
+	# DEBUG: Press L to toggle all face-down cards face-up.
+	# This is purely visual — CardData.is_face_up is not changed, bot memory is untouched.
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_L:
+			_toggle_debug_reveal()
+
+func _toggle_debug_reveal() -> void:
+	if not _debug_reveal:
+		# Reveal all hidden cards on the board visually only.
+		_debug_flipped_nodes.clear()
+		for hand in player_hands:
+			for card in hand:
+				if is_instance_valid(card) and not card.data.is_face_up:
+					# Show the front face directly without touching card.data.is_face_up
+					card.front_face.show()
+					card.back_face.hide()
+					card._apply_atlas_textures()
+					_debug_flipped_nodes.append(card)
+		_debug_reveal = true
+		# Bug 5: use raw label insert so we don't wipe _current_ability_message.
+		for child in top_center.get_children(): child.queue_free()
+		var dbg_lbl := Label.new()
+		dbg_lbl.name = "DebugMessage"
+		dbg_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		dbg_lbl.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		dbg_lbl.text = "[DEBUG] All cards revealed (press L to hide)"
+		dbg_lbl.add_theme_font_size_override("font_size", 24)
+		top_center.add_child(dbg_lbl)
+		top_center.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		top_center.offset_top = 220
+	else:
+		# Hide the cards we revealed, restoring the back-face
+		for card in _debug_flipped_nodes:
+			if is_instance_valid(card) and not card.data.is_face_up:
+				card.front_face.hide()
+				card.back_face.show()
+		_debug_flipped_nodes.clear()
+		_debug_reveal = false
+		# Bug 5: restore the ability message instead of blanking the display.
+		if _current_ability_message != "":
+			_show_message(_current_ability_message)
+		else:
+			_hide_message()
+
+# ── Bug 2: briefly show the failed jump-in card then hide it ────────────────
+func _on_jump_in_failed(player_idx: int, card_idx: int, _card_data: CardData) -> void:
+	if player_idx < 0 or player_idx >= player_hands.size():
+		return
+	var hand: Array = player_hands[player_idx]
+	if card_idx < 0 or card_idx >= hand.size():
+		return
+	var card_node: CardUI = hand[card_idx]
+	if not is_instance_valid(card_node) or card_node.data.is_face_up:
+		return
+	# Reveal visually (do NOT change CardData.is_face_up so bots stay blind).
+	card_node.front_face.show()
+	card_node.back_face.hide()
+	card_node._apply_atlas_textures()
+	await get_tree().create_timer(1.0).timeout
+	if is_instance_valid(card_node) and not card_node.data.is_face_up:
+		card_node.front_face.hide()
+		card_node.back_face.show()
+
+# ── Bug 3: flip all cards face-up when the game ends ────────────────────────
+func _on_all_cards_revealed() -> void:
+	for hand in player_hands:
+		for card in hand:
+			if is_instance_valid(card) and not card.data.is_face_up:
+				card.data.is_face_up = true
+				card._update_visuals()
+
+# ── Bug 3: show results overlay ─────────────────────────────────────────────
+func _on_scores_ready(results: Array) -> void:
+	# Disable all interactivity.
+	_set_all_cards_interactive(false)
+	if end_turn_btn: end_turn_btn.hide()
+	if jump_in_btn: jump_in_btn.hide()
+	if call_dutch_btn: call_dutch_btn.hide()
+	if confirm_dutch_btn: confirm_dutch_btn.hide()
+	if forfeit_dutch_btn: forfeit_dutch_btn.hide()
+
+	var overlay := CanvasLayer.new()
+	add_child(overlay)
+
+	var bg := ColorRect.new()
+	bg.anchors_preset = Control.PRESET_FULL_RECT
+	bg.color = Color(0.0, 0.0, 0.0, 0.75)
+	overlay.add_child(bg)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	# UI Polish: Create a styled panel for the results content
+	var panel := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.2, 0.05, 0.3, 0.9) # deep purple
+	style.set_corner_radius_all(15)
+	style.set_content_margin_all(30)
+	style.shadow_color = Color(0, 0, 0, 0.5)
+	style.shadow_size = 10
+	panel.add_theme_stylebox_override("panel", style)
+	center.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 16)
+	panel.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "Game Over!"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 48)
+	vbox.add_child(title)
+
+	for i in range(results.size()):
+		var entry: Dictionary = results[i]
+		var row := Label.new()
+		var score_str := str(entry.score) if entry.score >= 0 else "0 (empty hand — wins!)"
+		var place := str(i + 1) + "."
+		row.text = "%s %s — %s pts" % [place, entry.name, score_str]
+		row.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		row.add_theme_font_size_override("font_size", 28)
+		if i == 0:
+			row.add_theme_color_override("font_color", Color(1.0, 0.85, 0.0)) # gold for winner
+		vbox.add_child(row)
+
+	var btn_box := HBoxContainer.new()
+	btn_box.add_theme_constant_override("separation", 20)
+	btn_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(btn_box)
+
+	var play_again_btn := Button.new()
+	play_again_btn.text = "Play Again"
+	play_again_btn.add_theme_font_size_override("font_size", 24)
+	play_again_btn.custom_minimum_size = Vector2(160, 55)
+	play_again_btn.pressed.connect(func():
+		get_tree().change_scene_to_file("res://game_board.tscn")
+	)
+	btn_box.add_child(play_again_btn)
+
+	var main_menu_btn := Button.new()
+	main_menu_btn.text = "Main Menu"
+	main_menu_btn.add_theme_font_size_override("font_size", 24)
+	main_menu_btn.custom_minimum_size = Vector2(160, 55)
+	main_menu_btn.pressed.connect(func():
+		get_tree().change_scene_to_file("res://main_menu.tscn")
+	)
+	btn_box.add_child(main_menu_btn)
+
+# Bug 8: Hide UI elements when pausing to prevent overlaps
 func _pause_game() -> void:
 	get_tree().paused = true
+	$GameUI.hide()
+	top_center.hide()
 	pause_menu_instance = pause_menu_scene.instantiate()
 	add_child(pause_menu_instance)
 	pause_menu_instance.resumed.connect(_resume_game)
@@ -671,6 +887,8 @@ func _pause_game() -> void:
 
 func _resume_game() -> void:
 	get_tree().paused = false
+	$GameUI.show()
+	top_center.show()
 	if pause_menu_instance:
 		pause_menu_instance.queue_free()
 		pause_menu_instance = null
