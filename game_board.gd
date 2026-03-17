@@ -33,6 +33,10 @@ var peeked_card_nodes: Array = []
 var pause_menu_scene = preload("res://pause_menu.tscn")
 var pause_menu_instance: Node = null
 
+# Debug: track which card nodes we flipped manually so we can toggle them back
+var _debug_reveal := false
+var _debug_flipped_nodes: Array = []
+
 func _ready():
 	print("Game Board: Ready. Connecting signals...")
 	GameManager.stop_menu_music()
@@ -43,6 +47,7 @@ func _ready():
 	GameManager.jump_in_penalty.connect(_on_jump_in_penalty)
 	GameManager.deck_ready.connect(_update_deck_visual)
 	GameManager.bot_action.connect(_on_bot_action)
+	GameManager.jack_swap_resolved.connect(_on_jack_swap_resolved)
 	resized.connect(_on_resized)
 	
 	var deck_button = $CenterTable/DeckArea/Slotbg/Interaction
@@ -273,16 +278,28 @@ func _perform_jack_swap():
 	var s1 = swap_sources[0]
 	var s2 = swap_sources[1]
 	
+	# GameManager handles the GM-data swap and emits jack_swap_resolved,
+	# which _on_jack_swap_resolved handles for visual node swapping.
 	GameManager.complete_swap_ability(s1.player, s1.index, s2.player, s2.index)
 	
-	player_hands[s1.player][s1.index] = s2.node
-	player_hands[s2.player][s2.index] = s1.node
+	# Notify bots their memory may be stale for swapped slots.
+	if bot_controller:
+		bot_controller._update_memory_on_swap(0, s1.player, s1.index, s2.player, s2.index)
 	
 	s1.node.set_selected(false)
 	s2.node.set_selected(false)
 	
 	swap_sources.clear()
 	clear_all_highlights()
+
+## Handles visual node swapping for Jack ability — works for both human and bot swaps.
+func _on_jack_swap_resolved(p1: int, c1: int, p2: int, c2: int) -> void:
+	if c1 >= player_hands[p1].size() or c2 >= player_hands[p2].size():
+		return
+	var node1 = player_hands[p1][c1]
+	var node2 = player_hands[p2][c2]
+	player_hands[p1][c1] = node2
+	player_hands[p2][c2] = node1
 	reposition_all_cards()
 
 func _on_bot_action(message: String) -> void:
@@ -314,7 +331,6 @@ func _show_message(text: String):
 func _hide_message():
 	for child in top_center.get_children():
 		child.queue_free()
-
 func _on_card_discarded(player_idx, card_data):
 	# Show the jump-in button as soon as there's something to jump into.
 	if jump_in_btn and not GameManager.deck_manager.discard_pile.is_empty():
@@ -347,12 +363,41 @@ func _on_card_discarded(player_idx, card_data):
 					pending_card = null
 					reposition_all_cards()
 				else:
-					# Pure discard (e.g. from Jump-In or a special effect). 
-					# Shrink the hand array so `reposition_all_cards` gracefully recenters the remaining cards.
-					hand.remove_at(i)
-					reposition_all_cards()
+					# Distinguish BOT SWAP from pure discard / jump-in.
+					# For a swap: GM replaced hand[i] with drawn card → gm_hand.size() == hand.size()
+					# For a discard/jump-in: GM called remove_at(i) first → gm_hand.size() == hand.size()-1
+					var gm_hand: Array = GameManager.players_info[player_idx].hand
+					if gm_hand.size() == hand.size():
+						# BOT SWAP: spawn a temporary card node for the discard animation.
+						# The existing hand node stays, updated in-place to the new drawn card.
+						var card_scene = preload("res://card.tscn")
+						var temp_discard = card_scene.instantiate()
+						add_child(temp_discard)
+						temp_discard.setup(card_data)
+						temp_discard.global_position = hand[i].global_position
+						card_to_discard = temp_discard
+
+						# Update the existing hand node to show the swapped-in card (face-down)
+						hand[i].setup(gm_hand[i])
+						if hand[i].data.is_face_up:
+							hand[i].data.is_face_up = false
+							hand[i]._update_visuals()
+					else:
+						# Pure discard: Jump-In or bot discarded the drawn card directly.
+						hand.remove_at(i)
+						reposition_all_cards()
 				break
 	
+	# Fallback: the card was never in player_hands (bot discarded its drawn card directly).
+	# Spawn a temporary node at the deck to animate it to the discard pile.
+	if card_to_discard == null and player_idx >= 0:
+		var card_scene = preload("res://card.tscn")
+		var temp = card_scene.instantiate()
+		add_child(temp)
+		temp.setup(card_data)
+		temp.global_position = deck_area.global_position
+		card_to_discard = temp
+
 	if card_to_discard:
 		card_to_discard.z_index = 100
 		var target_pos = discard_area.global_position
@@ -500,11 +545,13 @@ func _on_game_state_changed(new_state):
 		GameManager.GameState.INITIAL_PEEK:
 			_start_peek_phase()
 		GameManager.GameState.TURN_PEEK_ABILITY:
-			_show_message("Select ANY card to peek at.")
-			_highlight_selectable_cards()
+			if GameManager.current_player_index == 0:
+				_show_message("Select ANY card to peek at.")
+				_highlight_selectable_cards()
 		GameManager.GameState.TURN_SWAP_ABILITY:
-			_show_message("Select TWO cards on the board to swap.")
-			_highlight_selectable_cards(true) # Pass true to highlight ALL cards
+			if GameManager.current_player_index == 0:
+				_show_message("Select TWO cards on the board to swap.")
+				_highlight_selectable_cards(true) # Pass true to highlight ALL cards
 			swap_sources.clear()
 func _set_all_cards_interactive(enabled: bool) -> void:
 	for hand in player_hands:
@@ -661,6 +708,36 @@ func _unhandled_input(event: InputEvent) -> void:
 			_pause_game()
 		else:
 			_resume_game()
+
+	# DEBUG: Press L to toggle all face-down cards face-up.
+	# This is purely visual — CardData.is_face_up is not changed, bot memory is untouched.
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_L:
+			_toggle_debug_reveal()
+
+func _toggle_debug_reveal() -> void:
+	if not _debug_reveal:
+		# Reveal all hidden cards on the board visually only.
+		_debug_flipped_nodes.clear()
+		for hand in player_hands:
+			for card in hand:
+				if is_instance_valid(card) and not card.data.is_face_up:
+					# Show the front face directly without touching card.data.is_face_up
+					card.front_face.show()
+					card.back_face.hide()
+					card._apply_atlas_textures()
+					_debug_flipped_nodes.append(card)
+		_debug_reveal = true
+		_show_message("[DEBUG] All cards revealed (press L to hide)")
+	else:
+		# Hide the cards we revealed, restoring the back-face
+		for card in _debug_flipped_nodes:
+			if is_instance_valid(card) and not card.data.is_face_up:
+				card.front_face.hide()
+				card.back_face.show()
+		_debug_flipped_nodes.clear()
+		_debug_reveal = false
+		_hide_message()
 
 func _pause_game() -> void:
 	get_tree().paused = true
