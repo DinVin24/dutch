@@ -1,333 +1,327 @@
 extends Node
 class_name BotController
 
+# ============================================================
+# BotController — Simple AI for all non-human players.
+#
+# MEMORY: bot_memory[bot_idx][card_idx] = CardData
+#   A bot only stores what it has peeked at (2 cards at start + any abilities).
+#   Unknown cards are treated as value 99 in decisions.
+# ============================================================
+
+const UNKNOWN_VALUE := 99
+
 var gm: Node = null
-var rng = RandomNumberGenerator.new()
+var rng := RandomNumberGenerator.new()
 
-func _ready():
+# ─── Lifecycle ───────────────────────────────────────────────
+
+func _ready() -> void:
 	rng.randomize()
-	if gm:
-		gm.game_state_changed.connect(_on_game_state_changed)
-		gm.turn_started.connect(_on_turn_started)
-		gm.card_discarded.connect(_on_card_discarded)
+	if not gm:
+		push_error("BotController: gm is null in _ready().")
+		return
+	gm.game_state_changed.connect(_on_game_state_changed)
+	gm.turn_started.connect(_on_turn_started)
+	gm.card_discarded.connect(_on_card_discarded)
+	gm.memory_shift_required.connect(_on_memory_shift_required)
 
-func is_headless() -> bool:
+func _is_headless() -> bool:
 	return DisplayServer.get_name() == "headless"
 
-func _wait(seconds: float):
-	if is_headless(): return
-	await get_tree().create_timer(seconds).timeout
+func _wait(seconds: float) -> void:
+	if _is_headless(): return
+	await gm.get_tree().create_timer(seconds).timeout
 
-func _on_game_state_changed(new_state):
+# ─── Memory helpers ──────────────────────────────────────────
+
+## Returns a bot's own card memory dict { card_idx: CardData }
+func _mem(bot_idx: int) -> Dictionary:
+	return gm.players_info[bot_idx].bot_memory.get(bot_idx, {})
+
+## Returns the effective value of card at index i in the bot's own hand.
+## Unknown cards are treated as UNKNOWN_VALUE.
+func _effective_value(bot_idx: int, card_idx: int) -> int:
+	var m := _mem(bot_idx)
+	if m.has(card_idx):
+		return m[card_idx].point_value
+	return UNKNOWN_VALUE
+
+## Returns the hand-index with the highest effective value. -1 if hand is empty.
+func _worst_card_idx(bot_idx: int) -> int:
+	var hand_size: int = gm.players_info[bot_idx].hand.size()
+	if hand_size == 0: return -1
+	var best_val := -1
+	var best_idx := -1
+	for i in range(hand_size):
+		var v := _effective_value(bot_idx, i)
+		if v > best_val:
+			best_val = v
+			best_idx = i
+	return best_idx
+
+## Builds a multi-line hand summary string for console output.
+## Known cards are prefixed with *, unknown with a plain name.
+func _hand_summary(bot_idx: int) -> String:
+	var hand: Array = gm.players_info[bot_idx].hand
+	var mem := _mem(bot_idx)
+	var lines := "Player %d:\n" % bot_idx
+	for i in range(hand.size()):
+		if mem.has(i):
+			lines += "  *%s\n" % mem[i].display_name()
+		else:
+			lines += "  %s (unknown)\n" % hand[i].display_name()
+	return lines.strip_edges()
+
+# ─── Signal Handlers ─────────────────────────────────────────
+
+func _on_game_state_changed(new_state: int) -> void:
 	if new_state == GameManager.GameState.INITIAL_PEEK:
-		_execute_bot_initial_peek()
+		_execute_initial_peek()
 		return
 
-	if gm.current_player_index == 0:
-		return
-		
+	var idx: int = gm.current_player_index
+	if idx == 0: return  # Human handles their own turns
+
 	match new_state:
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
-			_execute_bot_resolve_drawn()
+			_execute_resolve_drawn(idx)
 		GameManager.GameState.TURN_PEEK_ABILITY:
-			_execute_bot_queen_peek()
+			_execute_queen_peek(idx)
 		GameManager.GameState.TURN_SWAP_ABILITY:
-			_execute_bot_jack_swap()
+			_execute_jack_swap(idx)
 		GameManager.GameState.TURN_END_CHOICE:
-			_execute_bot_end_choice()
+			_execute_end_choice(idx)
 		GameManager.GameState.TURN_CONFIRM_DUTCH:
-			_execute_bot_dutch_confirm()
+			_execute_confirm_dutch(idx)
 
-func _on_turn_started(player_idx):
-	if player_idx == 0:
-		return
-	
-	await _wait(1.0)
-	
-	if gm.current_state == GameManager.GameState.TURN_START_DRAW:
-		gm.player_draw_card()
+## Rule 2: Mandatory draw at the start of a bot's turn.
+func _on_turn_started(bot_idx: int) -> void:
+	if bot_idx == 0: return
+	await _wait(1.5)
+	if gm.current_state != GameManager.GameState.TURN_START_DRAW: return
+	if gm.current_player_index != bot_idx: return
+	gm.player_draw_card()
 
-func _on_card_discarded(discarder_idx, card_data):
-	# "even when it's not his turn, the bot will jump in if he knows he has a matching card, from his memory."
+## Rule 1: Constant jump-in monitoring — fires every time any card is discarded.
+func _on_card_discarded(_discarder_idx: int, card_data: CardData) -> void:
+	_try_jump_ins(card_data)
+
+## Shift memory indices when a card is removed from someone's hand.
+func _on_memory_shift_required(target_player_idx: int, removed_card_idx: int) -> void:
 	for bot_idx in range(1, gm.num_players):
-		if bot_idx == discarder_idx: continue
+		var mem: Dictionary = gm.players_info[bot_idx].bot_memory
+		if not mem.has(target_player_idx): continue
+		var p_mem: Dictionary = mem[target_player_idx]
+		var new_mem := {}
+		for c_idx in p_mem:
+			if c_idx < removed_card_idx:
+				new_mem[c_idx] = p_mem[c_idx]
+			elif c_idx > removed_card_idx:
+				new_mem[c_idx - 1] = p_mem[c_idx]
+			# c_idx == removed_card_idx: card is gone, forget it
+		mem[target_player_idx] = new_mem
+
+# ─── Jump-In ─────────────────────────────────────────────────
+
+## Check all bots — if any KNOWS a card in its hand matching the discarded rank, jump in.
+func _try_jump_ins(card_data: CardData) -> void:
+	await _wait(0.5)
+	if gm.current_state != GameManager.GameState.TURN_END_CHOICE: return
+
+	for bot_idx in range(1, gm.num_players):
+		if gm.current_state != GameManager.GameState.TURN_END_CHOICE: break
 		
-		# Only jump in if allowed by the game state
-		if gm.current_state != GameManager.GameState.TURN_END_CHOICE: continue
-		
-		var my_memory = gm.players_info[bot_idx].bot_memory
-		if not my_memory.has(bot_idx): continue
-		
-		var own_known = my_memory[bot_idx]
-		var found_match_idx = -1
-		
-		for c_idx in own_known:
-			if own_known[c_idx].rank == card_data.rank:
-				found_match_idx = c_idx
+		var match_idx := -1
+		for c_idx in _mem(bot_idx):
+			var known: CardData = _mem(bot_idx)[c_idx]
+			if known != null and known.rank == card_data.rank:
+				match_idx = c_idx
 				break
-				
-		if found_match_idx != -1:
-			_attempt_jump_in(bot_idx, found_match_idx)
-			break
 
-# --- ACTIONS ---
+		if match_idx != -1:
+			await _wait(0.3)
+			if gm.current_state != GameManager.GameState.TURN_END_CHOICE: break
+			if match_idx >= gm.players_info[bot_idx].hand.size(): break
+			var jumped_card: CardData = _mem(bot_idx)[match_idx]
+			var top_card: CardData = gm.deck_manager.discard_pile[-1] if gm.deck_manager.discard_pile.size() > 0 else null
+			var over_str: String = top_card.display_name() if top_card != null else "?"
+			print("Player %d jumped in with %s over %s" % [bot_idx, jumped_card.display_name(), over_str])
+			gm.bot_action.emit("Player %d jumped in with %s over %s." % [bot_idx, jumped_card.display_name(), over_str])
+			gm.start_jump_in(bot_idx)
+			gm.validate_jump_in(match_idx)
+			break  # Only one jump-in per discard event
 
-func _execute_bot_initial_peek():
-	# "in the beginning, the bots don't know any of their cards."
-	# "in the card peeking period, which happens at the same time for all players, 
-	# the bots are going to look at 2 out of the 4 cards they have and remember them."
-	for i in range(1, gm.num_players):
-		var bot_info = gm.players_info[i]
-		bot_info.bot_memory.clear()
-		for p_idx in range(gm.num_players):
-			bot_info.bot_memory[p_idx] = {}
-				
-		var hand_size = bot_info.hand.size()
-		if hand_size >= 2:
-			var idx1 = rng.randi_range(0, hand_size - 1)
-			var idx2 = idx1
-			while idx2 == idx1:
-				idx2 = rng.randi_range(0, hand_size - 1)
-				
-			bot_info.bot_memory[i][idx1] = bot_info.hand[idx1]
-			bot_info.bot_memory[i][idx2] = bot_info.hand[idx2]
+# ─── Bot Turn Actions ─────────────────────────────────────────
 
-	gm.bot_action.emit("Bots are memorizing their cards...")
+## INITIAL PEEK: each bot learns exactly 2 of its 4 dealt cards.
+func _execute_initial_peek() -> void:
+	for bot_idx in range(1, gm.num_players):
+		var bot_info: Dictionary = gm.players_info[bot_idx]
+		# Build a fresh memory structure for all players
+		var mem := {}
+		for p in range(gm.num_players): mem[p] = {}
+		bot_info["bot_memory"] = mem
+
+		var hand_size: int = bot_info["hand"].size()
+		if hand_size < 2: continue
+
+		var idx1 := rng.randi_range(0, hand_size - 1)
+		var idx2 := idx1
+		while idx2 == idx1:
+			idx2 = rng.randi_range(0, hand_size - 1)
+
+		mem[bot_idx][idx1] = bot_info["hand"][idx1]
+		mem[bot_idx][idx2] = bot_info["hand"][idx2]
+		print("Player %d learned cards at positions %d (*%s) and %d (*%s)." % [
+			bot_idx, idx1, (bot_info["hand"] as Array)[idx1].display_name(),
+			idx2, (bot_info["hand"] as Array)[idx2].display_name()])
+
 	await _wait(2.0)
 
-func _execute_bot_resolve_drawn():
-	var p_idx = gm.current_player_index
-	var p_info = gm.players_info[p_idx]
+## RESOLVE DRAWN: compare drawn card against worst effective card and decide.
+func _execute_resolve_drawn(bot_idx: int) -> void:
 	await _wait(1.5)
-	
-	var drawn_value = _get_card_value(gm.drawn_card_data)
-	if not p_info.bot_memory.has(p_idx):
-		p_info.bot_memory[p_idx] = {}
-		
-	var own_memory = p_info.bot_memory[p_idx]
-	var hand_size = p_info.hand.size()
-	
-	if hand_size == 0:
-		gm.bot_action.emit("Bot " + str(p_idx) + " discarded.")
+	if gm.current_state != GameManager.GameState.TURN_RESOLVE_DRAWN: return
+	if gm.current_player_index != bot_idx: return
+
+	var drawn: CardData = gm.drawn_card_data
+	if drawn == null: return
+	var drawn_val: int = drawn.point_value
+
+	var worst_idx := _worst_card_idx(bot_idx)
+	if worst_idx == -1:
 		gm.player_discard_drawn_card()
 		return
-		
-	var known_count = own_memory.size()
-	
-	if known_count < hand_size:
-		# "if it doesn't know all of its cards yet, it'll prefer to replace an unknown card. now his memory will be updated."
-		var unknown_indices = []
-		for i in range(hand_size):
-			if not own_memory.has(i):
-				unknown_indices.append(i)
-				
-		var swap_idx = unknown_indices[rng.randi_range(0, unknown_indices.size() - 1)]
-		gm.bot_action.emit("Bot " + str(p_idx) + " swapped a card.")
-		p_info.bot_memory[p_idx][swap_idx] = gm.drawn_card_data
-		gm.player_swap_drawn_card(swap_idx)
-	else:
-		# "if it knows all the cards... "
-		var max_val = -1
-		var max_idx = -1
-		for i in range(hand_size):
-			var val = _get_card_value(own_memory[i])
-			if val > max_val:
-				max_val = val
-				max_idx = i
-				
-		if drawn_value >= max_val:
-			# "... and the card is higher than all of his cards in hand, he discards it."
-			gm.bot_action.emit("Bot " + str(p_idx) + " discarded.")
-			gm.player_discard_drawn_card()
-		else:
-			# "... and is smaller than one of them, it will replace it, discarding the card he had in hand and updates the memory."
-			gm.bot_action.emit("Bot " + str(p_idx) + " swapped a card.")
-			p_info.bot_memory[p_idx][max_idx] = gm.drawn_card_data
-			gm.player_swap_drawn_card(max_idx)
 
-func _execute_bot_queen_peek():
-	var p_idx = gm.current_player_index
-	var p_info = gm.players_info[p_idx]
-	await _wait(1.2)
-	
-	if not p_info.bot_memory.has(p_idx):
-		p_info.bot_memory.clear()
-		for i in range(gm.num_players): p_info.bot_memory[i] = {}
-		
-	var own_memory = p_info.bot_memory[p_idx]
-	var hand_size = p_info.hand.size()
-	
-	var unknown_own_indices = []
-	for i in range(hand_size):
-		if not own_memory.has(i):
-			unknown_own_indices.append(i)
-			
-	if unknown_own_indices.size() > 0:
-		# "when using a queen, the bot will first use it to learn the cards from his hand that he doesn't know yet."
-		var peek_idx = unknown_own_indices[rng.randi_range(0, unknown_own_indices.size() - 1)]
-		p_info.bot_memory[p_idx][peek_idx] = p_info.hand[peek_idx]
-		gm.bot_action.emit("Bot " + str(p_idx) + " peeked at its own card.")
+	var worst_val := _effective_value(bot_idx, worst_idx)
+
+	if drawn_val < worst_val:
+		# Swap: drawn card takes the worst slot, old worst goes to discard
+		var card_name: String = ("unknown" if worst_val == UNKNOWN_VALUE
+			else _mem(bot_idx)[worst_idx].display_name())
+		# Update memory BEFORE building summary so * reflects new state
+		gm.players_info[bot_idx].bot_memory[bot_idx][worst_idx] = drawn
+		var summary := _hand_summary(bot_idx)
+		print("%s\nDrew %s\nDiscarded %s for %s" % [
+			summary, drawn.display_name(), card_name, drawn.display_name()])
+		gm.bot_action.emit("Player %d drew %s. Discarded %s." % [bot_idx, drawn.display_name(), card_name])
+		gm.player_swap_drawn_card(worst_idx)
 	else:
-		# "otherwise he'll pick a random card from a player to learn. (you could make it so it chooses the player with the least amount of cards as well)"
-		var target_p = -1
-		var min_cards = 999
-		
-		for i in range(gm.num_players):
-			if i == p_idx: continue
-			var sz = gm.players_info[i].hand.size()
-			if sz > 0 and sz < min_cards:
-				min_cards = sz
-				
-		var candidates = []
-		for i in range(gm.num_players):
-			if i == p_idx: continue
-			if gm.players_info[i].hand.size() == min_cards:
-				candidates.append(i)
-				
+		# Drawn card is no better — just discard it
+		var summary := _hand_summary(bot_idx)
+		print("%s\nDrew %s\nDiscarded %s" % [summary, drawn.display_name(), drawn.display_name()])
+		gm.bot_action.emit("Player %d drew %s. Discarded %s." % [bot_idx, drawn.display_name(), drawn.display_name()])
+		gm.player_discard_drawn_card()
+
+## QUEEN ABILITY: learn an unknown own card first; otherwise learn any card on the board.
+func _execute_queen_peek(bot_idx: int) -> void:
+	await _wait(1.0)
+	if gm.current_state != GameManager.GameState.TURN_PEEK_ABILITY: return
+	if gm.current_player_index != bot_idx: return
+
+	# Priority: own unknown card
+	var own_unknowns := []
+	for i in range(gm.players_info[bot_idx].hand.size()):
+		if _effective_value(bot_idx, i) == UNKNOWN_VALUE:
+			own_unknowns.append(i)
+
+	if own_unknowns.size() > 0:
+		var peek_idx: int = own_unknowns[rng.randi_range(0, own_unknowns.size() - 1)]
+		var card: CardData = gm.players_info[bot_idx].hand[peek_idx]
+		gm.players_info[bot_idx].bot_memory[bot_idx][peek_idx] = card
+		print("%s\nLearned *%s (Queen ability)" % [_hand_summary(bot_idx), card.display_name()])
+		gm.bot_action.emit("Player %d used a Queen to reveal %s." % [bot_idx, card.display_name()])
+	else:
+		# Fallback: pick any card from another player
+		var candidates := []
+		for p in range(gm.num_players):
+			if p == bot_idx: continue
+			for c in range(gm.players_info[p].hand.size()):
+				candidates.append({"p": p, "c": c})
 		if candidates.size() > 0:
-			target_p = candidates[rng.randi_range(0, candidates.size() - 1)]
-			var target_sz = gm.players_info[target_p].hand.size()
-			var target_c = rng.randi_range(0, target_sz - 1)
-			
-			p_info.bot_memory[target_p][target_c] = gm.players_info[target_p].hand[target_c]
-			gm.bot_action.emit("Bot " + str(p_idx) + " peeked at Player " + str(target_p) + "'s card.")
-	
+			var pick = candidates[rng.randi_range(0, candidates.size() - 1)]
+			var card: CardData = gm.players_info[pick.p].hand[pick.c]
+			if not gm.players_info[bot_idx].bot_memory.has(pick.p):
+				gm.players_info[bot_idx].bot_memory[pick.p] = {}
+			gm.players_info[bot_idx].bot_memory[pick.p][pick.c] = card
+			print("Player %d used a Queen to learn opponent card: *%s" % [bot_idx, card.display_name()])
+			gm.bot_action.emit("Player %d used a Queen to reveal %s." % [bot_idx, card.display_name()])
+
 	gm.complete_peek_ability()
 
-func _execute_bot_jack_swap():
-	var p_idx = gm.current_player_index
-	var p_info = gm.players_info[p_idx]
-	gm.bot_action.emit("Bot " + str(p_idx) + " is choosing cards to swap...")
+## JACK ABILITY: swap 2 random cards from any two different opponent slots.
+func _execute_jack_swap(bot_idx: int) -> void:
 	await _wait(1.5)
-	
-	var my_memory = p_info.bot_memory
-	
-	# "when using a jack, this is more complex. he can either choose 2 random cards from other players, 
-	# or choose a big card from his hand and a small card from another player's hand if he knows them."
-	
-	# Find my highest known card
-	var my_highest_val = -1
-	var my_highest_c = -1
-	if my_memory.has(p_idx):
-		for c_idx in my_memory[p_idx]:
-			var val = _get_card_value(my_memory[p_idx][c_idx])
-			if val > my_highest_val:
-				my_highest_val = val
-				my_highest_c = c_idx
-				
-	# Find an opponent's lowest known card
-	var opp_lowest_val = 999
-	var target_p = -1
-	var target_c = -1
-	
-	for opp_idx in my_memory:
-		if opp_idx == p_idx: continue
-		for opp_c_idx in my_memory[opp_idx]:
-			var val = _get_card_value(my_memory[opp_idx][opp_c_idx])
-			if val < opp_lowest_val:
-				opp_lowest_val = val
-				target_p = opp_idx
-				target_c = opp_c_idx
-				
-	var p1 = -1
-	var c1 = -1
-	var p2 = -1
-	var c2 = -1
-	
-	# "choose a big card from his hand and a small card from another player's hand if he knows them"
-	if my_highest_c != -1 and target_c != -1 and my_highest_val > opp_lowest_val:
-		p1 = p_idx
-		c1 = my_highest_c
-		p2 = target_p
-		c2 = target_c
-	else:
-		# "choose 2 random cards from other players"
-		p1 = p_idx
-		while p1 == p_idx or gm.players_info[p1].hand.size() == 0:
-			p1 = rng.randi_range(0, gm.num_players - 1)
-		c1 = rng.randi_range(0, gm.players_info[p1].hand.size() - 1)
-		
-		p2 = p_idx
-		while p2 == p_idx or p2 == p1 or gm.players_info[p2].hand.size() == 0:
-			p2 = rng.randi_range(0, gm.num_players - 1)
-			
-		c2 = rng.randi_range(0, gm.players_info[p2].hand.size() - 1)
-		
-	_update_memory_on_swap(p1, c1, p2, c2)
-	
-	gm.bot_action.emit("Bot " + str(p_idx) + " swapped cards.")
-	gm.complete_swap_ability(p1, c1, p2, c2)
+	if gm.current_state != GameManager.GameState.TURN_SWAP_ABILITY: return
+	if gm.current_player_index != bot_idx: return
 
-func _execute_bot_end_choice():
-	var p_idx = gm.current_player_index
-	var p_info = gm.players_info[p_idx]
-	await _wait(1.0)
-	
-	if not p_info.bot_memory.has(p_idx):
-		gm.end_turn()
+	gm.bot_action.emit("Player %d used a Jack." % bot_idx)
+
+	# Gather all (player, card_idx) pairs from opponents
+	var slots := []
+	for p in range(gm.num_players):
+		if p == bot_idx: continue
+		for c in range(gm.players_info[p].hand.size()):
+			slots.append({"p": p, "c": c})
+
+	if slots.size() < 2:
+		gm.complete_swap_ability(0, 0, 0, 0)  # Failsafe edge case
 		return
-		
-	var own_memory = p_info.bot_memory[p_idx]
-	var hand_size = p_info.hand.size()
-	
-	# "calling dutch: the bot will call dutch when he knows all his cards and the total score is less than 7."
-	if own_memory.size() == hand_size and hand_size > 0:
-		var total_score = 0
-		for i in range(hand_size):
-			total_score += _get_card_value(own_memory[i])
-			
-		if total_score < 7 and gm.dutch_caller_index == -1 and p_info.can_call_dutch:
-			gm.bot_action.emit("Bot " + str(p_idx) + " is CALLING DUTCH!")
-			gm.call_dutch(p_idx)
+
+	slots.shuffle()
+	var s1 = slots[0]
+	var s2 = null
+	for s in slots:
+		if s.p != s1.p:
+			s2 = s
+			break
+	if s2 == null: s2 = slots[1]  # fallback: same player, different card
+
+	_update_memory_on_swap(bot_idx, s1.p, s1.c, s2.p, s2.c)
+	gm.complete_swap_ability(s1.p, s1.c, s2.p, s2.c)
+
+## END CHOICE: call Dutch if all cards are known and score < 7; otherwise end turn.
+func _execute_end_choice(bot_idx: int) -> void:
+	await _wait(0.9)
+	if gm.current_state != GameManager.GameState.TURN_END_CHOICE: return
+	if gm.current_player_index != bot_idx: return
+
+	var hand_size: int = gm.players_info[bot_idx].hand.size()
+	var all_known := true
+	for i in range(hand_size):
+		if _effective_value(bot_idx, i) == UNKNOWN_VALUE:
+			all_known = false
+			break
+
+	if all_known and hand_size > 0:
+		var score := 0
+		for c in _mem(bot_idx).values(): score += c.point_value
+		if score < 7 and gm.dutch_caller_index == -1 and gm.players_info[bot_idx].can_call_dutch:
+			gm.bot_action.emit("Player %d calls DUTCH! (score: %d)" % [bot_idx, score])
+			gm.call_dutch(bot_idx)
 			return
-			
+
 	gm.end_turn()
 
-func _execute_bot_dutch_confirm():
-	var p_idx = gm.current_player_index
+## CONFIRM DUTCH: bot always confirms.
+func _execute_confirm_dutch(bot_idx: int) -> void:
 	await _wait(1.5)
+	if gm.current_state != GameManager.GameState.TURN_CONFIRM_DUTCH: return
+	if gm.current_player_index != bot_idx: return
 	gm.confirm_dutch()
 
-func _attempt_jump_in(bot_idx: int, card_idx: int):
-	await _wait(1.2)
-	
-	if gm.current_state != GameManager.GameState.TURN_END_CHOICE:
-		return
-		
-	var original_turn = gm.current_player_index
-	gm.current_player_index = bot_idx
-	
-	gm.bot_action.emit("Bot " + str(bot_idx) + " is JUMPING IN!")
-	gm.start_jump_in()
-	gm.validate_jump_in(card_idx)
-	
-	if gm.current_player_index == bot_idx:
-		gm.current_player_index = original_turn
+# ─── Memory Utility ───────────────────────────────────────────
 
-# --- UTILITIES ---
-
-func _get_card_value(card_data: CardData) -> int:
-	if card_data.rank == "King" and card_data.suit == "Diamonds": return 0
-	if card_data.rank == "Ace": return 1
-	if card_data.rank == "Jack": return 11
-	if card_data.rank == "Queen": return 12
-	if card_data.rank == "King": return 13
-	return card_data.rank.to_int()
-
-func _update_memory_on_swap(p1, c1, p2, c2):
-	for i in range(1, gm.num_players):
-		var mem = gm.players_info[i].bot_memory
+## Update all bots' memories when two card slots are swapped (e.g. after Jack).
+func _update_memory_on_swap(acting_bot: int, p1: int, c1: int, p2: int, c2: int) -> void:
+	for bot_idx in range(1, gm.num_players):
+		var mem: Dictionary = gm.players_info[bot_idx].bot_memory
 		if not mem.has(p1): mem[p1] = {}
 		if not mem.has(p2): mem[p2] = {}
-		
-		var p1_known = null
-		if mem[p1].has(c1): p1_known = mem[p1][c1]
-		
-		var p2_known = null
-		if mem[p2].has(c2): p2_known = mem[p2][c2]
-		
-		if p2_known: mem[p1][c1] = p2_known
+		var knew_p1: CardData = mem[p1].get(c1, null)
+		var knew_p2: CardData = mem[p2].get(c2, null)
+		if knew_p2 != null: mem[p1][c1] = knew_p2
 		else: mem[p1].erase(c1)
-			
-		if p1_known: mem[p2][c2] = p1_known
+		if knew_p1 != null: mem[p2][c2] = knew_p1
 		else: mem[p2].erase(c2)
