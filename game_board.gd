@@ -15,7 +15,8 @@ var bot_controller: BotController = null
 var end_turn_btn: Button
 var jump_in_btn: Button
 var call_dutch_btn: Button
-var confirm_dutch_box: HBoxContainer
+var confirm_dutch_btn: Button
+var forfeit_dutch_btn: Button
 
 var player_hands: Array = [[], [], [], []]
 var card_spacing = 110.0
@@ -129,34 +130,37 @@ func _create_dutch_ui():
 	call_dutch_btn.offset_bottom = -200
 	call_dutch_btn.hide()
 	
-	# Inject Confirm/Cancel panel at the bottom-center, replacing End Turn / Call Dutch.
-	confirm_dutch_box = HBoxContainer.new()
-	confirm_dutch_box.add_theme_constant_override("separation", 20)
-	$GameUI/MainHUD.add_child(confirm_dutch_box)
-	confirm_dutch_box.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	confirm_dutch_box.offset_left = -270
-	confirm_dutch_box.offset_right = 270
-	confirm_dutch_box.offset_top = -250
-	confirm_dutch_box.offset_bottom = -200
-	confirm_dutch_box.hide()
-	
-	var confirm_btn = Button.new()
-	confirm_btn.text = "CONFIRM DUTCH"
-	confirm_btn.add_theme_font_size_override("font_size", 20)
+	# Bug 7 fix: Separate Confirm and Forfeit buttons to outer slots
+	# to leave the middle slot (Slot 2) for Jump In.
+	confirm_dutch_btn = Button.new()
+	confirm_dutch_btn.text = "CONFIRM DUTCH"
+	confirm_dutch_btn.add_theme_font_size_override("font_size", 20)
 	var style_confirm = StyleBoxFlat.new()
 	style_confirm.bg_color = Color(0.2, 0.6, 0.2)
-	confirm_btn.add_theme_stylebox_override("normal", style_confirm)
-	confirm_btn.pressed.connect(_on_confirm_dutch_pressed)
-	confirm_dutch_box.add_child(confirm_btn)
+	confirm_dutch_btn.add_theme_stylebox_override("normal", style_confirm)
+	confirm_dutch_btn.pressed.connect(_on_confirm_dutch_pressed)
+	$GameUI/MainHUD.add_child(confirm_dutch_btn)
+	confirm_dutch_btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	confirm_dutch_btn.offset_left = -270 # Slot 1
+	confirm_dutch_btn.offset_right = -110
+	confirm_dutch_btn.offset_top = -250
+	confirm_dutch_btn.offset_bottom = -200
+	confirm_dutch_btn.hide()
 	
-	var cancel_btn = Button.new()
-	cancel_btn.text = "FORFEIT DUTCH"
-	cancel_btn.add_theme_font_size_override("font_size", 20)
-	var style_cancel = StyleBoxFlat.new()
-	style_cancel.bg_color = Color(0.8, 0.2, 0.2)
-	cancel_btn.add_theme_stylebox_override("normal", style_cancel)
-	cancel_btn.pressed.connect(_on_cancel_dutch_pressed)
-	confirm_dutch_box.add_child(cancel_btn)
+	forfeit_dutch_btn = Button.new()
+	forfeit_dutch_btn.text = "FORFEIT DUTCH"
+	forfeit_dutch_btn.add_theme_font_size_override("font_size", 20)
+	var style_forfeit = StyleBoxFlat.new()
+	style_forfeit.bg_color = Color(0.8, 0.2, 0.2)
+	forfeit_dutch_btn.add_theme_stylebox_override("normal", style_forfeit)
+	forfeit_dutch_btn.pressed.connect(_on_cancel_dutch_pressed)
+	$GameUI/MainHUD.add_child(forfeit_dutch_btn)
+	forfeit_dutch_btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	forfeit_dutch_btn.offset_left = 110 # Slot 3
+	forfeit_dutch_btn.offset_right = 270
+	forfeit_dutch_btn.offset_top = -250
+	forfeit_dutch_btn.offset_bottom = -200
+	forfeit_dutch_btn.hide()
 
 func _update_deck_visual():
 	for child in deck_area.get_children():
@@ -489,7 +493,8 @@ func _on_game_state_changed(new_state):
 	
 	if end_turn_btn: end_turn_btn.hide()
 	if call_dutch_btn: call_dutch_btn.hide()
-	if confirm_dutch_box: confirm_dutch_box.hide()
+	if confirm_dutch_btn: confirm_dutch_btn.hide()
+	if forfeit_dutch_btn: forfeit_dutch_btn.hide()
 	
 	# ── Deck / discard interaction lockout ───────────────────────────────────
 	# Deck is clickable ONLY when it's the player's draw turn.
@@ -550,7 +555,8 @@ func _on_game_state_changed(new_state):
 		GameManager.GameState.TURN_CONFIRM_DUTCH:
 			if GameManager.current_player_index == 0:
 				_show_message("You called Dutch! Confirm or Forfeit?")
-				confirm_dutch_box.show()
+				confirm_dutch_btn.show()
+				forfeit_dutch_btn.show()
 		GameManager.GameState.DEAL_CARDS:
 			_handle_initial_deal()
 		GameManager.GameState.INITIAL_PEEK:
@@ -798,7 +804,8 @@ func _on_scores_ready(results: Array) -> void:
 	if end_turn_btn: end_turn_btn.hide()
 	if jump_in_btn: jump_in_btn.hide()
 	if call_dutch_btn: call_dutch_btn.hide()
-	if confirm_dutch_box: confirm_dutch_box.hide()
+	if confirm_dutch_btn: confirm_dutch_btn.hide()
+	if forfeit_dutch_btn: forfeit_dutch_btn.hide()
 
 	var overlay := CanvasLayer.new()
 	add_child(overlay)
@@ -857,8 +864,11 @@ func _on_scores_ready(results: Array) -> void:
 	)
 	btn_box.add_child(main_menu_btn)
 
+# Bug 8: Hide UI elements when pausing to prevent overlaps
 func _pause_game() -> void:
 	get_tree().paused = true
+	$GameUI.hide()
+	top_center.hide()
 	pause_menu_instance = pause_menu_scene.instantiate()
 	add_child(pause_menu_instance)
 	pause_menu_instance.resumed.connect(_resume_game)
@@ -866,6 +876,8 @@ func _pause_game() -> void:
 
 func _resume_game() -> void:
 	get_tree().paused = false
+	$GameUI.show()
+	top_center.show()
 	if pause_menu_instance:
 		pause_menu_instance.queue_free()
 		pause_menu_instance = null
