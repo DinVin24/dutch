@@ -23,7 +23,6 @@ signal game_over(winner_id)
 signal scores_ready(results: Array)      # Bug 3: carries sorted leaderboard
 signal all_cards_revealed                 # Bug 3: tells board to flip all cards face-up
 signal deck_ready
-signal card_drawn(player_id, card_data)
 signal card_drawn_to_pending(player_id, card_data)
 signal card_discarded(player_id, card_data)
 signal jump_in_penalty(player_idx, penalty_card_data)
@@ -31,6 +30,7 @@ signal jump_in_failed(player_idx: int, card_idx: int, card_data: CardData) # Bug
 signal bot_action(message: String)
 signal memory_shift_required(player_idx, removed_card_idx)
 signal jack_swap_resolved(p1: int, c1: int, p2: int, c2: int)
+signal hand_updated(player_idx: int)
 
 var current_state: GameState = GameState.INITIALIZING
 var deck_manager: DeckManager
@@ -242,6 +242,7 @@ func validate_jump_in(card_idx: int) -> bool:
 				top_discard.rank, top_discard.suit
 			])
 			h.remove_at(card_idx)
+			hand_updated.emit(jump_in_player_idx)
 			memory_shift_required.emit(jump_in_player_idx, card_idx)
 			deck_manager.discard_pile.append(selected_card)
 			card_discarded.emit(jump_in_player_idx, selected_card)
@@ -272,6 +273,7 @@ func validate_jump_in(card_idx: int) -> bool:
 		var p_card := CardData.new(penalty_card_dict.rank, penalty_card_dict.suit)
 		p_card.is_face_up = false
 		h.append(p_card)
+		hand_updated.emit(jump_in_player_idx)
 		jump_in_penalty.emit(jump_in_player_idx, p_card)
 
 	var was_own_draw := jump_in_was_own_draw_phase
@@ -349,6 +351,7 @@ func player_swap_drawn_card(card_idx: int):
 	var old_card = player_h[card_idx]
 	print("GameManager: Swapping drawn card with hand card at idx ", card_idx)
 	player_h[card_idx] = drawn_card_data
+	hand_updated.emit(current_player_index)
 	
 	# Old card goes to discard
 	deck_manager.discard_pile.append(old_card)
@@ -392,6 +395,9 @@ func complete_swap_ability(player1_idx: int, card1_idx: int, player2_idx: int, c
 	var temp_data = h1[card1_idx]
 	h1[card1_idx] = h2[card2_idx]
 	h2[card2_idx] = temp_data
+	
+	hand_updated.emit(player1_idx)
+	hand_updated.emit(player2_idx)
 	
 	# Emit before _prompt_turn_end so the board can update visual nodes synchronously.
 	jack_swap_resolved.emit(player1_idx, card1_idx, player2_idx, card2_idx)
