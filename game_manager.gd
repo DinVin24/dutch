@@ -246,9 +246,14 @@ func validate_jump_in(card_idx: int) -> bool:
 			deck_manager.discard_pile.append(selected_card)
 			card_discarded.emit(jump_in_player_idx, selected_card)
 			jump_in_player_idx = -1
-			# Bug 6 fix: clear own-draw flag BEFORE resolving effects so
-			# _prompt_turn_end() doesn't grant a free draw after an ability.
-			jump_in_was_own_draw_phase = false
+			# Bug 6 fix (refined): only clear the own-draw flag early for Queen/Jack.
+			# Those cards enter an ability state BEFORE _prompt_turn_end() runs, so
+			# the flag must be cleared here to prevent a free draw after the ability.
+			# For all other cards, _prompt_turn_end() reads the flag directly and
+			# correctly routes back to TURN_START_DRAW when the player jumped in at
+			# the start of their own turn.
+			if selected_card.rank == "Queen" or selected_card.rank == "Jack":
+				jump_in_was_own_draw_phase = false
 			_resolve_discard_effects(selected_card)
 			# Emit AFTER _resolve_discard_effects so the message outlasts the
 			# _hide_message() call triggered by the state change above.
