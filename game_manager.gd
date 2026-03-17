@@ -186,7 +186,7 @@ func start_jump_in(player_idx: int = -1) -> void:
 		# Human player: allow jump-in from any state EXCEPT their own active draw/resolve.
 		var blocked_states := [
 			GameState.INITIALIZING, GameState.DEAL_CARDS, GameState.INITIAL_PEEK,
-			GameState.TURN_JUMP_IN_SELECTION, GameState.TURN_CONFIRM_DUTCH, GameState.GAME_OVER
+			GameState.TURN_JUMP_IN_SELECTION, GameState.GAME_OVER
 		]
 		# Block only if currently mid-resolve (pending drawn card in hand).
 		if (current_state in blocked_states) or \

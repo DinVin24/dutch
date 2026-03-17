@@ -819,9 +819,20 @@ func _on_scores_ready(results: Array) -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	overlay.add_child(center)
 
+	# UI Polish: Create a styled panel for the results content
+	var panel := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.2, 0.05, 0.3, 0.9) # deep purple
+	style.set_corner_radius_all(15)
+	style.set_content_margin_all(30)
+	style.shadow_color = Color(0, 0, 0, 0.5)
+	style.shadow_size = 10
+	panel.add_theme_stylebox_override("panel", style)
+	center.add_child(panel)
+
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 16)
-	center.add_child(vbox)
+	panel.add_child(vbox)
 
 	var title := Label.new()
 	title.text = "Game Over!"
