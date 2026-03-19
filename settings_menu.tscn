@@ -90,6 +90,14 @@ max_value = 1.0
 step = 0.05
 value = 1.0
 
+[node name="DevConsoleLabel" type="Label" parent="BackgroundTint/VBoxContainer/GridContainer"]
+layout_mode = 2
+text = "Enable Developer Console"
+
+[node name="DevConsoleCheck" type="CheckBox" parent="BackgroundTint/VBoxContainer/GridContainer"]
+layout_mode = 2
+button_pressed = true
+
 [node name="HSeparator2" type="HSeparator" parent="BackgroundTint/VBoxContainer"]
 layout_mode = 2
 
@@ -102,4 +110,5 @@ text = "Back"
 [connection signal="item_selected" from="BackgroundTint/VBoxContainer/GridContainer/WindowModeOption" to="." method="_on_window_mode_selected"]
 [connection signal="value_changed" from="BackgroundTint/VBoxContainer/GridContainer/MusicSlider" to="." method="_on_music_value_changed"]
 [connection signal="value_changed" from="BackgroundTint/VBoxContainer/GridContainer/SFXSlider" to="." method="_on_sfx_value_changed"]
+[connection signal="toggled" from="BackgroundTint/VBoxContainer/GridContainer/DevConsoleCheck" to="." method="_on_dev_console_toggled"]
 [connection signal="pressed" from="BackgroundTint/VBoxContainer/BackButton" to="." method="_on_back_button_pressed"]

@@ -3,6 +3,7 @@ class_name DeckManager
 
 # Signal for when the deck is reshuffled from discard
 signal deck_reshuffled
+signal discard_pile_updated
 
 var deck: Array = []
 var discard_pile: Array = []
@@ -62,6 +63,7 @@ func draw_card() -> Dictionary:
 
 func discard_card(card: Dictionary):
 	discard_pile.append(card)
+	discard_pile_updated.emit()
 
 func get_top_discard() -> Dictionary:
 	if discard_pile.is_empty():

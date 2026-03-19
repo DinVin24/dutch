@@ -111,7 +111,7 @@ func _on_card_discarded(_discarder_idx: int, card_data: CardData) -> void:
 func _on_memory_shift_required(target_player_idx: int, removed_card_idx: int) -> void:
 	for bot_idx in range(1, gm.num_players):
 		var mem: Dictionary = gm.players_info[bot_idx].bot_memory
-		if not mem.has(target_player_idx): continue
+		if not mem.has(target_player_idx) or target_player_idx == -1: continue
 		var p_mem: Dictionary = mem[target_player_idx]
 		var new_mem := {}
 		for c_idx in p_mem:
@@ -229,6 +229,8 @@ func _execute_queen_peek(bot_idx: int) -> void:
 	if own_unknowns.size() > 0:
 		var peek_idx: int = own_unknowns[rng.randi_range(0, own_unknowns.size() - 1)]
 		var card: CardData = gm.players_info[bot_idx].hand[peek_idx]
+		if not gm.players_info[bot_idx].bot_memory.has(bot_idx):
+			gm.players_info[bot_idx].bot_memory[bot_idx] = {}
 		gm.players_info[bot_idx].bot_memory[bot_idx][peek_idx] = card
 		print("%s\nLearned *%s (Queen ability)" % [_hand_summary(bot_idx), card.display_name()])
 		gm.bot_action.emit("Player %d used a Queen to reveal %s." % [bot_idx, card.display_name()])

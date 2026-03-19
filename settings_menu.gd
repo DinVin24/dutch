@@ -6,6 +6,7 @@ signal back_pressed
 @onready var window_mode_option: OptionButton = $BackgroundTint/VBoxContainer/GridContainer/WindowModeOption
 @onready var music_slider: HSlider = $BackgroundTint/VBoxContainer/GridContainer/MusicSlider
 @onready var sfx_slider: HSlider = $BackgroundTint/VBoxContainer/GridContainer/SFXSlider
+@onready var dev_console_check: CheckBox = $BackgroundTint/VBoxContainer/GridContainer/DevConsoleCheck
 	
 var resolutions = [
 	Vector2i(1152, 648),
@@ -45,6 +46,8 @@ func _ready() -> void:
 		music_slider.value = db_to_linear(AudioServer.get_bus_volume_db(music_bus))
 	if sfx_bus >= 0:
 		sfx_slider.value = db_to_linear(AudioServer.get_bus_volume_db(sfx_bus))
+	
+	dev_console_check.button_pressed = GameManager.dev_console_enabled
 
 func _on_resolution_selected(index: int) -> void:
 	DisplayServer.window_set_size(resolutions[index])
@@ -71,3 +74,6 @@ func _on_sfx_value_changed(value: float) -> void:
 func _on_back_button_pressed() -> void:
 	back_pressed.emit()
 	queue_free()
+
+func _on_dev_console_toggled(toggled_on: bool) -> void:
+	GameManager.dev_console_enabled = toggled_on

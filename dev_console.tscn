@@ -1,0 +1,106 @@
+[gd_scene format=3 uid="uid://c5vxjw5x7u8n6"]
+
+[ext_resource type="Script" path="res://dev_console.gd" id="1_script"]
+
+[node name="DevConsole" type="CanvasLayer"]
+process_mode = 3
+layer = 128
+script = ExtResource("1_script")
+
+[node name="ConsoleWindow" type="Control" parent="."]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="Panel" parent="ConsoleWindow"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+offset_top = 50.0
+offset_right = 300.0
+offset_bottom = 450.0
+grow_horizontal = 2
+
+[node name="TitleBar" type="ColorRect" parent="ConsoleWindow/Panel"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 30.0
+grow_horizontal = 2
+color = Color(0.2, 0.2, 0.2, 1)
+
+[node name="Title" type="Label" parent="ConsoleWindow/Panel/TitleBar"]
+layout_mode = 1
+anchors_preset = 4
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_left = 10.0
+offset_top = -11.5
+offset_right = 150.0
+offset_bottom = 11.5
+grow_vertical = 2
+text = "Developer Console"
+
+[node name="CloseButton" type="Button" parent="ConsoleWindow/Panel/TitleBar"]
+layout_mode = 1
+anchors_preset = 6
+anchor_left = 1.0
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_left = -30.0
+offset_top = -15.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "X"
+
+[node name="Output" type="RichTextLabel" parent="ConsoleWindow/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 30.0
+offset_bottom = -40.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/default_color = Color(0.8, 0.8, 0.8, 1)
+theme_override_font_sizes/normal_font_size = 14
+bbcode_enabled = true
+scroll_following = true
+
+[node name="Input" type="LineEdit" parent="ConsoleWindow/Panel"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -35.0
+grow_horizontal = 2
+grow_vertical = 0
+placeholder_text = "Enter command..."
+context_menu_enabled = false
+caret_blink = true
+
+[node name="ResizeHandle" type="ColorRect" parent="ConsoleWindow/Panel"]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -15.0
+offset_top = -15.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_default_cursor_shape = 12
+color = Color(0.4, 0.4, 0.4, 1)
+
+[connection signal="gui_input" from="ConsoleWindow/Panel/TitleBar" to="." method="_on_title_bar_gui_input"]
+[connection signal="pressed" from="ConsoleWindow/Panel/TitleBar/CloseButton" to="." method="_on_close_button_pressed"]
+[connection signal="text_submitted" from="ConsoleWindow/Panel/Input" to="." method="_on_input_text_submitted"]
+[connection signal="gui_input" from="ConsoleWindow/Panel/ResizeHandle" to="." method="_on_resize_handle_gui_input"]
