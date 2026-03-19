@@ -31,6 +31,7 @@ signal bot_action(message: String)
 signal memory_shift_required(player_idx, removed_card_idx)
 signal jack_swap_resolved(p1: int, c1: int, p2: int, c2: int)
 signal hand_updated(player_idx: int)
+signal dutch_called(player_idx: int)
 
 var current_state: GameState = GameState.INITIALIZING
 var deck_manager: DeckManager
@@ -156,6 +157,7 @@ func call_dutch(player_id: int):
 	if dutch_caller_index == -1 and players_info[player_id].can_call_dutch:
 		dutch_caller_index = player_id
 		print("Player ", player_id, " called DUTCH!")
+		dutch_called.emit(player_id)
 		# Game continues until it returns to this player
 		next_turn()
 
@@ -191,9 +193,8 @@ func start_jump_in(player_idx: int = -1) -> void:
 			GameState.TURN_JUMP_IN_SELECTION, GameState.GAME_OVER,
 			GameState.TURN_PEEK_ABILITY, GameState.TURN_SWAP_ABILITY
 		]
-		# Block only if currently mid-resolve (pending drawn card in hand).
-		if (current_state in blocked_states) or \
-		   (current_player_index == 0 and current_state in [GameState.TURN_RESOLVE_DRAWN]):
+		# Block if currently in a forbidden state.
+		if (current_state in blocked_states):
 			return
 		# Require a non-empty discard pile to jump into.
 		if deck_manager.discard_pile.is_empty():
@@ -222,63 +223,45 @@ func validate_jump_in(card_idx: int) -> bool:
 		return false
 
 	var h: Array = players_info[jump_in_player_idx].hand
-	if card_idx < 0 or card_idx >= h.size():
-		return false
-
-	var selected_card: CardData = h[card_idx]
+	var selected_card: CardData = null
+	
+	if card_idx == -2:
+		selected_card = drawn_card_data
+	elif card_idx >= 0 and card_idx < h.size():
+		selected_card = h[card_idx]
+		
 	if selected_card == null:
 		return false
 
 	if deck_manager.discard_pile.size() > 0:
 		var top_discard: CardData = deck_manager.discard_pile[-1]
-		print("[JUMP-IN CHECK] Player %d selected '%s of %s' (rank:'%s') vs top discard '%s of %s' (rank:'%s')" % [
-			jump_in_player_idx,
-			selected_card.rank, selected_card.suit, selected_card.rank,
-			top_discard.rank, top_discard.suit, top_discard.rank])
-		if selected_card.rank == top_discard.rank:
-			# Build the message before clearing jump_in_player_idx.
-			var msg := "Player %d: %s of %s matches the %s of %s — JUMP IN!" % [
-				jump_in_player_idx,
-				selected_card.rank, selected_card.suit,
-				top_discard.rank, top_discard.suit
+		# CASE-INSENSITIVE RANK MATCH
+		if selected_card.rank.to_lower() == top_discard.rank.to_lower():
+			var msg := "Player %d: %s of %s matches! JUMP IN!" % [
+				jump_in_player_idx, selected_card.rank, selected_card.suit
 			]
-			print("[JUMP-IN] Player %d jumped in with %s of %s over a %s of %s" % [
-				jump_in_player_idx,
-				selected_card.rank, selected_card.suit,
-				top_discard.rank, top_discard.suit
-			])
-			h.remove_at(card_idx)
-			hand_updated.emit(jump_in_player_idx)
-			memory_shift_required.emit(jump_in_player_idx, card_idx)
+			if card_idx == -2:
+				drawn_card_data = null
+				change_state(GameState.TURN_END_CHOICE)
+			else:
+				h.remove_at(card_idx)
+				hand_updated.emit(jump_in_player_idx)
+				memory_shift_required.emit(jump_in_player_idx, card_idx)
 			
 			if h.size() == 0:
-				print("Player ", jump_in_player_idx, " has 0 cards! GAME OVER.")
 				change_state(GameState.GAME_OVER)
 				return true
 				
 			deck_manager.discard_pile.append(selected_card)
 			card_discarded.emit(jump_in_player_idx, selected_card)
 			jump_in_player_idx = -1
-			# Bug 6 fix (refined): only clear the own-draw flag early for Queen/Jack.
-			# Those cards enter an ability state BEFORE _prompt_turn_end() runs, so
-			# the flag must be cleared here to prevent a free draw after the ability.
-			# For all other cards, _prompt_turn_end() reads the flag directly and
-			# correctly routes back to TURN_START_DRAW when the player jumped in at
-			# the start of their own turn.
-			if selected_card.rank == "Queen" or selected_card.rank == "Jack":
-				jump_in_was_own_draw_phase = false
 			_resolve_discard_effects(selected_card)
-			# Emit AFTER _resolve_discard_effects so the message outlasts the
-			# _hide_message() call triggered by the state change above.
 			bot_action.emit(msg)
 			return true
 
-	print("No match. Jump In invalid. Assigning penalty card to player ", jump_in_player_idx)
-	# Bug 2 fix: emit failed signal BEFORE the penalty so the board can briefly
-	# reveal the attempted card to the player.
+	print("No match. Jump In invalid.")
 	jump_in_failed.emit(jump_in_player_idx, card_idx, selected_card)
-	# Small delay so the board has time to show the reveal animation.
-	await get_tree().create_timer(1.2).timeout
+	await get_tree().create_timer(1.2, false).timeout
 
 	var penalty_card_dict: Dictionary = deck_manager.draw_card()
 	if not penalty_card_dict.is_empty():
@@ -377,7 +360,7 @@ func player_swap_drawn_card(card_idx: int):
 
 func _resolve_discard_effects(card: CardData):
 	# Wait for the card discard visual tween to complete before changing state
-	await get_tree().create_timer(0.4).timeout
+	await get_tree().create_timer(0.4, false).timeout
 	if card.rank == "Queen":
 		print("Queen discarded! FSM -> TURN_PEEK_ABILITY")
 		change_state(GameState.TURN_PEEK_ABILITY)

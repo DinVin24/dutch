@@ -1,34 +1,22 @@
 [gd_scene format=3 uid="uid://b1hw72oap8kmj"]
 
 [ext_resource type="Script" uid="uid://bdxak4r8w6swu" path="res://game_board_3d.gd" id="1_script"]
-[ext_resource type="Shader" path="res://shaders/crt_glitch.gdshader" id="2_shader"]
-
-[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
-sky_top_color = Color(0.3, 0.5, 1, 1)
-sky_horizon_color = Color(0.7, 0.8, 1, 1)
-ground_bottom_color = Color(0.1, 0.4, 0.1, 1)
-ground_horizon_color = Color(0.7, 0.8, 1, 1)
-
-[sub_resource type="Sky" id="Sky_1"]
-sky_material = SubResource("ProceduralSkyMaterial_1")
+[ext_resource type="Shader" uid="uid://chcpger88sefc" path="res://shaders/crt_glitch.gdshader" id="2_shader"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
-background_color = Color(0, 0, 0, 1)
 ambient_light_source = 1
-ambient_light_color = Color(0.05, 0.05, 0.08, 1)
-ambient_light_energy = 1.0
+ambient_light_color = Color(0.1, 0.1, 0.1, 1)
 tonemap_mode = 3
 glow_enabled = true
-glow_intensity = 1.5
-glow_strength = 1.2
-glow_bloom = 0.2
+glow_intensity = 1.0
+glow_strength = 1.0
+glow_bloom = 0.1
 glow_blend_mode = 0
 glow_hdr_threshold = 0.5
 fog_enabled = true
 fog_light_color = Color(0.1, 0.1, 0.1, 1)
 fog_density = 0.05
-volumetric_fog_enabled = false
 volumetric_fog_density = 0.02
 volumetric_fog_albedo = Color(0.2, 0.2, 0.2, 1)
 
@@ -36,12 +24,12 @@ volumetric_fog_albedo = Color(0.2, 0.2, 0.2, 1)
 size = Vector3(15, 0.2, 10)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_Table"]
-albedo_color = Color(0.04, 0.035, 0.03, 1)
-roughness = 0.85
-metallic = 0.1
+albedo_color = Color(0.1, 0.09, 0.08, 1)
+metallic = 0.05
+roughness = 0.9
 emission_enabled = true
-emission = Color(0.1, 0.15, 0.2, 1)
-emission_energy_multiplier = 0.05
+emission = Color(0.1, 0.08, 0.05, 1)
+emission_energy_multiplier = 0.02
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_Grass"]
 size = Vector2(100, 100)
@@ -60,6 +48,7 @@ shader_parameter/aberration_amount = 1.4
 shader_parameter/vignette_intensity = 0.6
 shader_parameter/curvature = 1.8
 shader_parameter/glitch_intensity = 0.0
+shader_parameter/time = 0.0
 
 [node name="GameBoard3D" type="Node3D" unique_id=1162522278]
 script = ExtResource("1_script")
@@ -69,14 +58,14 @@ environment = SubResource("Environment_1")
 
 [node name="SpotLight_Deck" type="SpotLight3D" parent="." unique_id=45875596]
 transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, -1.5, 3.5, 0)
-light_color = Color(0.8, 0.9, 1, 1)
+light_color = Color(1, 0.95, 0.9, 1)
 light_energy = 4.0
 light_volumetric_fog_energy = 1.5
 shadow_enabled = true
 spot_range = 8.0
 spot_angle = 25.0
 
-[node name="SpotLight_Discard" type="SpotLight3D" parent="."]
+[node name="SpotLight_Discard" type="SpotLight3D" parent="." unique_id=158839449]
 transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 1.5, 3.5, 0)
 light_color = Color(1, 0.8, 0.8, 1)
 light_energy = 4.0
@@ -85,14 +74,13 @@ shadow_enabled = true
 spot_range = 8.0
 spot_angle = 25.0
 
-[node name="SpotLight_Table" type="SpotLight3D" parent="."]
+[node name="SpotLight_Table" type="SpotLight3D" parent="." unique_id=1825334186]
 transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 5, 0)
 light_color = Color(1, 1, 0.9, 1)
 light_energy = 2.0
 light_volumetric_fog_energy = 2.0
 shadow_enabled = true
 spot_range = 10.0
-spot_angle = 45.0
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=701076918]
 transform = Transform3D(1, 4.2146862e-08, -4.214684e-08, 1.151398e-08, 0.55719453, 0.83038205, 5.848198e-08, -0.83038205, 0.55719453, 0, 6.8125296, 5.238456)
@@ -131,56 +119,51 @@ shape = SubResource("BoxShape3D_Deck")
 [node name="Bottom" type="Node3D" parent="PlayerPositions" unique_id=1640482197]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 4)
 
+[node name="Spotlight_P0" type="SpotLight3D" parent="PlayerPositions/Bottom" unique_id=495142937]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 3.4, 0.6592293)
+light_color = Color(0.2, 0.8, 1, 1)
+light_energy = 0.0
+shadow_enabled = true
+spot_range = 6.0
+spot_angle = 35.0
+
 [node name="Top" type="Node3D" parent="PlayerPositions" unique_id=1531237525]
 transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 0, 0.1, -4)
+
+[node name="Spotlight_P2" type="SpotLight3D" parent="PlayerPositions/Top" unique_id=1783742724]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 3.4, 0)
+light_color = Color(1, 1, 0.8, 1)
+light_energy = 0.0
+shadow_enabled = true
+spot_range = 6.0
+spot_angle = 35.0
 
 [node name="Left" type="Node3D" parent="PlayerPositions" unique_id=346409451]
 transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -5.5, 0.1, 0)
 
+[node name="Spotlight_P1" type="SpotLight3D" parent="PlayerPositions/Left" unique_id=672307767]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 3.4, 0)
+light_color = Color(1, 1, 0.8, 1)
+light_energy = 0.0
+shadow_enabled = true
+spot_range = 6.0
+spot_angle = 35.0
+
 [node name="Right" type="Node3D" parent="PlayerPositions" unique_id=1342769357]
 transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 5.5, 0.1, 0)
 
-[node name="Spotlight_P0" type="SpotLight3D" parent="PlayerPositions/Bottom"]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 3.4, 0)
-light_color = Color(0.2, 0.8, 1, 1)
-light_energy = 0.0
-light_volumetric_fog_energy = 1.0
-shadow_enabled = true
-spot_range = 6.0
-spot_angle = 35.0
-
-[node name="Spotlight_P1" type="SpotLight3D" parent="PlayerPositions/Left"]
+[node name="Spotlight_P3" type="SpotLight3D" parent="PlayerPositions/Right" unique_id=1947534400]
 transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 3.4, 0)
 light_color = Color(1, 1, 0.8, 1)
 light_energy = 0.0
-light_volumetric_fog_energy = 1.0
 shadow_enabled = true
 spot_range = 6.0
 spot_angle = 35.0
 
-[node name="Spotlight_P2" type="SpotLight3D" parent="PlayerPositions/Top"]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 3.4, 0)
-light_color = Color(1, 1, 0.8, 1)
-light_energy = 0.0
-light_volumetric_fog_energy = 1.0
-shadow_enabled = true
-spot_range = 6.0
-spot_angle = 35.0
-
-[node name="Spotlight_P3" type="SpotLight3D" parent="PlayerPositions/Right"]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 3.4, 0)
-light_color = Color(1, 1, 0.8, 1)
-light_energy = 0.0
-light_volumetric_fog_energy = 1.0
-shadow_enabled = true
-spot_range = 6.0
-spot_angle = 35.0
-
-[node name="AmbientFill" type="DirectionalLight3D" parent="."]
+[node name="AmbientFill" type="DirectionalLight3D" parent="." unique_id=1546069566]
 transform = Transform3D(0.707107, -0.353553, 0.612372, 0, 0.866025, 0.5, -0.707107, -0.353553, 0.612372, 0, 10, 0)
-light_color = Color(0.2, 0.25, 0.35, 1)
-light_energy = 0.8
-shadow_enabled = false
+light_color = Color(0.25, 0.25, 0.25, 1)
+light_energy = 0.6
 
 [node name="GameUI" type="CanvasLayer" parent="." unique_id=322047825]
 
@@ -197,9 +180,9 @@ mouse_filter = 2
 layout_mode = 0
 offset_right = 40.0
 offset_bottom = 40.0
+mouse_filter = 2
 theme_override_constants/margin_left = 20
 theme_override_constants/margin_top = 20
-mouse_filter = 2
 
 [node name="TurnLabel" type="Label" parent="GameUI/MainHUD/TopLeft" unique_id=1788336695]
 layout_mode = 2
@@ -212,13 +195,14 @@ anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
 grow_horizontal = 2
-[node name="PostProcessing" type="CanvasLayer" parent="."]
+
+[node name="PostProcessing" type="CanvasLayer" parent="." unique_id=765453877]
 layer = 10
 
-[node name="BackBufferCopy" type="BackBufferCopy" parent="PostProcessing"]
+[node name="BackBufferCopy" type="BackBufferCopy" parent="PostProcessing" unique_id=1767890878]
 copy_mode = 2
 
-[node name="CRT_Overlay" type="ColorRect" parent="PostProcessing"]
+[node name="CRT_Overlay" type="ColorRect" parent="PostProcessing" unique_id=1112601211]
 material = SubResource("ShaderMaterial_CRT")
 anchors_preset = 15
 anchor_right = 1.0

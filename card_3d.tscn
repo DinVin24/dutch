@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://card_3d.gd" id="1_script"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
-size = Vector3(1, 1.4, 0.05)
+size = Vector3(1, 1.4, 0.2)
 
 [sub_resource type="QuadMesh" id="QuadMesh_1"]
 size = Vector2(1, 1.4)

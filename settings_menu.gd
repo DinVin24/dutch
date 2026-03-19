@@ -17,6 +17,7 @@ var resolutions = [
 
 func _ready() -> void:
 	# Resolution Setup
+	resolution_option.clear()
 	for res in resolutions:
 		resolution_option.add_item(str(res.x) + "x" + str(res.y))
 	
@@ -28,6 +29,7 @@ func _ready() -> void:
 	resolution_option.select(res_index)
 	
 	# Window Mode Setup
+	window_mode_option.clear()
 	window_mode_option.add_item("Windowed", DisplayServer.WINDOW_MODE_WINDOWED)
 	window_mode_option.add_item("Fullscreen", DisplayServer.WINDOW_MODE_FULLSCREEN)
 	
@@ -49,13 +51,20 @@ func _ready() -> void:
 	
 	dev_console_check.button_pressed = GameManager.dev_console_enabled
 
+func _input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		if DevConsole and DevConsole.window.is_visible():
+			return
+		_on_back_button_pressed()
+		get_viewport().set_input_as_handled()
+
 func _on_resolution_selected(index: int) -> void:
 	DisplayServer.window_set_size(resolutions[index])
 	# Center window if windowed
 	if DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_WINDOWED:
 		var screen_size = DisplayServer.screen_get_size()
 		var window_size = DisplayServer.window_get_size()
-		DisplayServer.window_set_position((screen_size - window_size) / 2)
+		DisplayServer.window_set_position((screen_size - window_size) / 2.0)
 
 func _on_window_mode_selected(index: int) -> void:
 	var mode = window_mode_option.get_item_id(index)

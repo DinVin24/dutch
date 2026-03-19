@@ -31,7 +31,7 @@ func _is_headless() -> bool:
 
 func _wait(seconds: float) -> void:
 	if _is_headless(): return
-	await gm.get_tree().create_timer(seconds).timeout
+	await gm.get_tree().create_timer(seconds, false).timeout
 
 # ─── Memory helpers ──────────────────────────────────────────
 

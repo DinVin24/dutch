@@ -90,8 +90,8 @@ func _apply_atlas_textures():
 	front_mat.roughness = 0.2
 	if is_highlighted:
 		front_mat.emission_enabled = true
-		front_mat.emission = Color(0, 1, 1) # Cyan glow
-		front_mat.emission_energy_multiplier = 0.5
+		front_mat.emission = Color(1, 1, 1) # White glow
+		front_mat.emission_energy_multiplier = 0.2
 	
 	front_face.set_surface_override_material(0, front_mat)
 
@@ -106,7 +106,7 @@ func _apply_atlas_textures():
 	back_mat.roughness = 0.1
 	if is_highlighted:
 		back_mat.emission_enabled = true
-		back_mat.emission = Color(1, 0, 1) # Magenta glow
+		back_mat.emission = Color(0, 1, 1) # Cyan glow (matching theme)
 		back_mat.emission_energy_multiplier = 0.5
 		
 	back_face.set_surface_override_material(0, back_mat)
@@ -125,6 +125,10 @@ func flip() -> void:
 func animate_flip(is_face_up: bool, target_y: float = -1.0):
 	if is_flipping: return
 	is_flipping = true
+	
+	if highlight_tween:
+		highlight_tween.kill()
+		highlight_tween = null
 	
 	# To flip a flat card (X=90) to its other side (X=-90 or 270)
 	var target_rot_x = 90.0 if not is_face_up else 270.0

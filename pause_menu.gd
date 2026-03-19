@@ -11,6 +11,18 @@ var settings_instance: Node = null
 func _ready() -> void:
 	pass
 
+func _input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		# Let the developer console handle Esc if it's visible
+		if DevConsole.window.is_visible():
+			return
+			
+		if settings_instance != null:
+			_on_settings_back()
+		else:
+			resumed.emit()
+		get_viewport().set_input_as_handled()
+
 func _on_resume_button_pressed() -> void:
 	resumed.emit()
 
