@@ -2,6 +2,7 @@ extends Node3D
 class_name Card3D
 
 signal card_clicked(card_node, card_data)
+signal card_flipped(card_node, card_data)
 
 @onready var front_face: MeshInstance3D = $Visuals/FrontFace
 @onready var back_face: MeshInstance3D = $Visuals/BackFace
@@ -21,6 +22,9 @@ const RANK_ORDER = ["Ace", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Jack",
 
 static var _master_texture: Texture2D = null
 
+var _current_suit: String = ""
+var _current_rank: String = ""
+
 func setup(p_data: CardData) -> void:
 	data = p_data
 	if is_node_ready():
@@ -28,24 +32,27 @@ func setup(p_data: CardData) -> void:
 
 func _ready():
 	_update_visuals()
-	area.input_event.connect(_on_input_event)
+	if area:
+		area.input_event.connect(_on_input_event)
+		area.input_ray_pickable = true
+	else:
+		print("Card3D Error: Area3D not found!")
 
 func _update_visuals() -> void:
 	if not data: return
 	_apply_atlas_textures()
 	
-	if data.is_face_up:
-		front_face.show()
-		back_face.hide()
-	else:
-		front_face.hide()
-		back_face.show()
+	# In 3D, both faces are always physically there, just on opposite sides.
+	# We rely on rotation to show the correct side.
+	front_face.show()
+	back_face.show()
 	
+	# Selection visuals
 	if is_selected:
-		# Simple 3D highlight: slightly raise the card or change emission
-		position.y = 0.1
+		# Premium glow / lift for selection
+		scale = Vector3(1.1, 1.1, 1.1)
 	else:
-		position.y = 0.0
+		scale = Vector3(1.0, 1.0, 1.0)
 
 func _apply_atlas_textures():
 	if _master_texture == null:
@@ -56,9 +63,18 @@ func _apply_atlas_textures():
 	if not _master_texture: return
 
 	# Front Face
+	# Optimization: only rebuild material if data changed
+	if _current_suit == data.suit and _current_rank == data.rank:
+		return
+		
+	_current_suit = data.suit
+	_current_rank = data.rank
+
 	var row = SUIT_ORDER.find(data.suit.capitalize())
 	var col = RANK_ORDER.find(data.rank.capitalize())
-	if row == -1 or col == -1: return
+	if row == -1 or col == -1: 
+		print("Card3D Error: Rank/Suit not found: ", data.rank, "/", data.suit)
+		return
 
 	var front_mat = StandardMaterial3D.new()
 	front_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -79,33 +95,51 @@ func _on_input_event(_camera, event, _position, _normal, _shape_idx):
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		card_clicked.emit(self, data)
 
-func animate_flip(is_face_up: bool):
+func set_selected(p_selected: bool):
+	is_selected = p_selected
+	_update_visuals()
+
+func flip() -> void:
+	animate_flip(!data.is_face_up)
+
+func animate_flip(is_face_up: bool, target_y: float = -1.0):
 	if is_flipping: return
 	is_flipping = true
-	var target_y = 0.0 if is_face_up else PI
-	var target_rotation = Vector3(rotation.x, target_y, rotation.z)
+	
+	# To flip a flat card (X=90) to its other side (X=-90 or 270)
+	var target_rot_x = 90.0 if not is_face_up else 270.0
 	
 	var tween = create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(self, "rotation", target_rotation, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	# Use current Y as baseline if target_y not specified
+	var base_y = target_y if target_y >= 0 else position.y
 	
-	# Lift it slightly while flipping
-	var base_y = position.y
-	tween.tween_property(self, "position:y", base_y + 0.3, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tween.chain().tween_property(self, "position:y", base_y, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.set_parallel(true)
+	tween.tween_property(self, "rotation_degrees:x", target_rot_x, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(self, "position:y", base_y + 0.4, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	
+	tween.chain().tween_property(self, "position:y", base_y, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	
 	tween.finished.connect(func():
 		is_flipping = false
 		data.is_face_up = is_face_up
 		_update_visuals()
+		card_flipped.emit(self, data)
 	)
 
 func set_highlight(enabled: bool):
 	is_highlighted = enabled
 	if highlight_tween: highlight_tween.kill()
-	highlight_tween = create_tween()
-	var target_y = 0.5 if enabled else 0.0
-	highlight_tween.tween_property(self, "position:y", target_y, 0.2).set_trans(Tween.TRANS_QUAD)
+	
+	if enabled:
+		highlight_tween = create_tween().set_loops()
+		# Pulse lift
+		highlight_tween.tween_property(self, "position:y", 0.3, 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		highlight_tween.tween_property(self, "position:y", 0.05, 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	else:
+		highlight_tween = create_tween()
+		# Return to standard table/hand height
+		highlight_tween.tween_property(self, "position:y", 0.05, 0.2).set_trans(Tween.TRANS_QUAD)
+		highlight_tween.finished.connect(func(): highlight_tween = null)
 
 func set_interactive(enabled: bool):
 	$Area3D/CollisionShape3D.disabled = !enabled

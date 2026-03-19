@@ -44,6 +44,8 @@ var dutch_caller_index: int = -1 # -1 means no one has called Dutch yet
 var jump_in_player_idx: int = -1 # who is currently attempting the jump-in
 var drawn_card_data: CardData = null
 var jump_in_was_own_draw_phase: bool = false # true when player 0 jumps in at the start of their own turn
+var pre_jump_in_state: GameState = GameState.INITIALIZING
+var dev_console_enabled: bool = true
 
 func _ready():
 	deck_manager = DeckManager.new()
@@ -76,7 +78,7 @@ func initialize_game(p_count: int = 4):
 	for i in range(num_players):
 		players_info.append({
 			"id": i,
-			"name": "Player " + str(i + 1),
+			"name": "Player_" + str(i + 1),
 			"score": 0,
 			"hand": [], # CardData objects
 			"can_call_dutch": true,
@@ -186,7 +188,8 @@ func start_jump_in(player_idx: int = -1) -> void:
 		# Human player: allow jump-in from any state EXCEPT their own active draw/resolve.
 		var blocked_states := [
 			GameState.INITIALIZING, GameState.DEAL_CARDS, GameState.INITIAL_PEEK,
-			GameState.TURN_JUMP_IN_SELECTION, GameState.GAME_OVER
+			GameState.TURN_JUMP_IN_SELECTION, GameState.GAME_OVER,
+			GameState.TURN_PEEK_ABILITY, GameState.TURN_SWAP_ABILITY
 		]
 		# Block only if currently mid-resolve (pending drawn card in hand).
 		if (current_state in blocked_states) or \
@@ -206,6 +209,9 @@ func start_jump_in(player_idx: int = -1) -> void:
 	else:
 		jump_in_was_own_draw_phase = false
 
+	if current_state != GameState.TURN_JUMP_IN_SELECTION:
+		pre_jump_in_state = current_state
+	
 	jump_in_player_idx = resolved_idx
 	change_state(GameState.TURN_JUMP_IN_SELECTION)
 
@@ -244,6 +250,12 @@ func validate_jump_in(card_idx: int) -> bool:
 			h.remove_at(card_idx)
 			hand_updated.emit(jump_in_player_idx)
 			memory_shift_required.emit(jump_in_player_idx, card_idx)
+			
+			if h.size() == 0:
+				print("Player ", jump_in_player_idx, " has 0 cards! GAME OVER.")
+				change_state(GameState.GAME_OVER)
+				return true
+				
 			deck_manager.discard_pile.append(selected_card)
 			card_discarded.emit(jump_in_player_idx, selected_card)
 			jump_in_player_idx = -1
@@ -282,7 +294,7 @@ func validate_jump_in(card_idx: int) -> bool:
 	if was_own_draw:
 		change_state(GameState.TURN_START_DRAW)
 	else:
-		change_state(GameState.TURN_END_CHOICE)
+		change_state(pre_jump_in_state if pre_jump_in_state != GameState.TURN_JUMP_IN_SELECTION else GameState.TURN_END_CHOICE)
 	return false
 
 ## Human opted out of a jump-in: return to TURN_END_CHOICE without penalty.
@@ -290,7 +302,7 @@ func cancel_jump_in() -> void:
 	if current_state != GameState.TURN_JUMP_IN_SELECTION:
 		return
 	jump_in_player_idx = -1
-	change_state(GameState.TURN_END_CHOICE)
+	change_state(pre_jump_in_state if pre_jump_in_state != GameState.TURN_JUMP_IN_SELECTION else GameState.TURN_END_CHOICE)
 
 func confirm_dutch():
 	if current_state != GameState.TURN_CONFIRM_DUTCH:
