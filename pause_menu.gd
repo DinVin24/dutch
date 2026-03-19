@@ -3,7 +3,7 @@ extends CanvasLayer
 signal resumed
 signal main_menu_requested
 
-@onready var vbox: VBoxContainer = $CenterContainer/VBoxContainer
+@onready var vbox: VBoxContainer = $CenterContainer/PanelContainer/VBoxContainer
 
 var settings_menu_scene = preload("res://settings_menu.tscn")
 var settings_instance: Node = null
@@ -24,10 +24,10 @@ func _on_settings_button_pressed() -> void:
 	settings_instance = settings_menu_scene.instantiate()
 	add_child(settings_instance)
 	settings_instance.back_pressed.connect(_on_settings_back)
-	vbox.hide()
+	if vbox: vbox.hide()
 
 func _on_settings_back() -> void:
 	if settings_instance:
 		settings_instance.queue_free()
 		settings_instance = null
-	vbox.show()
+	if vbox: vbox.show()

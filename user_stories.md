@@ -29,3 +29,8 @@
 - [x] **Story**: As a system, I want the bot to strategically evaluate the card it draws from the deck and appropriately discard unknown cards for low-value drawn cards, or discard high-value drawn cards, so that it attempts to win.
 - [x] **Story**: As a system, I want the bot to purposefully use its Queen and Jack abilities strategically (peeking at opponents or swapping worst/best cards) when available, rather than playing them randomly, so that it feels like a competitive player.
 - [x] **Story**: As a system, I want the bot to recognize when an opponent discards a matching card, and automatically trigger a "Jump In" if the bot knows it possesses the match, so that it can utilize all valid game mechanics.
+## Epic 7: Visual Overhaul & Juicy Aesthetics (Y2K/Analog Horror)
+- [ ] **Story**: As a player, I want the game environment to feel dark and suspenseful (like Resident Evil 7 / Buckshot Roulette), with focused spotlights on the table and volumetric fog, so that the high-stakes atmosphere is reinforced.
+- [ ] **Story**: As a player, I want to see CRT scanlines, chromatic aberration, and digital glitch effects (Y2K aesthetic), so that the game feels like a piece of retro-tech or a lost digital artifact.
+- [ ] **Story**: As a player, I want the UI to use high-saturation neons and glassmorphism (Balatro style), contrasting with the dark 3D scene, so that interactive elements are striking and clear.
+- [ ] **Story**: As a player, I want every card move, swap, and draw to have "juice" (screen shake, card wobble, subtle particle trails), so that the gameplay feels physically satisfying.

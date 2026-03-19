@@ -316,7 +316,7 @@ func _execute_confirm_dutch(bot_idx: int) -> void:
 # ─── Memory Utility ───────────────────────────────────────────
 
 ## Update all bots' memories when two card slots are swapped (e.g. after Jack).
-func _update_memory_on_swap(acting_bot: int, p1: int, c1: int, p2: int, c2: int) -> void:
+func _update_memory_on_swap(_acting_bot: int, p1: int, c1: int, p2: int, c2: int) -> void:
 	for bot_idx in range(1, gm.num_players):
 		var mem: Dictionary = gm.players_info[bot_idx].bot_memory
 		if not mem.has(p1): mem[p1] = {}

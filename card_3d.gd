@@ -13,6 +13,8 @@ var is_flipping: bool = false
 var is_selected: bool = false
 var is_highlighted: bool = false
 var highlight_tween: Tween = null
+var _wobble_time: float = 0.0
+var _base_visual_pos: Vector3
 
 const SPRITE_SHEET_PATH = "res://assets/images/cards/playing_cards.png"
 const CARD_WIDTH = 100
@@ -31,6 +33,7 @@ func setup(p_data: CardData) -> void:
 		_update_visuals()
 
 func _ready():
+	_base_visual_pos = $Visuals.position
 	_update_visuals()
 	if area:
 		area.input_event.connect(_on_input_event)
@@ -81,6 +84,15 @@ func _apply_atlas_textures():
 	front_mat.albedo_texture = _master_texture
 	front_mat.uv1_scale = Vector3(1.0/13.0, 1.0/5.0, 1.0)
 	front_mat.uv1_offset = Vector3(float(col)/13.0, float(row)/5.0, 0.0)
+	
+	# Y2K Polish: subtle metallic sheen and emission
+	front_mat.metallic = 0.3
+	front_mat.roughness = 0.2
+	if is_highlighted:
+		front_mat.emission_enabled = true
+		front_mat.emission = Color(0, 1, 1) # Cyan glow
+		front_mat.emission_energy_multiplier = 0.5
+	
 	front_face.set_surface_override_material(0, front_mat)
 
 	# Back Face (Row 4, Col 0)
@@ -89,6 +101,14 @@ func _apply_atlas_textures():
 	back_mat.albedo_texture = _master_texture
 	back_mat.uv1_scale = Vector3(1.0/13.0, 1.0/5.0, 1.0)
 	back_mat.uv1_offset = Vector3(0.0, 4.0/5.0, 0.0)
+	
+	back_mat.metallic = 0.5
+	back_mat.roughness = 0.1
+	if is_highlighted:
+		back_mat.emission_enabled = true
+		back_mat.emission = Color(1, 0, 1) # Magenta glow
+		back_mat.emission_energy_multiplier = 0.5
+		
 	back_face.set_surface_override_material(0, back_mat)
 
 func _on_input_event(_camera, event, _position, _normal, _shape_idx):
@@ -143,3 +163,28 @@ func set_highlight(enabled: bool):
 
 func set_interactive(enabled: bool):
 	$Area3D/CollisionShape3D.disabled = !enabled
+
+func _process(delta: float):
+	if is_highlighted or is_selected:
+		_wobble_time += delta * 5.0
+		var wobble_offset = Vector3(0, sin(_wobble_time) * 0.02, 0)
+		var wobble_rot = Vector3(
+			sin(_wobble_time * 0.8) * 2.0,
+			cos(_wobble_time * 1.2) * 2.0,
+			sin(_wobble_time * 0.5) * 2.0
+		)
+		# Move the whole Visuals group so the Area3D DOES NOT follow? 
+		# NO! We want the Area3D to follow the visuals so clicks are accurate.
+		# Reparenting Area3D to Visuals in the scene would be best, 
+		# but for now we'll sync it or move the root rotation.
+		$Visuals.position = _base_visual_pos + wobble_offset
+		$Visuals.rotation_degrees = wobble_rot
+		
+		# Sync Area3D transform to match Visuals
+		$Area3D.position = $Visuals.position
+		$Area3D.rotation = $Visuals.rotation
+	else:
+		$Visuals.position = _base_visual_pos
+		$Visuals.rotation_degrees = Vector3.ZERO
+		$Area3D.position = _base_visual_pos
+		$Area3D.rotation = Vector3.ZERO

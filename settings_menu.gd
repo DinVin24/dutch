@@ -55,7 +55,7 @@ func _on_resolution_selected(index: int) -> void:
 	if DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_WINDOWED:
 		var screen_size = DisplayServer.screen_get_size()
 		var window_size = DisplayServer.window_get_size()
-		DisplayServer.window_set_position(screen_size / 2 - window_size / 2)
+		DisplayServer.window_set_position((screen_size - window_size) / 2)
 
 func _on_window_mode_selected(index: int) -> void:
 	var mode = window_mode_option.get_item_id(index)

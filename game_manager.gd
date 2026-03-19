@@ -345,10 +345,10 @@ func player_discard_drawn_card():
 	deck_manager.discard_pile.append(drawn_card_data)
 	card_discarded.emit(current_player_index, drawn_card_data)
 	
-	var discarded_card = drawn_card_data
+	var discarded_handled = drawn_card_data
 	drawn_card_data = null
 	
-	_resolve_discard_effects(discarded_card)
+	_resolve_discard_effects(discarded_handled)
 
 func player_swap_drawn_card(card_idx: int):
 	if current_state != GameState.TURN_RESOLVE_DRAWN:
@@ -362,12 +362,14 @@ func player_swap_drawn_card(card_idx: int):
 	# Swap cards
 	var old_card = player_h[card_idx]
 	print("GameManager: Swapping drawn card with hand card at idx ", card_idx)
-	player_h[card_idx] = drawn_card_data
-	hand_updated.emit(current_player_index)
 	
-	# Old card goes to discard
+	# Old card goes to discard first so board finds the node in the current hand
 	deck_manager.discard_pile.append(old_card)
 	card_discarded.emit(current_player_index, old_card)
+	
+	drawn_card_data.is_face_up = false # Must be face-down in hand
+	player_h[card_idx] = drawn_card_data
+	hand_updated.emit(current_player_index)
 	
 	drawn_card_data = null
 	
