@@ -121,8 +121,8 @@ func _create_hud_ui():
 	# Action Buttons Container
 	var action_container = HBoxContainer.new()
 	action_container.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	action_container.offset_top = -100
-	action_container.offset_bottom = -50
+	action_container.offset_top = -220
+	action_container.offset_bottom = -170
 	action_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	action_container.add_theme_constant_override("separation", 20)
 	$GameUI/MainHUD.add_child(action_container)
