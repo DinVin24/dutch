@@ -2,6 +2,8 @@
 
 [ext_resource type="Script" uid="uid://bdxak4r8w6swu" path="res://game_board_3d.gd" id="1_script"]
 [ext_resource type="Shader" uid="uid://chcpger88sefc" path="res://shaders/crt_glitch.gdshader" id="2_shader"]
+[ext_resource type="PackedScene" uid="uid://b0gsyl67hvq5u" path="res://assets/3DModel.fbx" id="3_person_model"]
+[ext_resource type="Script" uid="uid://ccwkxmwii4s6t" path="res://assets/person_animator.gd" id="4_person_script"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -10,7 +12,6 @@ ambient_light_color = Color(0.1, 0.1, 0.1, 1)
 tonemap_mode = 3
 glow_enabled = true
 glow_intensity = 1.0
-glow_strength = 1.0
 glow_bloom = 0.1
 glow_blend_mode = 0
 glow_hdr_threshold = 0.5
@@ -39,6 +40,9 @@ albedo_color = Color(0.1, 0.3, 0.1, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_Deck"]
 size = Vector3(1.2, 0.5, 1.6)
+
+[sub_resource type="BoxMesh" id="BoxMesh_Chair_Leg"]
+size = Vector3(0.1, 0.3, 0.1)
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_CRT"]
 shader = ExtResource("2_shader")
@@ -83,7 +87,7 @@ shadow_enabled = true
 spot_range = 10.0
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=701076918]
-transform = Transform3D(1, 4.2146862e-08, -4.214684e-08, 1.151398e-08, 0.55719453, 0.83038205, 5.848198e-08, -0.83038205, 0.55719453, 0, 6.8125296, 5.238456)
+transform = Transform3D(1, 4.2146844e-08, -4.2146826e-08, 2.0728725e-09, 0.6820877, 0.7312703, 5.9568574e-08, -0.7312703, 0.6820877, 0, 5.868693, 5.8421235)
 fov = 60.0
 
 [node name="Table" type="MeshInstance3D" parent="." unique_id=1174919008]
@@ -195,6 +199,10 @@ anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
 grow_horizontal = 2
+
+[node name="PersonModel" parent="." unique_id=105399246 instance=ExtResource("3_person_model")]
+transform = Transform3D(3, 0, 0, 0, 3, 0, 0, 0, 3, 0, -1.5229415, -5.5)
+script = ExtResource("4_person_script")
 
 [node name="PostProcessing" type="CanvasLayer" parent="." unique_id=765453877]
 layer = 10
