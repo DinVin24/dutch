@@ -131,20 +131,19 @@ func _create_hud_ui():
 	forfeit_dutch_btn.pressed.connect(_on_cancel_dutch_pressed)
 	
 	# Money Labels
+	var margins = [Vector2(20, -50), Vector2(20, 20), Vector2(-150, 20), Vector2(-150, -50)]
+	var presets = [Control.PRESET_BOTTOM_LEFT, Control.PRESET_CENTER_LEFT, Control.PRESET_TOP_RIGHT, Control.PRESET_CENTER_RIGHT]
 	for i in range(4):
 		var l = Label.new()
-		l.text = "$0"
-		l.add_theme_font_size_override("font_size", 24)
+		l.text = "P" + str(i+1) + " Money: $0"
+		l.add_theme_font_size_override("font_size", 28)
 		l.add_theme_color_override("font_color", Color.GOLD)
+		l.add_theme_color_override("font_outline_color", Color.BLACK)
+		l.add_theme_constant_override("outline_size", 4)
 		$GameUI/MainHUD.add_child(l)
+		l.set_anchors_preset(presets[i])
+		l.position = margins[i]
 		money_labels.append(l)
-		
-	# Quick anchoring for 4 corners (approximate)
-	money_labels[0].set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	money_labels[0].position = Vector2(20, -50)
-	money_labels[1].set_anchors_preset(Control.PRESET_CENTER_LEFT)
-	money_labels[2].set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	money_labels[3].set_anchors_preset(Control.PRESET_CENTER_RIGHT)
 
 func _create_button(text: String, color: Color, left: int, right: int) -> Button:
 	var btn = Button.new()
@@ -261,7 +260,17 @@ func _create_beer_placeholders():
 			beer.height = 0.25
 			var mat = StandardMaterial3D.new()
 			mat.albedo_color = Color(0.8, 0.5, 0.1) # Beer color
+			mat.roughness = 0.2
 			beer.material = mat
+			
+			var foam = CSGCylinder3D.new()
+			foam.radius = 0.082
+			foam.height = 0.05
+			foam.position = Vector3(0, 0.125, 0)
+			var foam_mat = StandardMaterial3D.new()
+			foam_mat.albedo_color = Color(1.0, 1.0, 1.0)
+			foam.material = foam_mat
+			beer.add_child(foam)
 			
 			var offset_x = (b - 2) * 0.25
 			beer.position = Vector3(offset_x, 0.125, -1.8) # Behind cards
@@ -270,8 +279,9 @@ func _create_beer_placeholders():
 
 func _create_chicken_placeholder():
 	var chicken = CSGSphere3D.new()
-	chicken.radius = 0.5
-	chicken.position = Vector3(0, 3.5, -3) # Hovering top center
+	chicken.radius = 0.4
+	# Move lower and slightly closer to center of the table so camera sees it
+	chicken.position = Vector3(0, 1.5, -3.5) 
 	
 	var mat = StandardMaterial3D.new()
 	mat.albedo_color = Color(0.9, 0.9, 0.8) # Pale chicken
@@ -280,6 +290,24 @@ func _create_chicken_placeholder():
 	mat.emission_energy_multiplier = 0.5
 	chicken.material = mat
 	add_child(chicken)
+	
+	# Add beak
+	var beak = CSGBox3D.new()
+	beak.size = Vector3(0.2, 0.1, 0.3)
+	beak.position = Vector3(0, 0, 0.45)
+	var beak_mat = StandardMaterial3D.new()
+	beak_mat.albedo_color = Color(1.0, 0.5, 0.0)
+	beak.material = beak_mat
+	chicken.add_child(beak)
+	
+	# Add red comb
+	var comb = CSGBox3D.new()
+	comb.size = Vector3(0.1, 0.2, 0.3)
+	comb.position = Vector3(0, 0.4, 0.1)
+	var comb_mat = StandardMaterial3D.new()
+	comb_mat.albedo_color = Color(1.0, 0.1, 0.1)
+	comb.material = comb_mat
+	chicken.add_child(comb)
 	
 	var area = Area3D.new()
 	var col = CollisionShape3D.new()
@@ -355,7 +383,7 @@ func _on_player_eliminated(player_idx):
 
 func _on_player_gained_money(player_idx, amount, total):
 	if player_idx >= 0 and player_idx < money_labels.size():
-		money_labels[player_idx].text = "$" + str(total)
+		money_labels[player_idx].text = "P" + str(player_idx + 1) + " Money: $" + str(total)
 
 func _on_turn_started(player_idx):
 	var p_info = GameManager.players_info[player_idx]
