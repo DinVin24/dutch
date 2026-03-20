@@ -21,8 +21,8 @@ enum GameState {
 signal game_state_changed(new_state)
 signal turn_started(player_id)
 signal game_over(winner_id)
-signal scores_ready(results: Array)      # Bug 3: carries sorted leaderboard
-signal all_cards_revealed                 # Bug 3: tells board to flip all cards face-up
+signal scores_ready(results: Array) # Bug 3: carries sorted leaderboard
+signal all_cards_revealed # Bug 3: tells board to flip all cards face-up
 signal deck_ready
 signal card_drawn_to_pending(player_id, card_data)
 signal card_discarded(player_id, card_data)
@@ -154,7 +154,7 @@ func _calculate_scores() -> Array:
 		var hand: Array = info.hand
 		# Edge case: player with 0 cards wins outright.
 		if hand.size() == 0:
-			entries.append({"id": i, "name": info.name, "score": -1, "card_count": 0})
+			entries.append({"id": i, "name": info.name, "score": - 1, "card_count": 0})
 			continue
 		var total := 0
 		for card in hand:
@@ -250,9 +250,10 @@ func play_ability(player_idx: int, ability_id: String, target_idx: int = -1) -> 
 		return false
 		
 	var valid_states = [
-		GameState.TURN_START_DRAW, 
-		GameState.TURN_RESOLVE_DRAWN, 
-		GameState.TURN_PEEK_ABILITY, 
+		GameState.TURN_START_DRAW,
+		GameState.TURN_RESOLVE_DRAWN,
+		GameState.TURN_END_CHOICE,
+		GameState.TURN_PEEK_ABILITY,
 		GameState.TURN_SWAP_ABILITY
 	]
 	

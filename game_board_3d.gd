@@ -121,6 +121,8 @@ func _create_hud_ui():
 	# Action Buttons Container
 	var action_container = HBoxContainer.new()
 	action_container.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	action_container.offset_left = -400
+	action_container.offset_right = 400
 	action_container.offset_top = -220
 	action_container.offset_bottom = -170
 	action_container.alignment = BoxContainer.ALIGNMENT_CENTER
