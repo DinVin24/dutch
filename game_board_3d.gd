@@ -150,7 +150,9 @@ func _create_hud_ui():
 	l.add_theme_constant_override("outline_size", 4)
 	$GameUI/MainHUD.add_child(l)
 	l.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	l.position = Vector2(30, -70)
+	l.offset_left = 40
+	l.offset_top = -100
+	l.offset_bottom = -60
 	money_labels.append(l)
 
 func _create_button(parent: Node, text: String, color: Color) -> Button:
