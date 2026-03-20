@@ -47,6 +47,10 @@ var base_camera_transform: Transform3D
 var camera_rot_x: float = 0.0
 var camera_rot_y: float = 0.0
 
+# Tavern Mechanics Visuals
+var player_beers_nodes: Array = [[], [], [], []]
+var money_labels: Array = []
+
 @onready var camera = $Camera3D
 var _current_ability_message: String = ""
 var _shake_intensity: float = 0.0
@@ -73,8 +77,15 @@ func _ready():
 	GameManager.hand_updated.connect(_on_hand_updated)
 	GameManager.dutch_called.connect(_on_dutch_called)
 	
+	# Tavern Hookups
+	GameManager.player_drank_beer.connect(_on_player_drank_beer)
+	GameManager.player_eliminated.connect(_on_player_eliminated)
+	GameManager.player_gained_money.connect(_on_player_gained_money)
+	
 	_create_hud_ui()
 	_create_discard_indicator()
+	_create_beer_placeholders()
+	_create_chicken_placeholder()
 	
 	$DeckArea/Area3D.input_event.connect(_on_deck_input_event)
 	$DiscardArea/Area3D.input_event.connect(_on_discard_input_event)
@@ -118,6 +129,22 @@ func _create_hud_ui():
 	call_dutch_btn.pressed.connect(_on_call_dutch_pressed)
 	confirm_dutch_btn.pressed.connect(_on_confirm_dutch_pressed)
 	forfeit_dutch_btn.pressed.connect(_on_cancel_dutch_pressed)
+	
+	# Money Labels
+	for i in range(4):
+		var l = Label.new()
+		l.text = "$0"
+		l.add_theme_font_size_override("font_size", 24)
+		l.add_theme_color_override("font_color", Color.GOLD)
+		$GameUI/MainHUD.add_child(l)
+		money_labels.append(l)
+		
+	# Quick anchoring for 4 corners (approximate)
+	money_labels[0].set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	money_labels[0].position = Vector2(20, -50)
+	money_labels[1].set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	money_labels[2].set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	money_labels[3].set_anchors_preset(Control.PRESET_CENTER_RIGHT)
 
 func _create_button(text: String, color: Color, left: int, right: int) -> Button:
 	var btn = Button.new()
@@ -224,6 +251,111 @@ func _create_discard_indicator():
 	
 	discard_area.add_child(discard_indicator)
 	discard_indicator.position = Vector3(0, 0.01, 0)
+
+func _create_beer_placeholders():
+	for i in range(4):
+		var pos_node = player_pos_nodes[i]
+		for b in range(5):
+			var beer = CSGCylinder3D.new()
+			beer.radius = 0.08
+			beer.height = 0.25
+			var mat = StandardMaterial3D.new()
+			mat.albedo_color = Color(0.8, 0.5, 0.1) # Beer color
+			beer.material = mat
+			
+			var offset_x = (b - 2) * 0.25
+			beer.position = Vector3(offset_x, 0.125, -1.8) # Behind cards
+			pos_node.add_child(beer)
+			player_beers_nodes[i].append(beer)
+
+func _create_chicken_placeholder():
+	var chicken = CSGSphere3D.new()
+	chicken.radius = 0.5
+	chicken.position = Vector3(0, 3.5, -3) # Hovering top center
+	
+	var mat = StandardMaterial3D.new()
+	mat.albedo_color = Color(0.9, 0.9, 0.8) # Pale chicken
+	mat.emission_enabled = true
+	mat.emission = Color(0.9, 0.9, 0.5)
+	mat.emission_energy_multiplier = 0.5
+	chicken.material = mat
+	add_child(chicken)
+	
+	var area = Area3D.new()
+	var col = CollisionShape3D.new()
+	var shape = SphereShape3D.new()
+	shape.radius = 0.6
+	col.shape = shape
+	area.add_child(col)
+	chicken.add_child(area)
+	
+	area.input_event.connect(_on_chicken_clicked)
+
+func _on_chicken_clicked(_camera, event, _position, _normal, _shape_idx):
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if GameManager.current_player_index == 0:
+			_try_buy_ability(0)
+
+func _try_buy_ability(p_idx: int):
+	var cost = 50
+	if GameManager.players_info[p_idx].money >= cost:
+		GameManager.players_info[p_idx].money -= cost
+		GameManager.player_gained_money.emit(p_idx, -cost, GameManager.players_info[p_idx].money)
+		_drop_egg_for(p_idx)
+	else:
+		_show_message("Chicken wants $50 for an egg!")
+
+func _drop_egg_for(p_idx: int):
+	_show_message("The Chicken laid an Ability Egg!")
+	var abilities = ["drink_beer", "extra_beer", "remove_highest_card", "give_highest_deck_card", "uno_reverse", "skip_turn", "chaotic_reset", "double_values", "halve_values", "jumpscare", "shuffle_hand"]
+	var ab = abilities[randi() % abilities.size()]
+	GameManager.players_info[p_idx].abilities.append(ab)
+	print("Player ", p_idx, " bought ability: ", ab)
+	
+	# Spawn ability token visually
+	var token = load("res://ability_token_3d.gd").new()
+	player_pos_nodes[p_idx].add_child(token)
+	token.setup(ab)
+	token.token_clicked.connect(_on_ability_token_clicked)
+	
+	# Layout the tokens next to the beers
+	var count = GameManager.players_info[p_idx].abilities.size()
+	token.position = Vector3(1.5, 0.1, -1.0 + (count * 0.6))
+	
+func _on_ability_token_clicked(token):
+	var p_idx = -1
+	for i in range(4):
+		if token.get_parent() == player_pos_nodes[i]:
+			p_idx = i; break
+	
+	if p_idx == GameManager.current_player_index:
+		# Simple execution targeting nearest opponent or random stuff for Phase 1
+		# In a real game, this would enter a target selection sub-phase.
+		var target = (p_idx + 1) % 4
+		if GameManager.play_ability(p_idx, token.ability_id, target):
+			token.queue_free()
+			var ab_idx = GameManager.players_info[p_idx].abilities.find(token.ability_id)
+			if ab_idx != -1:
+				GameManager.players_info[p_idx].abilities.remove_at(ab_idx)
+	else:
+		_show_message("Not your turn to play abilities!")
+
+func _on_player_drank_beer(player_idx, remaining):
+	if player_idx < 0 or player_idx >= 4: return
+	var beers_array = player_beers_nodes[player_idx]
+	for i in range(beers_array.size()):
+		beers_array[i].visible = (i < remaining)
+	shake(0.2, 0.3)
+
+func _on_player_eliminated(player_idx):
+	_show_message(GameManager.players_info[player_idx].name + " PASSED OUT!")
+	# Turn their zone red
+	player_lights[player_idx].light_color = Color(1, 0, 0)
+	player_lights[player_idx].light_energy = 10.0
+
+func _on_player_gained_money(player_idx, amount, total):
+	if player_idx >= 0 and player_idx < money_labels.size():
+		money_labels[player_idx].text = "$" + str(total)
 
 func _on_turn_started(player_idx):
 	var p_info = GameManager.players_info[player_idx]

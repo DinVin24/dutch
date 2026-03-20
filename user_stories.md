@@ -34,3 +34,14 @@
 - [ ] **Story**: As a player, I want to see CRT scanlines, chromatic aberration, and digital glitch effects (Y2K aesthetic), so that the game feels like a piece of retro-tech or a lost digital artifact.
 - [ ] **Story**: As a player, I want the UI to use high-saturation neons and glassmorphism (Balatro style), contrasting with the dark 3D scene, so that interactive elements are striking and clear.
 - [ ] **Story**: As a player, I want every card move, swap, and draw to have "juice" (screen shake, card wobble, subtle particle trails), so that the gameplay feels physically satisfying.
+
+## Epic 8: The Tavern Mechanics (Beers, Money, Chicken & Abilities)
+- [ ] **Story**: As a player, I want to see 5 3D rendered beers on my side of the table that act as my "lives," so that I know how close I am to elimination.
+- [ ] **Story**: As a player, when I instantly discard a card I just drew or fail a Jump-In, I want to automatically "drink" one beer as a penalty.
+- [ ] **Story**: As a player, when I consume my 5th beer, I want to pass out and be eliminated from the game, so that survival becomes a core mechanic.
+- [ ] **Story**: As a player, when I discard a card, I want to earn in-game money scaled to the card's value (King of Diamonds = Most, Aces = High, Spades/Hearts/Clubs Kings = 0), so that I have a currency to spend.
+- [ ] **Story**: As a player, I want to see a hovering chicken at the top of the table that I can click on to spend my money, so that I have a shop mechanic.
+- [ ] **Story**: As a player, when I buy from the chicken, I want it to lay an egg that lands on my side, cracks, and reveals an ability card/token that is then turned face-down, so that my abilities remain a secret.
+- [ ] **Story**: As a player, I want playing an ability to be a "free action" during my turn that doesn't conflict with my main draw/discard/swap action, so that I can strategize freely.
+- [ ] **Story**: As a player, I want to be able to use a variety of offensive abilities (e.g., force drink, give highest deck card, skip turn, Jumpscare, shuffle opponent's cards) to disrupt my opponents.
+- [ ] **Story**: As a player, I want to be able to use a variety of defensive/utility abilities (e.g., extra beer, remove highest card, double/halve card values for scoring, reverse turn order, Chaotic Reset) to improve my own standing.

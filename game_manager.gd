@@ -13,6 +13,7 @@ enum GameState {
 	TURN_JUMP_IN_SELECTION,
 	CHECK_DUTCH,
 	TURN_CONFIRM_DUTCH,
+	STATE_PLAYING_ABILITY,
 	GAME_OVER
 }
 
@@ -33,14 +34,21 @@ signal jack_swap_resolved(p1: int, c1: int, p2: int, c2: int)
 signal hand_updated(player_idx: int)
 signal dutch_called(player_idx: int)
 
+# New Economy Signals
+signal player_drank_beer(player_idx, remaining)
+signal player_eliminated(player_idx)
+signal player_gained_money(player_idx, amount, total)
+
 var current_state: GameState = GameState.INITIALIZING
 var deck_manager: DeckManager
 var bg_music_player: AudioStreamPlayer
+var ability_manager: AbilityManager
 
 # Match Settings
 var num_players: int = 4 # Hotseat local play
 var players_info: Array = []
 var current_player_index: int = 0
+var turn_direction: int = 1 # 1 for clockwise, -1 for counter-clockwise (Uno Reverse)
 var dutch_caller_index: int = -1 # -1 means no one has called Dutch yet
 var jump_in_player_idx: int = -1 # who is currently attempting the jump-in
 var drawn_card_data: CardData = null
@@ -51,6 +59,9 @@ var dev_console_enabled: bool = true
 func _ready():
 	deck_manager = DeckManager.new()
 	add_child(deck_manager)
+	
+	ability_manager = AbilityManager.new()
+	add_child(ability_manager)
 	
 	# Background Music Setup
 	bg_music_player = AudioStreamPlayer.new()
@@ -74,6 +85,7 @@ func initialize_game(p_count: int = 4):
 	num_players = p_count
 	players_info.clear()
 	current_player_index = 0
+	turn_direction = 1
 	dutch_caller_index = -1
 	jump_in_player_idx = -1
 	for i in range(num_players):
@@ -83,6 +95,10 @@ func initialize_game(p_count: int = 4):
 			"score": 0,
 			"hand": [], # CardData objects
 			"can_call_dutch": true,
+			"beers": 5,
+			"money": 0,
+			"abilities": [],
+			"is_eliminated": false,
 			# bot_memory: { player_idx: { card_idx: CardData } }
 			# Populated by BotController during INITIAL_PEEK.
 			"bot_memory": {}
@@ -107,7 +123,12 @@ func change_state(new_state: GameState):
 			_handle_game_over()
 
 func next_turn():
-	current_player_index = (current_player_index + 1) % num_players
+	# Loop until we find a player who is not eliminated
+	for _i in range(num_players):
+		current_player_index = (current_player_index + turn_direction + num_players) % num_players
+		if not players_info[current_player_index].is_eliminated:
+			break
+			
 	# Bug 1 fix: always go to TURN_START_DRAW; the Dutch-caller check now lives
 	# in _prompt_turn_end() so the caller still draws before confirming.
 	change_state(GameState.TURN_START_DRAW)
@@ -147,6 +168,47 @@ func _calculate_scores() -> Array:
 	)
 	return entries
 
+func _check_elimination_win_condition():
+	var active_players = 0
+	for i in range(num_players):
+		if not players_info[i].is_eliminated:
+			active_players += 1
+	if active_players <= 1:
+		print("Only one player remains! Game Over.")
+		change_state(GameState.GAME_OVER)
+
+func drink_beer(p_idx: int):
+	if players_info[p_idx].is_eliminated: return
+	players_info[p_idx].beers -= 1
+	player_drank_beer.emit(p_idx, players_info[p_idx].beers)
+	print("Player ", p_idx, " drank a beer! Remaining: ", players_info[p_idx].beers)
+	
+	if players_info[p_idx].beers <= 0:
+		players_info[p_idx].is_eliminated = true
+		player_eliminated.emit(p_idx)
+		print("Player ", p_idx, " is ELIMINATED!")
+		_check_elimination_win_condition()
+
+func gain_money_for_discard(p_idx: int, card: CardData):
+	if players_info[p_idx].is_eliminated: return
+	var amount = 0
+	var r = card.rank
+	var s = card.suit
+	
+	if r == "King":
+		if s == "Diamonds": amount = 50
+		else: amount = 0
+	elif r == "Ace": amount = 20
+	elif r == "Queen" or r == "Jack": amount = 15
+	elif r == "10": amount = 10
+	elif r == "9" or r == "8": amount = 8
+	else: amount = 5
+	
+	players_info[p_idx].money += amount
+	player_gained_money.emit(p_idx, amount, players_info[p_idx].money)
+	print("Player ", p_idx, " gained $", amount, " for discarding ", r, " of ", s)
+
+
 func start_game():
 	change_state(GameState.DEAL_CARDS)
 
@@ -173,6 +235,44 @@ func _prompt_turn_end():
 		change_state(GameState.TURN_CONFIRM_DUTCH)
 		return
 	change_state(GameState.TURN_END_CHOICE)
+
+## Abilities API
+var state_before_ability: GameState = GameState.INITIALIZING
+signal ability_played(player_idx, ability_id)
+signal ability_finished
+
+func play_ability(player_idx: int, ability_id: String, target_idx: int = -1) -> bool:
+	"""Called by the board when an ability token is dragged to the center."""
+	# Can only play abilities on your specific turn.
+	if current_player_index != player_idx:
+		print("FSM Blocked: Cannot play ability if it's not your turn.")
+		return false
+		
+	var valid_states = [
+		GameState.TURN_START_DRAW, 
+		GameState.TURN_RESOLVE_DRAWN, 
+		GameState.TURN_PEEK_ABILITY, 
+		GameState.TURN_SWAP_ABILITY
+	]
+	
+	if current_state not in valid_states:
+		print("FSM Blocked: Cannot play ability in current state ", current_state)
+		return false
+
+	state_before_ability = current_state
+	change_state(GameState.STATE_PLAYING_ABILITY)
+	print("Player ", player_idx, " played ability: ", ability_id, " on P", target_idx)
+	
+	ability_played.emit(player_idx, ability_id)
+	ability_manager.execute(player_idx, ability_id, target_idx)
+	return true
+	
+func resume_from_ability():
+	"""Called by AbilityManager when visual effects and internal logic are complete."""
+	if current_state != GameState.STATE_PLAYING_ABILITY:
+		return
+	change_state(state_before_ability)
+	ability_finished.emit()
 
 func end_turn():
 	if current_state != GameState.TURN_END_CHOICE and current_state != GameState.TURN_JUMP_IN_SELECTION:
@@ -248,12 +348,14 @@ func validate_jump_in(card_idx: int) -> bool:
 				hand_updated.emit(jump_in_player_idx)
 				memory_shift_required.emit(jump_in_player_idx, card_idx)
 			
+			
 			if h.size() == 0:
 				change_state(GameState.GAME_OVER)
 				return true
 				
 			deck_manager.discard_pile.append(selected_card)
 			card_discarded.emit(jump_in_player_idx, selected_card)
+			gain_money_for_discard(jump_in_player_idx, selected_card)
 			jump_in_player_idx = -1
 			_resolve_discard_effects(selected_card)
 			bot_action.emit(msg)
@@ -261,6 +363,7 @@ func validate_jump_in(card_idx: int) -> bool:
 
 	print("No match. Jump In invalid.")
 	jump_in_failed.emit(jump_in_player_idx, card_idx, selected_card)
+	drink_beer(jump_in_player_idx)
 	await get_tree().create_timer(1.2, false).timeout
 
 	var penalty_card_dict: Dictionary = deck_manager.draw_card()
@@ -327,6 +430,8 @@ func player_discard_drawn_card():
 	print("GameManager: Discarding drawn card.")
 	deck_manager.discard_pile.append(drawn_card_data)
 	card_discarded.emit(current_player_index, drawn_card_data)
+	gain_money_for_discard(current_player_index, drawn_card_data)
+	drink_beer(current_player_index)
 	
 	var discarded_handled = drawn_card_data
 	drawn_card_data = null
@@ -349,6 +454,7 @@ func player_swap_drawn_card(card_idx: int):
 	# Old card goes to discard first so board finds the node in the current hand
 	deck_manager.discard_pile.append(old_card)
 	card_discarded.emit(current_player_index, old_card)
+	gain_money_for_discard(current_player_index, old_card)
 	
 	drawn_card_data.is_face_up = false # Must be face-down in hand
 	player_h[card_idx] = drawn_card_data
