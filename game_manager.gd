@@ -111,6 +111,14 @@ func initialize_game(p_count: int = 4):
 	start_game()
 
 func change_state(new_state: GameState):
+	# Automatic pass-through override: never grant an interactive turn 
+	# to an eliminated player. Instantly skip to safety.
+	if new_state in [GameState.TURN_START_DRAW, GameState.TURN_RESOLVE_DRAWN, GameState.TURN_END_CHOICE, GameState.TURN_CONFIRM_DUTCH]:
+		if players_info[current_player_index].is_eliminated:
+			print("FSM Guard: Skipping turn state for eliminated player ", current_player_index)
+			next_turn()
+			return
+			
 	current_state = new_state
 	game_state_changed.emit(new_state)
 	

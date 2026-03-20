@@ -83,7 +83,7 @@ func _on_input_text_submitted(new_text):
 	input.clear()
 	
 	if cmd == "help":
-		output.append_text("\n[color=yellow]Available commands: help, clear, exit, noclip, cards, give, remove[/color]")
+		output.append_text("\n[color=yellow]Available commands: help, clear, exit, noclip, cards, give, remove, kill[/color]")
 	elif cmd == "clear":
 		output.clear()
 	elif cmd == "exit":
@@ -100,6 +100,8 @@ func _on_input_text_submitted(new_text):
 		_cmd_give(args)
 	elif cmd == "remove":
 		_cmd_remove(args)
+	elif cmd == "kill":
+		_cmd_kill(args)
 	else:
 		output.append_text("\n[color=red]command not recognized, use 'help' for all the commands[/color]")
 	
@@ -201,6 +203,21 @@ func _cmd_remove(args: Array):
 			GameManager.change_state(GameManager.GameState.GAME_OVER)
 	else:
 		output.append_text("\n[color=red]Card or index '" + target + "' not found in " + player.name + "'s hand.[/color]")
+
+func _cmd_kill(args: Array):
+	if args.size() < 1:
+		output.append_text("\n[color=red]Usage: kill <PlayerName>[/color]")
+		return
+	
+	var p_name = args[0].to_lower()
+	var player = _find_player(p_name)
+	if not player: return
+	
+	output.append_text("\n[color=cyan]Killing " + player.name + "...[/color]")
+	
+	# Force beers to 1 and drink to properly trigger natural elimination
+	GameManager.players_info[player.id].beers = 1
+	GameManager.drink_beer(player.id)
 
 func _find_player(p_name: String):
 	for p in GameManager.players_info:

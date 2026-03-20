@@ -82,6 +82,7 @@ func _ready():
 	GameManager.player_drank_beer.connect(_on_player_drank_beer)
 	GameManager.player_eliminated.connect(_on_player_eliminated)
 	GameManager.player_gained_money.connect(_on_player_gained_money)
+	GameManager.ability_played.connect(_on_ability_played)
 	
 	_create_hud_ui()
 	_create_discard_indicator()
@@ -323,15 +324,14 @@ func _try_buy_ability(p_idx: int):
 		_show_message("Chicken wants $50 for an egg!")
 
 func _drop_egg_for(p_idx: int):
-	_show_message("The Chicken laid an Ability Egg!")
+	var abilities = ["drink_beer", "extra_beer", "remove_highest_card", "give_highest_deck_card", "uno_reverse", "skip_turn", "chaotic_reset", "double_values", "halve_values", "jumpscare", "shuffle_hand"]
+	var ab = abilities[randi() % abilities.size()]
+	_show_message("You got: " + ab.capitalize() + "!")
 	
 	if is_instance_valid(_chicken_node):
 		var tween = create_tween()
 		tween.tween_property(_chicken_node, "position:y", 2.0, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tween.tween_property(_chicken_node, "position:y", 1.5, 0.2).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
-	
-	var abilities = ["drink_beer", "extra_beer", "remove_highest_card", "give_highest_deck_card", "uno_reverse", "skip_turn", "chaotic_reset", "double_values", "halve_values", "jumpscare", "shuffle_hand"]
-	var ab = abilities[randi() % abilities.size()]
 	GameManager.players_info[p_idx].abilities.append(ab)
 	print("Player ", p_idx, " bought ability: ", ab)
 	
@@ -379,6 +379,10 @@ func _on_player_eliminated(player_idx):
 func _on_player_gained_money(player_idx, amount, total):
 	if player_idx == 0 and money_labels.size() > 0:
 		money_labels[0].text = "$" + str(total)
+
+func _on_ability_played(player_idx, ability_id):
+	var p_name = GameManager.players_info[player_idx].name
+	_show_message(p_name + " used " + ability_id.capitalize() + "!")
 
 func _on_turn_started(player_idx):
 	var p_info = GameManager.players_info[player_idx]
