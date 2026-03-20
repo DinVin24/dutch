@@ -131,8 +131,14 @@ func _create_hud_ui():
 	forfeit_dutch_btn.pressed.connect(_on_cancel_dutch_pressed)
 	
 	# Money Labels
-	var margins = [Vector2(20, -50), Vector2(20, 20), Vector2(-150, 20), Vector2(-150, -50)]
-	var presets = [Control.PRESET_BOTTOM_LEFT, Control.PRESET_CENTER_LEFT, Control.PRESET_TOP_RIGHT, Control.PRESET_CENTER_RIGHT]
+	var money_container = VBoxContainer.new()
+	money_container.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	money_container.offset_left = -220
+	money_container.offset_right = -20
+	money_container.offset_top = 20
+	money_container.offset_bottom = 200
+	$GameUI/MainHUD.add_child(money_container)
+	
 	for i in range(4):
 		var l = Label.new()
 		l.text = "P" + str(i+1) + " Money: $0"
@@ -140,9 +146,8 @@ func _create_hud_ui():
 		l.add_theme_color_override("font_color", Color.GOLD)
 		l.add_theme_color_override("font_outline_color", Color.BLACK)
 		l.add_theme_constant_override("outline_size", 4)
-		$GameUI/MainHUD.add_child(l)
-		l.set_anchors_preset(presets[i])
-		l.position = margins[i]
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		money_container.add_child(l)
 		money_labels.append(l)
 
 func _create_button(text: String, color: Color, left: int, right: int) -> Button:
