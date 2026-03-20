@@ -52,38 +52,38 @@
     * **Then** two chosen cards blindly swap positions on the board without revealing their faces.
 
 ## Epic 4: The Jump-In System
-- [ ] **Story**: As a player, I want the game to allow me to drag one of my cards to the discard pile at any point (even if it's not my turn) to attempt a Jump-In.
+- [x] **Story**: As a player, I want the game to allow me to drag one of my cards to the discard pile at any point (even if it's not my turn) to attempt a Jump-In.
   * **Acceptance Criteria**:
     * **Given** another player's turn is active
     * **When** I click and drag a card to the discard pile
     * **Then** the game evaluates it as a Jump-In attempt.
 
-- [ ] **Story**: As a player, if my Jump-In card matches the rank of the current top discard card, I want the game to accept the discard while maintaining the original turn order (it remains the turn of the player who was originally next), so that I am rewarded for my memory without disrupting the game flow.
+- [x] **Story**: As a player, if my Jump-In card matches the rank of the current top discard card, I want the game to accept the discard while maintaining the original turn order (it remains the turn of the player who was originally next), so that I am rewarded for my memory without disrupting the game flow.
   * **Acceptance Criteria**:
     * **Given** a card is dragged for a Jump-In
     * **When** its rank perfectly matches the discard pile's top card
     * **Then** the card is successfully discarded, and the current turn owner's turn resumes.
 
-- [ ] **Story**: As a player, if my Jump-In card does not match the current top discard card, I want my card returned to its original position and the game to automatically deal me an extra penalty card, so that guessing is discouraged.
+- [x] **Story**: As a player, if my Jump-In card does not match the current top discard card, I want my card returned to its original position and the game to automatically deal me an extra penalty card, so that guessing is discouraged.
   * **Acceptance Criteria**:
     * **Given** a card is dragged for a Jump-In
     * **When** its rank does not match the top discard card
     * **Then** the card returns to the player's zone and the player receives an extra penalty card.
 
 ## Epic 5: End Game & Scoring
-- [ ] **Story**: As a player, I want a "Call Dutch" button available during my turn that signals the final round, so that I can attempt to end the game when I believe I have the lowest score.
+- [x] **Story**: As a player, I want a "Call Dutch" button available during my turn that signals the final round, so that I can attempt to end the game when I believe I have the lowest score.
   * **Acceptance Criteria**:
     * **Given** it is the player's turn
     * **When** they click "Call Dutch"
     * **Then** a final round triggers for all other players before ending the game.
 
-- [ ] **Story**: As a player, once my "Dutch" call cycles back to my turn, I want to be prompted to either confirm the call (ending the game) or cancel it (forfeiting my right to call Dutch again for the rest of the game), so that the game transitions into the Scoring Phase or safely continues.
+- [x] **Story**: As a player, once my "Dutch" call cycles back to my turn, I want to be prompted to either confirm the call (ending the game) or cancel it (forfeiting my right to call Dutch again for the rest of the game), so that the game transitions into the Scoring Phase or safely continues.
   * **Acceptance Criteria**:
     * **Given** the round completes after a "Dutch" call
     * **When** it cycles back to the original caller
     * **Then** they must rigidly confirm or cancel the call.
 
-- [ ] **Story**: As a player, when the game ends, I want all cards flipped face up and the points tallied according to the rules (Ace=1, Jack=11, Queen=12, King=13, King of Diamonds=0), so that the lowest scorer is immediately declared the winner.
+- [x] **Story**: As a player, when the game ends, I want all cards flipped face up and the points tallied according to the rules (Ace=1, Jack=11, Queen=12, King=13, King of Diamonds=0), so that the lowest scorer is immediately declared the winner.
   * **Acceptance Criteria**:
     * **Given** the game ends
     * **When** scoring initiates
