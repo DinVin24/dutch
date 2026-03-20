@@ -196,13 +196,14 @@ func gain_money_for_discard(p_idx: int, card: CardData):
 	var s = card.suit
 	
 	if r == "King":
-		if s == "Diamonds": amount = 50
+		if s == "Diamonds": amount = 100
 		else: amount = 0
-	elif r == "Ace": amount = 20
-	elif r == "Queen" or r == "Jack": amount = 15
-	elif r == "10": amount = 10
-	elif r == "9" or r == "8": amount = 8
-	else: amount = 5
+	elif r == "Ace": amount = 50
+	elif r == "Queen" or r == "Jack": amount = 40
+	elif r == "10" or r == "9": amount = 35
+	elif r == "8" or r == "7": amount = 25
+	elif r == "6" or r == "5": amount = 20
+	else: amount = 15
 	
 	players_info[p_idx].money += amount
 	player_gained_money.emit(p_idx, amount, players_info[p_idx].money)
