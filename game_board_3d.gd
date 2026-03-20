@@ -50,6 +50,7 @@ var camera_rot_y: float = 0.0
 # Tavern Mechanics Visuals
 var player_beers_nodes: Array = [[], [], [], []]
 var money_labels: Array = []
+var _chicken_node: CSGSphere3D = null
 
 @onready var camera = $Camera3D
 var _current_ability_message: String = ""
@@ -196,12 +197,12 @@ func _create_button(text: String, color: Color, left: int, right: int) -> Button
 		btn.offset_top = -120
 		btn.offset_bottom = -70
 	else:
-		# JUMP IN button: CENTER TOP to avoid hand overlap
-		btn.set_anchors_preset(Control.PRESET_CENTER_TOP)
-		btn.offset_left = -100
-		btn.offset_right = 100
-		btn.offset_top = 80
-		btn.offset_bottom = 130
+		# JUMP IN button: CENTER LEFT to avoid hand overlap and Chicken overlap
+		btn.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+		btn.offset_left = 60
+		btn.offset_right = 260
+		btn.offset_top = -25
+		btn.offset_bottom = 25
 	btn.custom_minimum_size = Vector2(160, 50)
 	btn.hide()
 	return btn
@@ -295,6 +296,7 @@ func _create_chicken_placeholder():
 	mat.emission_energy_multiplier = 0.5
 	chicken.material = mat
 	add_child(chicken)
+	_chicken_node = chicken
 	
 	# Add beak
 	var beak = CSGBox3D.new()
@@ -340,6 +342,12 @@ func _try_buy_ability(p_idx: int):
 
 func _drop_egg_for(p_idx: int):
 	_show_message("The Chicken laid an Ability Egg!")
+	
+	if is_instance_valid(_chicken_node):
+		var tween = create_tween()
+		tween.tween_property(_chicken_node, "position:y", 2.0, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.tween_property(_chicken_node, "position:y", 1.5, 0.2).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	
 	var abilities = ["drink_beer", "extra_beer", "remove_highest_card", "give_highest_deck_card", "uno_reverse", "skip_turn", "chaotic_reset", "double_values", "halve_values", "jumpscare", "shuffle_hand"]
 	var ab = abilities[randi() % abilities.size()]
 	GameManager.players_info[p_idx].abilities.append(ab)
