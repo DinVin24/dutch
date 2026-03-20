@@ -118,12 +118,22 @@ func _ready():
 	trigger_glitch(0.4, 0.8) # Intro glitch
 
 func _create_hud_ui():
-	# Standard HUD buttons - positioned same as 2D for consistency
-	end_turn_btn = _create_button("END TURN", Color(0.2, 0.6, 0.2), -270, -110)
-	jump_in_btn = _create_button("JUMP IN", Color(0.2, 0.4, 0.8), -80, 80)
-	call_dutch_btn = _create_button("CALL DUTCH!", Color(0.8, 0.2, 0.2), 110, 270)
-	confirm_dutch_btn = _create_button("CONFIRM DUTCH", Color(0.2, 0.6, 0.2), -270, -110)
-	forfeit_dutch_btn = _create_button("FORFEIT DUTCH", Color(0.8, 0.2, 0.2), 110, 270)
+	# Action Buttons Container
+	var action_container = HBoxContainer.new()
+	action_container.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	action_container.offset_top = -100
+	action_container.offset_bottom = -50
+	action_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	action_container.add_theme_constant_override("separation", 20)
+	$GameUI/MainHUD.add_child(action_container)
+	action_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Standard HUD buttons
+	end_turn_btn = _create_button(action_container, "END TURN", Color(0.2, 0.6, 0.2))
+	jump_in_btn = _create_button(action_container, "JUMP IN", Color(0.2, 0.4, 0.8))
+	call_dutch_btn = _create_button(action_container, "CALL DUTCH!", Color(0.8, 0.2, 0.2))
+	confirm_dutch_btn = _create_button(action_container, "CONFIRM DUTCH", Color(0.2, 0.6, 0.2))
+	forfeit_dutch_btn = _create_button(action_container, "FORFEIT DUTCH", Color(0.8, 0.2, 0.2))
 	
 	end_turn_btn.pressed.connect(_on_end_turn_pressed)
 	jump_in_btn.pressed.connect(_on_jump_in_pressed)
@@ -131,27 +141,19 @@ func _create_hud_ui():
 	confirm_dutch_btn.pressed.connect(_on_confirm_dutch_pressed)
 	forfeit_dutch_btn.pressed.connect(_on_cancel_dutch_pressed)
 	
-	# Money Labels
-	var money_container = VBoxContainer.new()
-	money_container.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	money_container.offset_left = -220
-	money_container.offset_right = -20
-	money_container.offset_top = 20
-	money_container.offset_bottom = 200
-	$GameUI/MainHUD.add_child(money_container)
-	
-	for i in range(4):
-		var l = Label.new()
-		l.text = "P" + str(i+1) + " Money: $0"
-		l.add_theme_font_size_override("font_size", 28)
-		l.add_theme_color_override("font_color", Color.GOLD)
-		l.add_theme_color_override("font_outline_color", Color.BLACK)
-		l.add_theme_constant_override("outline_size", 4)
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		money_container.add_child(l)
-		money_labels.append(l)
+	# Local Player Money Label (Only show P0)
+	var l = Label.new()
+	l.text = "$0"
+	l.add_theme_font_size_override("font_size", 36)
+	l.add_theme_color_override("font_color", Color.GOLD)
+	l.add_theme_color_override("font_outline_color", Color.BLACK)
+	l.add_theme_constant_override("outline_size", 4)
+	$GameUI/MainHUD.add_child(l)
+	l.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	l.position = Vector2(30, -70)
+	money_labels.append(l)
 
-func _create_button(text: String, color: Color, left: int, right: int) -> Button:
+func _create_button(parent: Node, text: String, color: Color) -> Button:
 	var btn = Button.new()
 	btn.text = text
 	btn.add_theme_font_size_override("font_size", 20)
@@ -177,33 +179,9 @@ func _create_button(text: String, color: Color, left: int, right: int) -> Button
 	btn.add_theme_stylebox_override("hover", hover_style)
 	btn.add_theme_stylebox_override("pressed", hover_style)
 	
-	$GameUI/MainHUD.add_child(btn)
-	$GameUI/MainHUD.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	top_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	
-	btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	
-	# WIDER SPACING: move them to far corners to clear the center-projected 3D hand
-	if text == "END TURN" or text == "CONFIRM DUTCH":
-		btn.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-		btn.offset_left = 60
-		btn.offset_right = 260
-		btn.offset_top = -120
-		btn.offset_bottom = -70
-	elif text == "CALL DUTCH!" or text == "FORFEIT DUTCH":
-		btn.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-		btn.offset_left = -260
-		btn.offset_right = -60
-		btn.offset_top = -120
-		btn.offset_bottom = -70
-	else:
-		# JUMP IN button: CENTER LEFT to avoid hand overlap and Chicken overlap
-		btn.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-		btn.offset_left = 60
-		btn.offset_right = 260
-		btn.offset_top = -25
-		btn.offset_bottom = 25
-	btn.custom_minimum_size = Vector2(160, 50)
+	parent.add_child(btn)
+	# Removed manual anchors so HBoxContainer takes full control of layout
+	btn.custom_minimum_size = Vector2(140, 40)
 	btn.hide()
 	return btn
 
@@ -359,9 +337,9 @@ func _drop_egg_for(p_idx: int):
 	token.setup(ab)
 	token.token_clicked.connect(_on_ability_token_clicked)
 	
-	# Layout the tokens next to the beers
+	# Layout the tokens far to the right of the cards to prevent overlap
 	var count = GameManager.players_info[p_idx].abilities.size()
-	token.position = Vector3(1.5, 0.1, -1.0 + (count * 0.6))
+	token.position = Vector3(2.5 + (count * 0.6), 0.1, 0.0)
 	
 func _on_ability_token_clicked(token):
 	var p_idx = -1
@@ -395,8 +373,8 @@ func _on_player_eliminated(player_idx):
 	player_lights[player_idx].light_energy = 10.0
 
 func _on_player_gained_money(player_idx, amount, total):
-	if player_idx >= 0 and player_idx < money_labels.size():
-		money_labels[player_idx].text = "P" + str(player_idx + 1) + " Money: $" + str(total)
+	if player_idx == 0 and money_labels.size() > 0:
+		money_labels[0].text = "$" + str(total)
 
 func _on_turn_started(player_idx):
 	var p_info = GameManager.players_info[player_idx]
