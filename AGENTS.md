@@ -24,6 +24,7 @@ Here, agents act as Full-Stack Developers working on vertical slices (Epics) rat
    - Prompts The Planner to begin the next Epic.
 
 ## Agentic Guidelines
+- **Mandatory Kanban Synchronization (Industry Best Practice):** All agents MUST maintain a flawless 1:1 correlation between their GitHub workflow and the Jira Kanban board. If an agent has Jira access, they must proactively update and transition their relevant Jira tickets to exactly match what they are currently doing (e.g., moving tickets to "Planning", "Execution", or "Validation" based on their local git state / PR state). Jira represents the supreme source of truth for production.
 - **Strict FSM Architecture:** Agents must enforce a strict Finite State Machine (FSM) for game states at all times during the development phase (e.g., `STATE_DRAW_PHASE`, `STATE_WAITING_FOR_PEEK`, `STATE_INTERRUPT`). Avoid loose boolean flags (like `is_player_turn`) to control game logic, to prevent race conditions during interrupts like Jump-Ins.
 - **Issue Prioritization:** Before starting an Epic or vertical slice, agents MUST check the GitHub Issues list. If there are open bugs or tasks related to their current work area, they must prioritize resolving them with **perfect repairs** and closing them **only after Lead approval**.
 - **GitHub Formatting:** Pull Request descriptions and issue bodies must use professional, beautiful GitHub Markdown formatting. Avoid raw escape characters (like `\n`) in terminal-based creation; prefer clean, multi-line blocks that render perfectly on GitHub.
@@ -39,6 +40,7 @@ Here, agents act as Full-Stack Developers working on vertical slices (Epics) rat
 - Never change the git email and user name.
 
 ## Coordination
+- **Kanban-Driven Development:** Before writing any code or switching branches, authenticate and verify your Epic/Story is placed in the correct active column in Jira. When opening a Pull Request or completing a task, immediately transition the Jira ticket correspondingly.
 - Before editing a file owned by another role, confirm whether a dependency or signal hookup is required and note it in your update.
 - Send status updates like “Card Engine: data resource now exposes suit/rank/points; awaiting Game Flow review” so the crew knows why the branch moved.
 - Always run `git status` before and after major changes to avoid conflicts with the other agents.
