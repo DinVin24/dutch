@@ -597,9 +597,11 @@ func _show_message(text: String):
 		child.queue_free()
 	
 	var label = Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", 32)
 	label.add_theme_color_override("font_color", Color(1, 1, 1))
-	label.add_theme_color_override("outline_color", Color(0, 0, 0))
-	label.add_theme_constant_override("outline_size", 4)
+	label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	label.add_theme_constant_override("outline_size", 6)
 	top_center.add_child(label)
 	# Bug 5: responsive pos
 	top_center.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -626,7 +628,8 @@ func _on_game_state_changed(new_state):
 	   GameManager.current_state != GameManager.GameState.DEAL_CARDS and \
 	   GameManager.current_state != GameManager.GameState.GAME_OVER:
 		if not GameManager.deck_manager.discard_pile.is_empty():
-			jump_in_btn.show()
+			if not GameManager.players_info[0].is_eliminated:
+				jump_in_btn.show()
 	
 	# Update deck/discard highlighting based on state
 	# (In 3D we can raise them or change material emission)
@@ -709,7 +712,8 @@ func _on_game_state_changed(new_state):
 
 	if new_state != GameManager.GameState.GAME_OVER:
 		if GameManager.deck_manager.discard_pile.size() > 0:
-			jump_in_btn.show()
+			if not GameManager.players_info[0].is_eliminated:
+				jump_in_btn.show()
 
 func _set_all_cards_interactive(enabled: bool):
 	for i in range(4):

@@ -296,6 +296,10 @@ func end_turn():
 func start_jump_in(player_idx: int = -1) -> void:
 	var resolved_idx := player_idx if player_idx != -1 else current_player_index
 	
+	if players_info[resolved_idx].is_eliminated:
+		print("FSM Guard: Eliminated player cannot start a jump-in.")
+		return
+		
 	if resolved_idx == 0:
 		# Human player: allow jump-in from any state EXCEPT their own active draw/resolve.
 		var blocked_states := [
