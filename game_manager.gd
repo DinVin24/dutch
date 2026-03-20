@@ -176,7 +176,7 @@ func _calculate_scores() -> Array:
 	)
 	return entries
 
-func _check_elimination_win_condition():
+func _check_elimination_win_condition() -> bool:
 	var active_players = 0
 	for i in range(num_players):
 		if not players_info[i].is_eliminated:
@@ -184,6 +184,8 @@ func _check_elimination_win_condition():
 	if active_players <= 1:
 		print("Only one player remains! Game Over.")
 		change_state(GameState.GAME_OVER)
+		return true
+	return false
 
 func drink_beer(p_idx: int):
 	if players_info[p_idx].is_eliminated: return
@@ -195,7 +197,12 @@ func drink_beer(p_idx: int):
 		players_info[p_idx].is_eliminated = true
 		player_eliminated.emit(p_idx)
 		print("Player ", p_idx, " is ELIMINATED!")
-		_check_elimination_win_condition()
+		var game_over = _check_elimination_win_condition()
+		
+		# If the player died during their own active turn, instantly end it
+		if not game_over and current_player_index == p_idx:
+			print("Player died on their turn. Forcing next turn.")
+			next_turn()
 
 func gain_money_for_discard(p_idx: int, card: CardData):
 	if players_info[p_idx].is_eliminated: return
@@ -378,6 +385,12 @@ func validate_jump_in(card_idx: int) -> bool:
 	print("No match. Jump In invalid.")
 	jump_in_failed.emit(jump_in_player_idx, card_idx, selected_card)
 	drink_beer(jump_in_player_idx)
+	
+	if players_info[jump_in_player_idx].is_eliminated:
+		jump_in_player_idx = -1
+		jump_in_was_own_draw_phase = false
+		return false
+		
 	await get_tree().create_timer(1.2, false).timeout
 
 	var penalty_card_dict: Dictionary = deck_manager.draw_card()
@@ -445,7 +458,13 @@ func player_discard_drawn_card():
 	deck_manager.discard_pile.append(drawn_card_data)
 	card_discarded.emit(current_player_index, drawn_card_data)
 	gain_money_for_discard(current_player_index, drawn_card_data)
-	drink_beer(current_player_index)
+	
+	var p_idx = current_player_index
+	drink_beer(p_idx)
+	
+	if players_info[p_idx].is_eliminated:
+		drawn_card_data = null
+		return
 	
 	var discarded_handled = drawn_card_data
 	drawn_card_data = null
@@ -481,6 +500,7 @@ func player_swap_drawn_card(card_idx: int):
 func _resolve_discard_effects(card: CardData):
 	# Wait for the card discard visual tween to complete before changing state
 	await get_tree().create_timer(0.4, false).timeout
+	if current_state == GameState.GAME_OVER: return
 	if card.rank == "Queen":
 		print("Queen discarded! FSM -> TURN_PEEK_ABILITY")
 		change_state(GameState.TURN_PEEK_ABILITY)
