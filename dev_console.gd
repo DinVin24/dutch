@@ -1,4 +1,5 @@
 extends CanvasLayer
+const CardData = preload("res://card_data.gd")
 
 @onready var GameManager = get_node("/root/GameManager")
 @onready var window = $ConsoleWindow
