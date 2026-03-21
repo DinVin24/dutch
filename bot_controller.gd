@@ -1,6 +1,6 @@
 extends Node
 class_name BotController
-const CardData = preload("res://card_data.gd")
+const TYPE_REGISTRY = preload("res://type_registry.gd")
 
 # ============================================================
 # BotController — Simple AI for all non-human players.

@@ -1,6 +1,5 @@
 extends Node
-const CardData = preload("res://card_data.gd")
-const DeckManager = preload("res://deck_manager.gd")
+const TYPE_REGISTRY = preload("res://type_registry.gd")
 
 # Strict FSM Game States
 enum GameState {

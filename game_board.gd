@@ -1,8 +1,5 @@
 extends Control
-const CardData = preload("res://card_data.gd")
-const BotController = preload("res://bot_controller.gd")
-const CardUI = preload("res://card.gd")
-const Card3D = preload("res://card_3d.gd")
+const TYPE_REGISTRY = preload("res://type_registry.gd")
 
 var QA_SKIP_ANIM: bool = false
 
