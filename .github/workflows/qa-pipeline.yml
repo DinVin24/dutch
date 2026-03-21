@@ -39,7 +39,7 @@ jobs:
           download_url="${GODOT_DOWNLOAD_URL_OVERRIDE:-}"
           if [ -z "$download_url" ]; then
             version="${GODOT_VERSION_OVERRIDE:-$default_version}"
-            download_url="https://downloads.tuxfamily.org/godotengine/$version/Godot_v$version-stable_linux.x86_64.zip"
+            download_url="https://downloads.godotengine.org/godotengine/$version/Godot_v$version-stable_linux.x86_64.zip"
           fi
           echo "Downloading Godot from $download_url"
           curl -L -o godot.zip "$download_url"
