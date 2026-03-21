@@ -27,6 +27,9 @@ jobs:
       - name: Print project autoloads
         run: head -n 40 project.godot
 
+      - name: Clean Godot import cache
+        run: rm -rf ${{ github.workspace }}/.godot
+
       - name: Install unzip and jq (needed for Godot archive)
         run: |
           sudo apt-get update

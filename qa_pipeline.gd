@@ -1,6 +1,7 @@
 extends SceneTree
 
 const TYPE_REGISTRY = preload("res://type_registry.gd")
+const CardData = preload("res://card_data.gd")
 const GM_SCRIPT = preload("res://game_manager.gd")
 const BOT_SCRIPT = preload("res://bot_controller.gd")
 const GAME_BOARD_2D_SCENE = preload("res://game_board.tscn")

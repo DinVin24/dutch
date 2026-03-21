@@ -1,4 +1,7 @@
 extends Node3D
+const CardData = preload("res://card_data.gd")
+const BotController = preload("res://bot_controller.gd")
+const Card3D = preload("res://card_3d.gd")
 
 var QA_SKIP_ANIM: bool = false
 
