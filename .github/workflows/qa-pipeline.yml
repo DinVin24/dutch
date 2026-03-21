@@ -25,20 +25,14 @@ jobs:
         run: |
           latest_url=https://api.github.com/repos/godotengine/godot/releases/latest
           curl -sL "$latest_url" > latest.json
-          download_url=$(jq -r '.assets[] | select(.name | test("linux\\.x86_64.*\\.zip")) | .browser_download_url' latest.json | head -n 1)
+          download_url=$(jq -r '.assets[] | select(.name | test("linux\\.x86_64\\.zip")) | .browser_download_url' latest.json | head -n 1)
           if [ -z "$download_url" ]; then
             echo "Godot download URL not found" >&2
             exit 1
           fi
           curl -L -o godot.zip "$download_url"
           unzip godot.zip -d godot
-          godot_binary=$(ls godot/*linux*.x86_64 2>/dev/null | head -n 1)
-          if [ -z "$godot_binary" ]; then
-            echo "Godot binary not found inside archive" >&2
-            exit 1
-          fi
-          chmod +x "$godot_binary"
-          echo "GODOT_BINARY=$godot_binary" >> $GITHUB_ENV
+          chmod +x godot/*.x86_64
 
       - name: Run the QA pipeline
-        run: $GODOT_BINARY --headless --path ${{ github.workspace }} --script res://qa_pipeline.gd
+        run: godot/Godot_v4.6.1-stable_linux.x86_64 --headless --path ${{ github.workspace }} --script res://qa_pipeline.gd
