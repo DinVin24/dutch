@@ -71,27 +71,67 @@ func stop_menu_music() -> void:
 		bg_music_player.stop()
 
 func initialize_game(p_count: int = 4):
-	num_players = p_count
 	players_info.clear()
 	current_player_index = 0
 	dutch_caller_index = -1
 	jump_in_player_idx = -1
-	for i in range(num_players):
-		players_info.append({
-			"id": i,
-			"name": "Player_" + str(i + 1),
-			"score": 0,
-			"hand": [], # CardData objects
-			"can_call_dutch": true,
-			# bot_memory: { player_idx: { card_idx: CardData } }
-			# Populated by BotController during INITIAL_PEEK.
-			"bot_memory": {}
-		})
 	
-	# Ensure a fresh deck is ready for the new match
+	if NetworkManager.peer != null:
+		# Multiplayer setup
+		var peer_ids = NetworkManager.players.keys()
+		peer_ids.sort() # Ensure consistent order across all clients
+		num_players = peer_ids.size()
+		
+		for i in range(num_players):
+			var pid = peer_ids[i]
+			players_info.append({
+				"id": i,
+				"peer_id": pid,
+				"name": NetworkManager.players[pid].name,
+				"score": 0,
+				"hand": [], # CardData objects
+				"can_call_dutch": true,
+				"bot_memory": {}
+			})
+	else:
+		# Local singleplayer/hotseat setup
+		num_players = p_count
+		for i in range(num_players):
+			players_info.append({
+				"id": i,
+				"name": "Player_" + str(i + 1),
+				"peer_id": 1 if i == 0 else 0, # 1 for human, 0 for bot
+				"score": 0,
+				"hand": [], # CardData objects
+				"can_call_dutch": true,
+				"bot_memory": {}
+			})
+
+var clients_ready_to_start = []
+
+@rpc("any_peer", "call_local", "reliable")
+func mark_client_ready() -> void:
+	if multiplayer.multiplayer_peer == null:
+		clients_ready_to_start.clear()
+		_rpc_start_match(num_players if num_players > 0 else 4, randi())
+		return
+		
+	var id = multiplayer.get_remote_sender_id()
+	if id == 0: id = 1
+	if not clients_ready_to_start.has(id):
+		clients_ready_to_start.append(id)
+		
+	if multiplayer.is_server():
+		if clients_ready_to_start.size() >= NetworkManager.players.size():
+			clients_ready_to_start.clear()
+			_rpc_start_match.rpc(NetworkManager.players.size(), randi())
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_start_match(p_count: int, initial_seed: int) -> void:
+	initialize_game(p_count)
+	seed(initial_seed)
 	deck_manager.create_deck()
 	deck_ready.emit()
-	
 	start_game()
 
 func change_state(new_state: GameState):
@@ -150,6 +190,14 @@ func _calculate_scores() -> Array:
 func start_game():
 	change_state(GameState.DEAL_CARDS)
 
+func get_local_player_idx() -> int:
+	if multiplayer.multiplayer_peer == null: return 0
+	var my_id = multiplayer.get_unique_id()
+	for i in range(players_info.size()):
+		if players_info[i].peer_id == my_id: return i
+	return 0
+
+@rpc("any_peer", "call_local", "reliable")
 func call_dutch(player_id: int):
 	if current_state != GameState.TURN_END_CHOICE:
 		print("FSM Blocked: Cannot call Dutch outside of TURN_END_CHOICE state")
@@ -174,6 +222,7 @@ func _prompt_turn_end():
 		return
 	change_state(GameState.TURN_END_CHOICE)
 
+@rpc("any_peer", "call_local", "reliable")
 func end_turn():
 	if current_state != GameState.TURN_END_CHOICE and current_state != GameState.TURN_JUMP_IN_SELECTION:
 		print("FSM Blocked: Cannot end turn outside of END_CHOICE or JUMP_IN state")
@@ -183,6 +232,7 @@ func end_turn():
 ## player_idx: who is jumping in. -1 defaults to current_player_index (bot use).
 ## Bots may only call this during TURN_END_CHOICE.
 ## Player 0 may call this during any bot-turn state to interrupt and select a card.
+@rpc("any_peer", "call_local", "reliable")
 func start_jump_in(player_idx: int = -1) -> void:
 	var resolved_idx := player_idx if player_idx != -1 else current_player_index
 	
@@ -216,6 +266,7 @@ func start_jump_in(player_idx: int = -1) -> void:
 	jump_in_player_idx = resolved_idx
 	change_state(GameState.TURN_JUMP_IN_SELECTION)
 
+@rpc("any_peer", "call_local", "reliable")
 func validate_jump_in(card_idx: int) -> bool:
 	if current_state != GameState.TURN_JUMP_IN_SELECTION:
 		return false
@@ -281,18 +332,21 @@ func validate_jump_in(card_idx: int) -> bool:
 	return false
 
 ## Human opted out of a jump-in: return to TURN_END_CHOICE without penalty.
+@rpc("any_peer", "call_local", "reliable")
 func cancel_jump_in() -> void:
 	if current_state != GameState.TURN_JUMP_IN_SELECTION:
 		return
 	jump_in_player_idx = -1
 	change_state(pre_jump_in_state if pre_jump_in_state != GameState.TURN_JUMP_IN_SELECTION else GameState.TURN_END_CHOICE)
 
+@rpc("any_peer", "call_local", "reliable")
 func confirm_dutch():
 	if current_state != GameState.TURN_CONFIRM_DUTCH:
 		return
 	print("Player ", current_player_index, " CONFIRMED Dutch. Game Over.")
 	change_state(GameState.GAME_OVER)
 
+@rpc("any_peer", "call_local", "reliable")
 func cancel_dutch():
 	if current_state != GameState.TURN_CONFIRM_DUTCH:
 		return
@@ -302,6 +356,7 @@ func cancel_dutch():
 	# Give them their normal turn back
 	change_state(GameState.TURN_START_DRAW)
 
+@rpc("any_peer", "call_local", "reliable")
 func player_draw_card():
 	if current_state != GameState.TURN_START_DRAW:
 		print("FSM Blocked: Cannot draw card outside of TURN_START_DRAW state")
@@ -319,6 +374,7 @@ func player_draw_card():
 	print("GameManager: [DRAW SUCCESS] Player ", current_player_index, " state moved to RESOLVE.")
 	card_drawn_to_pending.emit(current_player_index, drawn_card_data)
 
+@rpc("any_peer", "call_local", "reliable")
 func player_discard_drawn_card():
 	if current_state != GameState.TURN_RESOLVE_DRAWN:
 		print("FSM Blocked: Cannot discard pending card outside of TURN_RESOLVE_DRAWN state")
@@ -333,6 +389,7 @@ func player_discard_drawn_card():
 	
 	_resolve_discard_effects(discarded_handled)
 
+@rpc("any_peer", "call_local", "reliable")
 func player_swap_drawn_card(card_idx: int):
 	if current_state != GameState.TURN_RESOLVE_DRAWN:
 		print("FSM Blocked: Cannot swap outside of TURN_RESOLVE_DRAWN state")
@@ -370,17 +427,45 @@ func _resolve_discard_effects(card: CardData):
 	else:
 		_prompt_turn_end()
 
+var _peek_ready_players = []
+
+@rpc("any_peer", "call_local", "reliable")
 func complete_initial_peek():
 	if current_state != GameState.INITIAL_PEEK:
 		return
+		
+	var sender_id = multiplayer.get_remote_sender_id()
+	if sender_id == 0: sender_id = 1
+	
+	if not _peek_ready_players.has(sender_id):
+		_peek_ready_players.append(sender_id)
+		
+	var humans = 0
+	var humans_ready = 0
+	for i in range(num_players):
+		var pid = players_info[i].peer_id
+		if pid != 0:
+			humans += 1
+			if _peek_ready_players.has(pid):
+				humans_ready += 1
+				
+	if humans_ready >= humans:
+		if multiplayer.is_server() or multiplayer.multiplayer_peer == null:
+			_proceed_to_first_turn.rpc()
+
+@rpc("authority", "call_local", "reliable")
+func _proceed_to_first_turn():
+	_peek_ready_players.clear()
 	change_state(GameState.TURN_START_DRAW)
 
+@rpc("any_peer", "call_local", "reliable")
 func complete_peek_ability():
 	if current_state != GameState.TURN_PEEK_ABILITY:
 		print("FSM Blocked: Cannot complete peek outside of TURN_PEEK_ABILITY state")
 		return
 	_prompt_turn_end()
 
+@rpc("any_peer", "call_local", "reliable")
 func complete_swap_ability(player1_idx: int, card1_idx: int, player2_idx: int, card2_idx: int):
 	if current_state != GameState.TURN_SWAP_ABILITY:
 		print("FSM Blocked: Cannot complete swap outside of TURN_SWAP_ABILITY state")

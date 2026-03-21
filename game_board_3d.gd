@@ -56,6 +56,7 @@ var _base_camera_pos: Vector3
 func _ready():
 	player_hands = [[], [], [], []]
 	print("Game Board 3D: Ready. Connecting signals...")
+	
 	GameManager.stop_menu_music()
 	GameManager.game_state_changed.connect(_on_game_state_changed)
 	GameManager.turn_started.connect(_on_turn_started)
@@ -101,8 +102,12 @@ func _ready():
 				if child is Control and not child is Button:
 					child.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	
-	print("Game Board 3D: Starting game...")
-	GameManager.initialize_game(4)
+	print("Game Board 3D: Notifying GameManager we are ready to start...")
+	if multiplayer.multiplayer_peer == null:
+		GameManager.mark_client_ready()
+	else:
+		GameManager.mark_client_ready.rpc_id(1)
+	
 	trigger_glitch(0.4, 0.8) # Intro glitch
 
 func _create_hud_ui():
@@ -296,7 +301,7 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	
 	_update_deck_visual()
 	
-	if player_idx != 0:
+	if player_idx != GameManager.get_local_player_idx():
 		_show_message(GameManager.players_info[player_idx].name + " is drawing...")
 		return
 		
@@ -446,11 +451,11 @@ func _show_message(text: String):
 	top_center.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	label.show()
 
-func _on_end_turn_pressed(): GameManager.end_turn()
-func _on_jump_in_pressed(): GameManager.start_jump_in(0)
-func _on_call_dutch_pressed(): GameManager.call_dutch(0)
-func _on_confirm_dutch_pressed(): GameManager.confirm_dutch()
-func _on_cancel_dutch_pressed(): GameManager.cancel_dutch()
+func _on_end_turn_pressed(): GameManager.end_turn.rpc()
+func _on_jump_in_pressed(): GameManager.start_jump_in.rpc(GameManager.get_local_player_idx())
+func _on_call_dutch_pressed(): GameManager.call_dutch.rpc(GameManager.get_local_player_idx())
+func _on_confirm_dutch_pressed(): GameManager.confirm_dutch.rpc()
+func _on_cancel_dutch_pressed(): GameManager.cancel_dutch.rpc()
 
 func _on_game_state_changed(new_state):
 	_hide_message()
@@ -478,7 +483,7 @@ func _on_game_state_changed(new_state):
 		GameManager.GameState.TURN_RESOLVE_DRAWN, \
 		GameManager.GameState.TURN_END_CHOICE, \
 		GameManager.GameState.TURN_CONFIRM_DUTCH:
-			block_cards = (GameManager.current_player_index != 0)
+			block_cards = (GameManager.current_player_index != GameManager.get_local_player_idx())
 		GameManager.GameState.TURN_PEEK_ABILITY, \
 		GameManager.GameState.TURN_SWAP_ABILITY, \
 		GameManager.GameState.TURN_JUMP_IN_SELECTION, \
@@ -494,6 +499,19 @@ func _on_game_state_changed(new_state):
 	
 	match new_state:
 		GameManager.GameState.DEAL_CARDS:
+			var local_idx = GameManager.get_local_player_idx()
+			player_pos_nodes = {
+				local_idx: $PlayerPositions/Bottom,
+				(local_idx + 1) % 4: $PlayerPositions/Left,
+				(local_idx + 2) % 4: $PlayerPositions/Top,
+				(local_idx + 3) % 4: $PlayerPositions/Right
+			}
+			player_lights = {
+				local_idx: $PlayerPositions/Bottom/Spotlight_P0,
+				(local_idx + 1) % 4: $PlayerPositions/Left/Spotlight_P1,
+				(local_idx + 2) % 4: $PlayerPositions/Top/Spotlight_P2,
+				(local_idx + 3) % 4: $PlayerPositions/Right/Spotlight_P3
+			}
 			turn_label.text = "Dealing cards..."
 			_handle_initial_deal()
 		GameManager.GameState.INITIAL_PEEK:
@@ -502,42 +520,42 @@ func _on_game_state_changed(new_state):
 			_update_turn_lights(-1, true)
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
 			print("GameBoard3D: UI - Showing TURN_RESOLVE_DRAWN")
-			if GameManager.current_player_index == 0:
+			if GameManager.current_player_index == GameManager.get_local_player_idx():
 				_show_message("Click a card in your hand to swap, or the drawn card to discard.")
-				_highlight_selectable_cards(false) # Highlight & enable player 0 hand
+				_highlight_selectable_cards(false) # Highlight & enable player hand
 			else:
 				var player_name = GameManager.players_info[GameManager.current_player_index].name
 				_show_message(player_name + " is deciding...")
 		GameManager.GameState.TURN_END_CHOICE:
 			print("GameBoard3D: UI - Showing TURN_END_CHOICE")
-			if GameManager.current_player_index == 0:
+			if GameManager.current_player_index == GameManager.get_local_player_idx():
 				end_turn_btn.show()
-				if GameManager.dutch_caller_index == -1 and GameManager.players_info[0].can_call_dutch:
+				var local_idx = GameManager.get_local_player_idx()
+				if GameManager.dutch_caller_index == -1 and GameManager.players_info[local_idx].can_call_dutch:
 					call_dutch_btn.show()
 		GameManager.GameState.TURN_JUMP_IN_SELECTION:
 			print("GameBoard3D: UI - Showing TURN_JUMP_IN_SELECTION")
 			var ji_idx = GameManager.jump_in_player_idx
 			var ji_name = GameManager.players_info[ji_idx].name if ji_idx >= 0 else "Someone"
 			_show_message(ji_name + ": pick a matching card, or end turn to cancel.")
-			if ji_idx == 0:
+			if ji_idx == GameManager.get_local_player_idx():
 				end_turn_btn.show()
 				_highlight_selectable_cards(false) # Highlight ONLY player hand, not opponents
 		GameManager.GameState.TURN_CONFIRM_DUTCH:
 			print("GameBoard3D: UI - Showing TURN_CONFIRM_DUTCH")
-			if GameManager.current_player_index == 0:
+			if GameManager.current_player_index == GameManager.get_local_player_idx():
 				_show_message("You called Dutch! Confirm or Forfeit?")
 				confirm_dutch_btn.show()
 				forfeit_dutch_btn.show()
 		GameManager.GameState.TURN_PEEK_ABILITY:
-			if GameManager.current_player_index == 0:
+			if GameManager.current_player_index == GameManager.get_local_player_idx():
 				_show_message("Select ANY card to peek at.")
 				_highlight_selectable_cards(true)
 			_update_turn_lights(-1, true) # All lights on for Queen
 		GameManager.GameState.TURN_SWAP_ABILITY:
-			if GameManager.current_player_index == 0:
+			if GameManager.current_player_index == GameManager.get_local_player_idx():
 				_show_message("Select TWO cards to swap.")
-				# User specifically disabled highlighting for this phase, so just enable clicks
-				_set_player_hand_interactive(0, true)
+				_set_player_hand_interactive(GameManager.get_local_player_idx(), true)
 				# Also allow swapping with opponents
 				for p in range(1, GameManager.num_players):
 					_set_player_hand_interactive(p, true)
@@ -570,8 +588,9 @@ func _highlight_selectable_cards(include_opponents: bool = false):
 		pending_card.set_highlight(true)
 		pending_card.set_interactive(true)
 
+	var local_idx = GameManager.get_local_player_idx()
 	for i in range(4):
-		if i == 0 or include_opponents:
+		if i == local_idx or include_opponents:
 			for card in player_pos_nodes[i].get_children():
 				if card is Card3D:
 					card.set_highlight(true)
@@ -682,7 +701,7 @@ func _start_peek_phase():
 	print("GameBoard3D: _start_peek_phase started")
 	_show_message("Select TWO cards to peek at.")
 	# In 3D, we can highlight them by raising them slightly
-	for c3d in player_pos_nodes[0].get_children():
+	for c3d in player_pos_nodes[GameManager.get_local_player_idx()].get_children():
 		if c3d is Card3D:
 			c3d.set_highlight(true)
 
@@ -696,7 +715,7 @@ func _on_card_clicked(node, data):
 			
 	match GameManager.current_state:
 		GameManager.GameState.INITIAL_PEEK:
-			if node.get_parent() == player_pos_nodes[0] and not data.is_face_up:
+			if node.get_parent() == player_pos_nodes[GameManager.get_local_player_idx()] and not data.is_face_up:
 				if peeked_cards.size() >= 2: return # Strict limit
 				if node in peeked_cards: return
 				node.animate_flip(true)
@@ -709,24 +728,20 @@ func _on_card_clicked(node, data):
 						c.set_interactive(false)
 					peeked_cards.clear()
 					_clear_all_highlights()
-					GameManager.complete_initial_peek()
+					GameManager.complete_initial_peek.rpc()
 		
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
-			if p_idx == 0:
-				GameManager.player_swap_drawn_card(player_hands[0].find(node))
+			if p_idx == GameManager.get_local_player_idx():
+				GameManager.player_swap_drawn_card.rpc(player_hands[p_idx].find(node))
 		
 		GameManager.GameState.TURN_JUMP_IN_SELECTION:
 			# JUMP-IN SELECTION: Use simple persistent-array index
 			var is_drawn = (node == pending_card or node.name == "PendingCard")
-			var c_idx = -2 if is_drawn else player_hands[0].find(node)
+			var c_idx = -2 if is_drawn else player_hands[GameManager.get_local_player_idx()].find(node)
 			
 			if c_idx != -1 or is_drawn:
 				_clear_all_highlights()
-				if await GameManager.validate_jump_in(c_idx):
-					print("[JUMP-IN] SUCCESS")
-				else:
-					print("[JUMP-IN] FAILED")
-					_on_jump_in_failed(0, c_idx, data)
+				GameManager.validate_jump_in.rpc(c_idx)
 				
 		GameManager.GameState.TURN_PEEK_ABILITY:
 			if node.data.is_face_up: return
@@ -736,7 +751,7 @@ func _on_card_clicked(node, data):
 			_clear_all_highlights() # Clear highlights BEFORE flipping back
 			node.animate_flip(false)
 			_set_all_cards_interactive(true)
-			GameManager.complete_peek_ability()
+			GameManager.complete_peek_ability.rpc()
 			_clear_all_highlights()
 			
 		GameManager.GameState.TURN_SWAP_ABILITY:
@@ -770,12 +785,12 @@ func _on_discard_input_event(_camera, event, _position, _normal, _shape_idx):
 		_on_discard_clicked()
 
 func _on_deck_clicked():
-	if GameManager.current_player_index == 0:
-		GameManager.player_draw_card()
+	if GameManager.current_player_index == GameManager.get_local_player_idx():
+		GameManager.player_draw_card.rpc()
 
 func _on_discard_clicked():
-	if GameManager.current_player_index == 0:
-		GameManager.player_discard_drawn_card()
+	if GameManager.current_player_index == GameManager.get_local_player_idx():
+		GameManager.player_discard_drawn_card.rpc()
 
 func _on_scores_ready(results):
 	var overlay = CanvasLayer.new()

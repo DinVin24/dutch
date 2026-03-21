@@ -33,6 +33,15 @@ func _wait(seconds: float) -> void:
 	if _is_headless(): return
 	await gm.get_tree().create_timer(seconds, false).timeout
 
+func _is_bot(idx: int) -> bool:
+	if idx < 0 or idx >= gm.players_info.size(): return false
+	return gm.players_info[idx].peer_id == 0
+
+func _should_run_bots() -> bool:
+	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
+		return false
+	return true
+
 # ─── Memory helpers ──────────────────────────────────────────
 
 ## Returns a bot's own card memory dict { card_idx: CardData }
@@ -76,12 +85,14 @@ func _hand_summary(bot_idx: int) -> String:
 # ─── Signal Handlers ─────────────────────────────────────────
 
 func _on_game_state_changed(new_state: int) -> void:
+	if not _should_run_bots(): return
+
 	if new_state == GameManager.GameState.INITIAL_PEEK:
 		_execute_initial_peek()
 		return
 
 	var idx: int = gm.current_player_index
-	if idx == 0: return  # Human handles their own turns
+	if not _is_bot(idx): return
 
 	match new_state:
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
@@ -97,11 +108,12 @@ func _on_game_state_changed(new_state: int) -> void:
 
 ## Rule 2: Mandatory draw at the start of a bot's turn.
 func _on_turn_started(bot_idx: int) -> void:
-	if bot_idx == 0: return
+	if not _should_run_bots(): return
+	if not _is_bot(bot_idx): return
 	await _wait(1.5)
 	if gm.current_state != GameManager.GameState.TURN_START_DRAW: return
 	if gm.current_player_index != bot_idx: return
-	gm.player_draw_card()
+	gm.player_draw_card.rpc()
 
 ## Rule 1: Constant jump-in monitoring — fires every time any card is discarded.
 func _on_card_discarded(_discarder_idx: int, card_data: CardData) -> void:
@@ -109,7 +121,9 @@ func _on_card_discarded(_discarder_idx: int, card_data: CardData) -> void:
 
 ## Shift memory indices when a card is removed from someone's hand.
 func _on_memory_shift_required(target_player_idx: int, removed_card_idx: int) -> void:
-	for bot_idx in range(1, gm.num_players):
+	if not _should_run_bots(): return
+	for bot_idx in range(0, gm.num_players):
+		if not _is_bot(bot_idx): continue
 		var mem: Dictionary = gm.players_info[bot_idx].bot_memory
 		if not mem.has(target_player_idx) or target_player_idx == -1: continue
 		var p_mem: Dictionary = mem[target_player_idx]
@@ -126,10 +140,12 @@ func _on_memory_shift_required(target_player_idx: int, removed_card_idx: int) ->
 
 ## Check all bots — if any KNOWS a card in its hand matching the discarded rank, jump in.
 func _try_jump_ins(card_data: CardData) -> void:
+	if not _should_run_bots(): return
 	await _wait(0.5)
 	if gm.current_state != GameManager.GameState.TURN_END_CHOICE: return
 
-	for bot_idx in range(1, gm.num_players):
+	for bot_idx in range(0, gm.num_players):
+		if not _is_bot(bot_idx): continue
 		if gm.current_state != GameManager.GameState.TURN_END_CHOICE: break
 		
 		var match_idx := -1
@@ -148,15 +164,16 @@ func _try_jump_ins(card_data: CardData) -> void:
 			var over_str: String = top_card.display_name() if top_card != null else "?"
 			print("Player %d jumped in with %s over %s" % [bot_idx, jumped_card.display_name(), over_str])
 			gm.bot_action.emit("Player %d jumped in with %s over %s." % [bot_idx, jumped_card.display_name(), over_str])
-			gm.start_jump_in(bot_idx)
-			gm.validate_jump_in(match_idx)
+			gm.start_jump_in.rpc(bot_idx)
+			gm.validate_jump_in.rpc(match_idx)
 			break  # Only one jump-in per discard event
 
 # ─── Bot Turn Actions ─────────────────────────────────────────
 
 ## INITIAL PEEK: each bot learns exactly 2 of its 4 dealt cards.
 func _execute_initial_peek() -> void:
-	for bot_idx in range(1, gm.num_players):
+	for bot_idx in range(0, gm.num_players):
+		if not _is_bot(bot_idx): continue
 		var bot_info: Dictionary = gm.players_info[bot_idx]
 		# Build a fresh memory structure for all players
 		var mem := {}
@@ -206,7 +223,7 @@ func _execute_resolve_drawn(bot_idx: int) -> void:
 		print("%s\nDrew %s\nDiscarded %s for %s" % [
 			summary, drawn.display_name(), card_name, drawn.display_name()])
 		gm.bot_action.emit("Player %d drew %s. Discarded %s." % [bot_idx, drawn.display_name(), card_name])
-		gm.player_swap_drawn_card(worst_idx)
+		gm.player_swap_drawn_card.rpc(worst_idx)
 	else:
 		# Drawn card is no better — just discard it
 		var summary := _hand_summary(bot_idx)
@@ -250,7 +267,7 @@ func _execute_queen_peek(bot_idx: int) -> void:
 			print("Player %d used a Queen to learn opponent card: *%s" % [bot_idx, card.display_name()])
 			gm.bot_action.emit("Player %d used a Queen to reveal %s." % [bot_idx, card.display_name()])
 
-	gm.complete_peek_ability()
+	gm.complete_peek_ability.rpc()
 
 ## JACK ABILITY: swap 2 random cards from any two different opponent slots.
 func _execute_jack_swap(bot_idx: int) -> void:
@@ -268,7 +285,7 @@ func _execute_jack_swap(bot_idx: int) -> void:
 			slots.append({"p": p, "c": c})
 
 	if slots.size() < 2:
-		gm.complete_swap_ability(0, 0, 0, 0)  # Failsafe edge case
+		gm.complete_swap_ability.rpc(0, 0, 0, 0)  # Failsafe edge case
 		return
 
 	slots.shuffle()
@@ -281,7 +298,7 @@ func _execute_jack_swap(bot_idx: int) -> void:
 	if s2 == null: s2 = slots[1]  # fallback: same player, different card
 
 	_update_memory_on_swap(bot_idx, s1.p, s1.c, s2.p, s2.c)
-	gm.complete_swap_ability(s1.p, s1.c, s2.p, s2.c)
+	gm.complete_swap_ability.rpc(s1.p, s1.c, s2.p, s2.c)
 
 ## END CHOICE: call Dutch if all cards are known and score < 7; otherwise end turn.
 func _execute_end_choice(bot_idx: int) -> void:
@@ -301,23 +318,25 @@ func _execute_end_choice(bot_idx: int) -> void:
 		for c in _mem(bot_idx).values(): score += c.point_value
 		if score < 7 and gm.dutch_caller_index == -1 and gm.players_info[bot_idx].can_call_dutch:
 			gm.bot_action.emit("Player %d calls DUTCH! (score: %d)" % [bot_idx, score])
-			gm.call_dutch(bot_idx)
+			gm.call_dutch.rpc(bot_idx)
 			return
 
-	gm.end_turn()
+	gm.end_turn.rpc()
 
 ## CONFIRM DUTCH: bot always confirms.
 func _execute_confirm_dutch(bot_idx: int) -> void:
 	await _wait(1.5)
 	if gm.current_state != GameManager.GameState.TURN_CONFIRM_DUTCH: return
 	if gm.current_player_index != bot_idx: return
-	gm.confirm_dutch()
+	gm.confirm_dutch.rpc()
 
 # ─── Memory Utility ───────────────────────────────────────────
 
 ## Update all bots' memories when two card slots are swapped (e.g. after Jack).
 func _update_memory_on_swap(_acting_bot: int, p1: int, c1: int, p2: int, c2: int) -> void:
-	for bot_idx in range(1, gm.num_players):
+	if not _should_run_bots(): return
+	for bot_idx in range(0, gm.num_players):
+		if not _is_bot(bot_idx): continue
 		var mem: Dictionary = gm.players_info[bot_idx].bot_memory
 		if not mem.has(p1): mem[p1] = {}
 		if not mem.has(p2): mem[p2] = {}

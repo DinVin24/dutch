@@ -6,6 +6,9 @@ func _ready() -> void:
 func _on_start_button_pressed() -> void:
 	get_tree().change_scene_to_file("res://game_board_3d.tscn")
 
+func _on_multiplayer_button_pressed() -> void:
+	get_tree().change_scene_to_file("res://lobby.tscn")
+
 func _on_settings_button_pressed() -> void:
 	var settings_scene = preload("res://settings_menu.tscn")
 	var settings_instance = settings_scene.instantiate()

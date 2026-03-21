@@ -19,6 +19,7 @@ config/icon="res://assets/images/icon.svg"
 
 GameManager="*res://game_manager.gd"
 DevConsole="*res://dev_console.tscn"
+NetworkManager="*res://network_manager.gd"
 
 [input]
 

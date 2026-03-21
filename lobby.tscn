@@ -1,0 +1,102 @@
+[gd_scene format=3 uid="uid://df72kxw2l1m4g"]
+
+[ext_resource type="Script" path="res://lobby.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/images/bg_rave.png" id="2_bg"]
+
+[node name="Lobby" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_bg")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="SetupPanel" type="VBoxContainer" parent="CenterContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="Title" type="Label" parent="CenterContainer/SetupPanel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 64
+text = "Multiplayer"
+horizontal_alignment = 1
+
+[node name="HostButton" type="Button" parent="CenterContainer/SetupPanel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Host Game"
+
+[node name="HSeparator" type="HSeparator" parent="CenterContainer/SetupPanel"]
+layout_mode = 2
+
+[node name="IPLineEdit" type="LineEdit" parent="CenterContainer/SetupPanel"]
+custom_minimum_size = Vector2(450, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+placeholder_text = "Enter Host IP (e.g 192.168.1.5)"
+alignment = 1
+
+[node name="JoinButton" type="Button" parent="CenterContainer/SetupPanel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Join Game"
+
+[node name="HSeparator2" type="HSeparator" parent="CenterContainer/SetupPanel"]
+layout_mode = 2
+
+[node name="BackButtonSetup" type="Button" parent="CenterContainer/SetupPanel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Back"
+
+[node name="RoomPanel" type="VBoxContainer" parent="CenterContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="Title" type="Label" parent="CenterContainer/RoomPanel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 64
+text = "Lobby Room"
+horizontal_alignment = 1
+
+[node name="PlayerList" type="VBoxContainer" parent="CenterContainer/RoomPanel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="StartButton" type="Button" parent="CenterContainer/RoomPanel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Start Game"
+
+[node name="BackButtonRoom" type="Button" parent="CenterContainer/RoomPanel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Leave Room"
+
+[connection signal="pressed" from="CenterContainer/SetupPanel/HostButton" to="." method="_on_host_pressed"]
+[connection signal="pressed" from="CenterContainer/SetupPanel/JoinButton" to="." method="_on_join_pressed"]
+[connection signal="pressed" from="CenterContainer/SetupPanel/BackButtonSetup" to="." method="_on_back_pressed"]
+[connection signal="pressed" from="CenterContainer/RoomPanel/StartButton" to="." method="_on_start_game_pressed"]
+[connection signal="pressed" from="CenterContainer/RoomPanel/BackButtonRoom" to="." method="_on_back_pressed"]
