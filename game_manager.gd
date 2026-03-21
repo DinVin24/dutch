@@ -130,7 +130,9 @@ func _can_transition_to(new_state: GameState) -> bool:
 			return new_state in [
 				GameState.TURN_PEEK_ABILITY,
 				GameState.TURN_SWAP_ABILITY,
-				GameState.TURN_END_CHOICE
+				GameState.TURN_END_CHOICE,
+				GameState.TURN_JUMP_IN_SELECTION,
+				GameState.TURN_CONFIRM_DUTCH
 			]
 		GameState.TURN_PEEK_ABILITY, GameState.TURN_SWAP_ABILITY:
 			return new_state in [
@@ -147,6 +149,7 @@ func _can_transition_to(new_state: GameState) -> bool:
 		GameState.TURN_JUMP_IN_SELECTION:
 			return new_state in [
 				GameState.TURN_START_DRAW,
+				GameState.TURN_RESOLVE_DRAWN,
 				GameState.TURN_END_CHOICE,
 				GameState.TURN_PEEK_ABILITY,
 				GameState.TURN_SWAP_ABILITY,
@@ -183,11 +186,22 @@ func can_player_start_jump_in(player_idx: int) -> bool:
 		return false
 	if deck_manager == null or deck_manager.discard_pile.is_empty():
 		return false
-	if current_state == GameState.TURN_START_DRAW:
+	if player_idx == 0:
+		if current_state in [
+			GameState.INITIALIZING,
+			GameState.DEAL_CARDS,
+			GameState.INITIAL_PEEK,
+			GameState.TURN_JUMP_IN_SELECTION,
+			GameState.TURN_PEEK_ABILITY,
+			GameState.TURN_SWAP_ABILITY,
+			GameState.TURN_CONFIRM_DUTCH,
+			GameState.GAME_OVER
+		]:
+			return false
+		if current_state == GameState.TURN_RESOLVE_DRAWN:
+			return current_player_index != 0
 		return true
-	if current_state == GameState.TURN_END_CHOICE:
-		return player_idx != current_player_index
-	return false
+	return current_state == GameState.TURN_END_CHOICE and player_idx != current_player_index
 
 func can_player_cancel_jump_in(player_idx: int) -> bool:
 	return _is_valid_player_index(player_idx) 		and current_state == GameState.TURN_JUMP_IN_SELECTION 		and jump_in_player_idx == player_idx
@@ -476,6 +490,9 @@ func complete_peek_ability():
 func complete_swap_ability(player1_idx: int, card1_idx: int, player2_idx: int, card2_idx: int):
 	if current_state != GameState.TURN_SWAP_ABILITY:
 		print("FSM Blocked: Cannot complete swap outside of TURN_SWAP_ABILITY state")
+		return
+	if player1_idx == -1 and card1_idx == -1 and player2_idx == -1 and card2_idx == -1:
+		_prompt_turn_end()
 		return
 	if not _hand_has_index(player1_idx, card1_idx) or not _hand_has_index(player2_idx, card2_idx):
 		print("FSM Blocked: Cannot complete swap with invalid card indices")

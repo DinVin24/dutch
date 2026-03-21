@@ -438,6 +438,8 @@ func _show_message(text: String):
 		child.queue_free()
 
 	var label = Label.new()
+	label.text = text
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.add_theme_color_override("font_color", Color(1, 1, 1))
 	label.add_theme_color_override("outline_color", Color(0, 0, 0))
 	label.add_theme_constant_override("outline_size", 4)
@@ -542,7 +544,9 @@ func _set_all_cards_interactive(enabled: bool):
 func _refresh_human_interactivity() -> void:
 	_set_all_cards_interactive(false)
 	if is_instance_valid(pending_card):
-		pending_card.set_interactive(GameManager.can_player_discard_drawn_card(0))
+		pending_card.set_interactive(
+			GameManager.can_player_discard_drawn_card(0) or GameManager.can_player_select_jump_in_card(0, 0, -2)
+		)
 	for p_idx in range(player_hands.size()):
 		for c_idx in range(player_hands[p_idx].size()):
 			var card = player_hands[p_idx][c_idx]
@@ -557,7 +561,9 @@ func _set_player_hand_interactive(player_idx: int, enabled: bool):
 
 func _highlight_selectable_cards(include_opponents: bool = false):
 	_clear_all_highlights()
-	if is_instance_valid(pending_card) and GameManager.can_player_discard_drawn_card(0):
+	if is_instance_valid(pending_card) and (
+		GameManager.can_player_discard_drawn_card(0) or GameManager.can_player_select_jump_in_card(0, 0, -2)
+	):
 		pending_card.set_highlight(true)
 		pending_card.set_interactive(true)
 	for p_idx in range(player_hands.size()):
@@ -682,13 +688,13 @@ func _start_peek_phase():
 var peeked_cards: Array = []
 func _on_card_clicked(node, data):
 	print("[INPUT] Card clicked: ", node.name, " (", data.rank, " of ", data.suit, ") in state: ", GameManager.GameState.keys()[GameManager.current_state])
-	var is_pending := (node == pending_card or node.name == "PendingCard")
-	var p_idx := -1
+	var is_pending: bool = (node == pending_card or node.name == "PendingCard")
+	var p_idx: int = -1
 	for i in range(4):
 		if player_hands[i].has(node):
 			p_idx = i
 			break
-	var c_idx := -2 if is_pending else (player_hands[p_idx].find(node) if p_idx != -1 else -1)
+	var c_idx: int = -2 if is_pending else (player_hands[p_idx].find(node) if p_idx != -1 else -1)
 
 	match GameManager.current_state:
 		GameManager.GameState.INITIAL_PEEK:
@@ -725,7 +731,6 @@ func _on_card_clicked(node, data):
 				print("[JUMP-IN] SUCCESS")
 			else:
 				print("[JUMP-IN] FAILED")
-				_on_jump_in_failed(0, c_idx, data)
 		GameManager.GameState.TURN_PEEK_ABILITY:
 			if is_pending or not GameManager.can_human_interact_with_hand_card(p_idx, c_idx, data.is_face_up):
 				return

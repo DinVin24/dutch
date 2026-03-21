@@ -126,7 +126,8 @@ func _on_memory_shift_required(target_player_idx: int, removed_card_idx: int) ->
 ## Check all bots — if any KNOWS a card in its hand matching the discarded rank, jump in.
 func _try_jump_ins(card_data: CardData) -> void:
 	await _wait(0.5)
-	if gm.current_state not in [GameManager.GameState.TURN_END_CHOICE, GameManager.GameState.TURN_START_DRAW]:
+	# Bots only auto-jump after the mandatory draw window has closed.
+	if gm.current_state != GameManager.GameState.TURN_END_CHOICE:
 		return
 
 	for bot_idx in range(1, gm.num_players):
@@ -268,7 +269,8 @@ func _execute_jack_swap(bot_idx: int) -> void:
 			slots.append({"p": p, "c": c})
 
 	if slots.size() < 2:
-		gm.complete_swap_ability(0, 0, 0, 0)  # Failsafe edge case
+		gm.bot_action.emit("Player %d used a Jack, but no valid swap was available." % bot_idx)
+		gm.complete_swap_ability(-1, -1, -1, -1)
 		return
 
 	slots.shuffle()

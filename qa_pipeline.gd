@@ -50,54 +50,38 @@ func start_pipeline():
 
 func phase_initialization():
 	print("\n>>> PHASE 1: Initialization & Deal Logic <<<")
-	gm.initialize_game(4)
-	
-	gm.change_state(gm.GameState.INITIAL_PEEK)
-	gm.complete_initial_peek()
-	
-	assert_player(0)
-	assert_state(gm.GameState.TURN_START_DRAW)
+	_setup_turn_start(0)
 
 func phase_normal_turns_discard():
 	print("\n>>> PHASE 2: Standard Draw/Discard (4 Players) <<<")
 	for i in range(4):
 		print("[QA] Player %d: Standard Turn (Discard)" % i)
-		gm.current_player_index = i
-		gm.change_state(gm.GameState.TURN_START_DRAW)
+		_setup_turn_start(i)
 		
-		# Draw
 		gm.player_draw_card()
-		
-		# Discard (Deterministic Ace of Clubs)
-		gm.drawn_card_data = load("res://card_data.gd").new("Ace", "Clubs")
+		gm.drawn_card_data = _make_card("Ace", "Clubs")
 		gm.player_discard_drawn_card()
+		await _await_resolution()
 		
 		assert_state(gm.GameState.TURN_END_CHOICE)
 		gm.end_turn()
-		
-		# In a real game, next_turn() advances the player. 
-		# Our loop sets gm.current_player_index manually for testing specific turns,
-		# but next_turn() would normally increment it.
 		assert_state(gm.GameState.TURN_START_DRAW)
 
 func phase_normal_turns_swap():
 	print("\n>>> PHASE 3: Standard Draw/Swap (4 Players) <<<")
 	for i in range(4):
 		print("[QA] Player %d: Standard Turn (Swap)" % i)
-		gm.current_player_index = i
-		gm.change_state(gm.GameState.TURN_START_DRAW)
+		_setup_turn_start(i)
 		
 		_setup_manual_hand(i, 0, "King", "Spades")
-		
 		gm.player_draw_card()
-		gm.drawn_card_data = load("res://card_data.gd").new("2", "Hearts")
-		
+		gm.drawn_card_data = _make_card("2", "Hearts")
 		gm.player_swap_drawn_card(0)
+		await _await_resolution()
 		
 		assert_state(gm.GameState.TURN_END_CHOICE)
 		gm.end_turn()
 		
-		# Verify swap worked
 		var hand_card = gm.players_info[i].hand[0]
 		if hand_card.rank == "2" and hand_card.suit == "Hearts":
 			print("[QA PASS] Player %d: Swap logic verified." % i)
@@ -108,44 +92,37 @@ func phase_queen_abilities_all_players():
 	print("\n>>> PHASE 4: Queen Peek Ability (4 Players) <<<")
 	for i in range(4):
 		print("[QA] Player %d: Triggering Queen Peek" % i)
-		gm.current_player_index = i
-		gm.change_state(gm.GameState.TURN_START_DRAW)
+		_setup_turn_start(i)
 		
 		gm.player_draw_card()
-		gm.drawn_card_data = load("res://card_data.gd").new("Queen", "Diamonds")
+		gm.drawn_card_data = _make_card("Queen", "Diamonds")
 		gm.player_discard_drawn_card()
+		await _await_resolution()
 		
 		assert_state(gm.GameState.TURN_PEEK_ABILITY)
-		
 		gm.complete_peek_ability()
-		
 		assert_state(gm.GameState.TURN_END_CHOICE)
 		gm.end_turn()
-		
 		assert_state(gm.GameState.TURN_START_DRAW)
 
 func phase_jack_abilities_all_players():
 	print("\n>>> PHASE 5: Jack Swap Ability (4 Players) <<<")
 	for i in range(4):
 		print("[QA] Player %d: Triggering Jack Swap" % i)
-		gm.current_player_index = i
-		gm.change_state(gm.GameState.TURN_START_DRAW)
+		_setup_turn_start(i)
 		
 		gm.player_draw_card()
-		gm.drawn_card_data = load("res://card_data.gd").new("Jack", "Clubs")
+		gm.drawn_card_data = _make_card("Jack", "Clubs")
 		gm.player_discard_drawn_card()
+		await _await_resolution()
 		
 		assert_state(gm.GameState.TURN_SWAP_ABILITY)
-		
 		_setup_manual_hand(0, 0, "7", "Hearts")
 		_setup_manual_hand(1, 0, "Ace", "Spades")
-		
 		gm.complete_swap_ability(0, 0, 1, 0)
-		
 		assert_state(gm.GameState.TURN_END_CHOICE)
 		gm.end_turn()
 		
-		# Verify swap between players
 		var p0_card = gm.players_info[0].hand[0]
 		var p1_card = gm.players_info[1].hand[0]
 		if p0_card.rank == "Ace" and p1_card.rank == "7":
@@ -157,78 +134,156 @@ func phase_dutch_calls_all_players():
 	print("\n>>> PHASE 6: Dutch Calling Logic <<<")
 	for trigger_p in range(4):
 		print("[QA] Verifying Dutch Call by Player %d" % trigger_p)
-		gm.initialize_game(4)
-		gm.current_player_index = trigger_p
-		gm.change_state(gm.GameState.TURN_START_DRAW)
+		_setup_turn_start(trigger_p)
 		
-		# Must draw and discard before we can call dutch in the end choice phase
 		gm.player_draw_card()
-		gm.drawn_card_data = load("res://card_data.gd").new("Ace", "Clubs")
+		gm.drawn_card_data = _make_card("Ace", "Clubs")
 		gm.player_discard_drawn_card()
+		await _await_resolution()
 		
 		assert_state(gm.GameState.TURN_END_CHOICE)
 		gm.call_dutch(trigger_p)
 		
-		# 3 other players must take a turn. Since we added TURN_END_CHOICE, 
-		# we must simulate their draws and explicitly end their turns
-		for pass_turn in range(3):
+		for _pass_turn in range(3):
 			gm.player_draw_card()
-			gm.drawn_card_data = load("res://card_data.gd").new("Ace", "Clubs")
+			gm.drawn_card_data = _make_card("Ace", "Clubs")
 			gm.player_discard_drawn_card()
+			await _await_resolution()
 			gm.end_turn()
 		
+		assert_state(gm.GameState.TURN_START_DRAW)
+		gm.player_draw_card()
+		gm.drawn_card_data = _make_card("Ace", "Clubs")
+		gm.player_discard_drawn_card()
+		await _await_resolution()
 		assert_state(gm.GameState.TURN_CONFIRM_DUTCH)
 		gm.confirm_dutch()
 		assert_state(gm.GameState.GAME_OVER)
 
 func phase_jump_in_all_players():
 	print("\n>>> PHASE 7: Jump In Mechanics <<<")
-	for i in range(4):
-		print("[QA] Player %d: Triggering Jump In" % i)
-		gm.initialize_game(4)
-		gm.current_player_index = i
-		gm.change_state(gm.GameState.TURN_START_DRAW)
-		
-		# Put a specific card in hand to jump in with
-		_setup_manual_hand(i, 0, "5", "Clubs")
-		
-		# Draw and discard a matching card
-		gm.player_draw_card()
-		gm.drawn_card_data = load("res://card_data.gd").new("5", "Hearts")
-		gm.player_discard_drawn_card()
-		
-		assert_state(gm.GameState.TURN_END_CHOICE)
-		
-		# Start jump in
-		gm.start_jump_in()
-		assert_state(gm.GameState.TURN_JUMP_IN_SELECTION)
-		
-		# Execute jump in
-		var success = gm.validate_jump_in(0)
-		if success:
-			print("[QA PASS] Jump in validated successfully")
-		else:
-			print("[QA FAIL] Jump in failed to validate")
-			
-		assert_state(gm.GameState.TURN_END_CHOICE)
-		
-		# Test Jump In Mismatch Penalty
-		gm.start_jump_in()
-		_setup_manual_hand(i, 0, "King", "Spades")
-		var old_hand_size = gm.players_info[i].hand.size()
-		
-		var mismatch_success = gm.validate_jump_in(0)
-		if not mismatch_success:
-			print("[QA PASS] Jump in correctly rejected mismatched rank")
-			if gm.players_info[i].hand.size() == old_hand_size + 1:
-				print("[QA PASS] Penalty card added to hand successfully")
-			else:
-				print("[QA FAIL] Penalty card not added! Expected %d, got %d" % [old_hand_size + 1, gm.players_info[i].hand.size()])
-		else:
-			print("[QA FAIL] Jump in accepted a mismatched card")
-			
-		assert_state(gm.GameState.TURN_END_CHOICE)
-		gm.end_turn()
+
+	# Draw-start jump-in should be legal before the draw, then resume to TURN_START_DRAW.
+	_setup_turn_start(0)
+	_set_discard_top("5", "Hearts")
+	_setup_manual_hand(0, 0, "King", "Spades")
+	_setup_manual_hand(0, 1, "2", "Clubs")
+
+	if gm.can_player_start_jump_in(0):
+		print("[QA PASS] Human jump-in allowed at TURN_START_DRAW")
+	else:
+		print("[QA FAIL] Human jump-in blocked at TURN_START_DRAW")
+
+	gm.start_jump_in(0)
+	assert_state(gm.GameState.TURN_JUMP_IN_SELECTION)
+
+	var draw_start_failed: bool = await gm.validate_jump_in(0)
+	if not draw_start_failed:
+		print("[QA PASS] Draw-start jump-in mismatch rejected")
+	else:
+		print("[QA FAIL] Draw-start jump-in accepted a mismatched card")
+
+	assert_state(gm.GameState.TURN_START_DRAW)
+	if gm.players_info[0].hand.size() == 3:
+		print("[QA PASS] Jump-in failure penalty card added")
+	else:
+		print("[QA FAIL] Jump-in failure penalty size mismatch: %d" % gm.players_info[0].hand.size())
+
+	# Pending-card path should accept the drawn card via card_idx == -2.
+	_setup_turn_start(0)
+	_set_discard_top("9", "Diamonds")
+	_setup_manual_hand(0, 0, "Queen", "Spades")
+	gm.drawn_card_data = _make_card("9", "Clubs")
+
+	gm.start_jump_in(0)
+	assert_state(gm.GameState.TURN_JUMP_IN_SELECTION)
+
+	if gm.can_player_select_jump_in_card(0, 0, -2):
+		print("[QA PASS] Pending-card jump-in selection allowed")
+	else:
+		print("[QA FAIL] Pending-card jump-in selection blocked")
+
+	var pending_success: bool = await gm.validate_jump_in(-2)
+	if pending_success:
+		print("[QA PASS] Pending-card jump-in resolved successfully")
+	else:
+		print("[QA FAIL] Pending-card jump-in failed unexpectedly")
+
+	await create_timer(0.6, false).timeout
+	assert_state(gm.GameState.TURN_START_DRAW)
+	if gm.drawn_card_data == null:
+		print("[QA PASS] Pending-card jump-in consumed the drawn card")
+	else:
+		print("[QA FAIL] Pending-card jump-in left drawn_card_data set")
+
+	# Once the draw has happened, jump-in must be blocked until the turn resolves.
+	_setup_turn_start(0)
+	_set_discard_top("8", "Clubs")
+	gm.player_draw_card()
+	assert_state(gm.GameState.TURN_RESOLVE_DRAWN)
+
+	if not gm.can_player_start_jump_in(0):
+		print("[QA PASS] Jump-in blocked after draw")
+	else:
+		print("[QA FAIL] Jump-in incorrectly allowed after draw")
+
+	var blocked_state: int = gm.current_state
+	var blocked_jump_in_player: int = gm.jump_in_player_idx
+	gm.start_jump_in(0)
+	if gm.current_state == blocked_state and gm.jump_in_player_idx == blocked_jump_in_player:
+		print("[QA PASS] Blocked post-draw jump-in left FSM unchanged")
+	else:
+		print("[QA FAIL] Post-draw jump-in changed FSM unexpectedly")
+
+	# Human jump-in during a bot's resolve phase should resume back to TURN_RESOLVE_DRAWN on cancel.
+	_setup_turn_start(1)
+	_set_discard_top("6", "Spades")
+	gm.player_draw_card()
+	assert_state(gm.GameState.TURN_RESOLVE_DRAWN)
+
+	if gm.can_player_start_jump_in(0):
+		print("[QA PASS] Human jump-in allowed during bot resolve")
+	else:
+		print("[QA FAIL] Human jump-in blocked during bot resolve")
+
+	gm.start_jump_in(0)
+	assert_state(gm.GameState.TURN_JUMP_IN_SELECTION)
+	gm.cancel_jump_in()
+	assert_state(gm.GameState.TURN_RESOLVE_DRAWN)
+
+	# Bots must not be allowed to jump in at the start of their own turn.
+	_setup_turn_start(1)
+	_set_discard_top("Jack", "Hearts")
+
+	if not gm.can_player_start_jump_in(1):
+		print("[QA PASS] Bot jump-in blocked at TURN_START_DRAW")
+	else:
+		print("[QA FAIL] Bot jump-in incorrectly allowed at TURN_START_DRAW")
+
+	var bot_state: int = gm.current_state
+	gm.start_jump_in(1)
+	if gm.current_state == bot_state and gm.jump_in_player_idx == -1:
+		print("[QA PASS] Bot start-turn jump-in request left FSM unchanged")
+	else:
+		print("[QA FAIL] Bot start-turn jump-in request changed FSM")
+
+func _make_card(rank: String, suit: String) -> CardData:
+	return load("res://card_data.gd").new(rank, suit)
+
+func _set_discard_top(rank: String, suit: String) -> void:
+	gm.deck_manager.discard_pile.clear()
+	gm.deck_manager.discard_pile.append(_make_card(rank, suit))
+
+func _setup_turn_start(player_idx: int) -> void:
+	gm.initialize_game(4)
+	gm.change_state(gm.GameState.INITIAL_PEEK)
+	gm.current_player_index = player_idx
+	gm.complete_initial_peek()
+	assert_player(player_idx)
+	assert_state(gm.GameState.TURN_START_DRAW)
+
+func _await_resolution() -> void:
+	await create_timer(0.6, false).timeout
 
 # --- UTILITIES ---
 
