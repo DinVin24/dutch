@@ -72,26 +72,26 @@ func _ready():
 	GameManager.deck_manager.discard_pile_updated.connect(_update_discard_visual)
 	GameManager.hand_updated.connect(_on_hand_updated)
 	GameManager.dutch_called.connect(_on_dutch_called)
-	
+
 	_create_hud_ui()
 	_create_discard_indicator()
-	
+
 	$DeckArea/Area3D.input_event.connect(_on_deck_input_event)
 	$DiscardArea/Area3D.input_event.connect(_on_discard_input_event)
-	
+
 	bot_controller = BotController.new()
 	bot_controller.gm = GameManager
 	add_child(bot_controller)
-	
+
 	$Camera3D.current = true
 	$GameUI/MainHUD.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	
+
 	await get_tree().process_frame
 	_update_deck_visual()
 	_base_camera_pos = $Camera3D.position
 	_setup_table_noise()
 	_update_turn_lights(-1, false) # Ensure all off
-	
+
 	# HUD PASS-THROUGH: Ensure UI containers don't block clicks to the 3D cards
 	for node_name in ["PostProcessing", "MainHUD", "TopCenter", "GameUI"]:
 		var n = find_child(node_name, true, false)
@@ -100,7 +100,7 @@ func _ready():
 			for child in n.get_children():
 				if child is Control and not child is Button:
 					child.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	
+
 	print("Game Board 3D: Starting game...")
 	GameManager.initialize_game(4)
 	trigger_glitch(0.4, 0.8) # Intro glitch
@@ -112,7 +112,7 @@ func _create_hud_ui():
 	call_dutch_btn = _create_button("CALL DUTCH!", Color(0.8, 0.2, 0.2), 110, 270)
 	confirm_dutch_btn = _create_button("CONFIRM DUTCH", Color(0.2, 0.6, 0.2), -270, -110)
 	forfeit_dutch_btn = _create_button("FORFEIT DUTCH", Color(0.8, 0.2, 0.2), 110, 270)
-	
+
 	end_turn_btn.pressed.connect(_on_end_turn_pressed)
 	jump_in_btn.pressed.connect(_on_jump_in_pressed)
 	call_dutch_btn.pressed.connect(_on_call_dutch_pressed)
@@ -123,7 +123,7 @@ func _create_button(text: String, color: Color, left: int, right: int) -> Button
 	var btn = Button.new()
 	btn.text = text
 	btn.add_theme_font_size_override("font_size", 20)
-	
+
 	var style = StyleBoxFlat.new()
 	style.bg_color = color.darkened(0.7)
 	style.bg_color.a = 0.6 # Glassmorphism
@@ -135,22 +135,22 @@ func _create_button(text: String, color: Color, left: int, right: int) -> Button
 	style.set_corner_radius_all(4)
 	style.shadow_color = color
 	style.shadow_size = 8
-	
+
 	var hover_style = style.duplicate()
 	hover_style.bg_color = color.darkened(0.5)
 	hover_style.bg_color.a = 0.8
 	hover_style.border_color = Color.WHITE
-	
+
 	btn.add_theme_stylebox_override("normal", style)
 	btn.add_theme_stylebox_override("hover", hover_style)
 	btn.add_theme_stylebox_override("pressed", hover_style)
-	
+
 	$GameUI/MainHUD.add_child(btn)
 	$GameUI/MainHUD.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	
+
 	btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	
+
 	# WIDER SPACING: move them to far corners to clear the center-projected 3D hand
 	if text == "END TURN" or text == "CONFIRM DUTCH":
 		btn.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
@@ -179,7 +179,7 @@ func _update_deck_visual():
 	for child in deck_area.get_children():
 		if child is Card3D:
 			child.queue_free()
-			
+
 	var stack_size = min(5, GameManager.deck_manager.deck.size())
 	for i in range(stack_size):
 		var card = card_scene.instantiate()
@@ -193,7 +193,7 @@ func _update_discard_visual():
 	for child in discard_area.get_children():
 		if child is Card3D:
 			child.queue_free()
-	
+
 	var pile = GameManager.deck_manager.discard_pile
 	if not pile.is_empty():
 		var top_info = pile.back()
@@ -213,7 +213,7 @@ func _create_discard_indicator():
 	var mesh = PlaneMesh.new()
 	mesh.size = Vector2(0.8, 1.1) # Slightly larger than a card
 	discard_indicator.mesh = mesh
-	
+
 	var mat = StandardMaterial3D.new()
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.albedo_color = Color(1, 1, 1, 0.15) # Ghostly white/gray
@@ -221,7 +221,7 @@ func _create_discard_indicator():
 	mat.emission = Color(1, 1, 1) # Neutral white glow
 	mat.emission_energy_multiplier = 0.3
 	discard_indicator.material_override = mat
-	
+
 	discard_area.add_child(discard_indicator)
 	discard_indicator.position = Vector3(0, 0.01, 0)
 
@@ -245,11 +245,11 @@ func _update_turn_lights(current_player: int, all_on: bool = false):
 		var light = player_lights[i]
 		var is_active = (i == current_player or all_on)
 		var hand_size = GameManager.players_info[i].hand.size()
-		
+
 		var target_energy = 15.0 if is_active else 0.0 # Increased for visibility
 		var target_angle = 60.0 + max(0, (hand_size - 4) * 8.0) # Wider base and steeper growth
 		target_angle = min(target_angle, 85.0)
-		
+
 		var tween = create_tween().set_parallel(true)
 		tween.tween_property(light, "light_energy", target_energy, 0.5).set_trans(Tween.TRANS_CUBIC)
 		tween.tween_property(light, "spot_angle", target_angle, 0.5).set_trans(Tween.TRANS_CUBIC)
@@ -260,16 +260,16 @@ func _setup_table_noise():
 	if not table_mesh: return
 	var mat = table_mesh.get_surface_override_material(0) as StandardMaterial3D
 	if not mat: return
-	
+
 	var noise = FastNoiseLite.new()
 	noise.seed = randi()
 	noise.frequency = 0.05
-	
+
 	var noise_tex = NoiseTexture2D.new()
 	noise_tex.noise = noise
 	noise_tex.as_normal_map = true
 	noise_tex.bump_strength = 2.0
-	
+
 	mat.normal_enabled = true
 	mat.normal_texture = noise_tex
 
@@ -293,35 +293,35 @@ func _get_glitch_string(base: String) -> String:
 
 func _on_card_drawn_to_pending(player_idx, card_data):
 	if pending_card: pending_card.queue_free()
-	
+
 	_update_deck_visual()
-	
+
 	if player_idx != 0:
 		_show_message(GameManager.players_info[player_idx].name + " is drawing...")
 		return
-		
+
 	pending_card = card_scene.instantiate()
 	pending_card.name = "PendingCard"
 	add_child(pending_card)
-	
+
 	card_data.is_face_up = false
 	pending_card.setup(card_data)
 	pending_card.card_clicked.connect(_on_card_clicked)
 	# Move slightly higher and CLOSER TO CAMERA (Z offset) to ensure it's not blocked by DeckArea
 	pending_card.position = deck_area.position + Vector3(0, 0.6, 0.5)
 	pending_card.set_interactive(true)
-	
+
 	# Reveal animations
 	await get_tree().create_timer(0.1, false).timeout
 	pending_card.animate_flip(true)
 	_update_deck_visual() # Refresh deck after drawing
 
 func _on_card_discarded(player_idx, card_data):
-	if jump_in_btn and not GameManager.deck_manager.discard_pile.is_empty():
-		jump_in_btn.show()
+	if jump_in_btn:
+		jump_in_btn.visible = GameManager.should_human_show_jump_in_button(0)
 
 	var card_to_discard: Node3D = null
-	
+
 	if pending_card and pending_card.data == card_data:
 		card_to_discard = pending_card
 		pending_card = null
@@ -331,35 +331,35 @@ func _on_card_discarded(player_idx, card_data):
 			var hand_card = hand_nodes[i]
 			if hand_card.data == card_data or (hand_card.data.rank == card_data.rank and hand_card.data.suit == card_data.suit):
 				card_to_discard = hand_card
-				
+
 				if pending_card:
 					# --- SWAP PHASE ---
 					var old_card_node = hand_nodes[i]
 					var new_card_node = pending_card
 					pending_card = null
-					
+
 					# Update persistent array: replace old node with new node at same index
 					hand_nodes[i] = new_card_node
-					
+
 					var hand_global_pos = old_card_node.global_position
 					var discard_global_pos = discard_area.global_position + Vector3(0, 0.05, 0)
-					
+
 					# 1. Animate Drawn Card to Hand
 					new_card_node.reparent(player_pos_nodes[player_idx])
 					var tween_new = create_tween().set_parallel(true)
 					tween_new.tween_property(new_card_node, "global_position", hand_global_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 					tween_new.tween_property(new_card_node, "rotation_degrees:x", 90.0, 0.3)
-					
+
 					# 2. Animate replaced card to Discard
 					var start_global_pos = old_card_node.global_position
 					old_card_node.reparent(get_tree().root) # Isolate from hand reorganization
 					old_card_node.global_position = start_global_pos
 					card_to_discard = old_card_node # Point directly to the node being moved
-					
+
 					var tween_old = create_tween().set_parallel(true)
 					tween_old.tween_property(old_card_node, "global_position", discard_global_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 					tween_old.tween_property(old_card_node, "rotation_degrees:x", 270.0, 0.3)
-					
+
 					# 3. Finalize
 					tween_new.chain().tween_callback(func():
 						hand_nodes[i] = new_card_node
@@ -389,16 +389,16 @@ func _on_card_discarded(player_idx, card_data):
 						# Pure removal (Jump-In or discard choice)
 						var node_to_move = hand_nodes[i]
 						hand_nodes.remove_at(i)
-						
+
 						# Isolate node for animation
 						var start_pos = node_to_move.global_position
 						node_to_move.reparent(get_tree().root)
 						node_to_move.global_position = start_pos
 						card_to_discard = node_to_move
-					
+
 					_update_hand_visuals(player_idx)
 				break
-	
+
 	if card_to_discard == null and player_idx >= 0:
 		# Fallback: if we can't find the node, create a temporary one for the animation
 		if pending_card:
@@ -413,14 +413,14 @@ func _on_card_discarded(player_idx, card_data):
 
 	if card_to_discard:
 		card_to_discard.set_highlight(false)
-		
+
 		# For discards from hand/deck, we want a smooth global motion
 		var target_global_pos = discard_area.global_position + Vector3(0, 0.05, 0)
-		
+
 		var tween = create_tween().set_parallel(true)
 		tween.tween_property(card_to_discard, "global_position", target_global_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tween.tween_property(card_to_discard, "rotation_degrees", Vector3(270, 0, 0), 0.4) # Face UP on table
-		
+
 		tween.chain().tween_callback(func():
 			_update_discard_visual()
 			_update_deck_visual()
@@ -428,7 +428,7 @@ func _on_card_discarded(player_idx, card_data):
 			if is_instance_valid(card_to_discard) and card_to_discard.get_parent() != discard_area:
 				card_to_discard.queue_free()
 		)
-	
+
 	if player_idx != -1:
 		_update_hand_visuals(player_idx)
 
@@ -436,7 +436,7 @@ func _show_message(text: String):
 	_current_ability_message = text
 	for child in top_center.get_children():
 		child.queue_free()
-	
+
 	var label = Label.new()
 	label.add_theme_color_override("font_color", Color(1, 1, 1))
 	label.add_theme_color_override("outline_color", Color(0, 0, 0))
@@ -446,52 +446,44 @@ func _show_message(text: String):
 	top_center.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	label.show()
 
-func _on_end_turn_pressed(): GameManager.end_turn()
-func _on_jump_in_pressed(): GameManager.start_jump_in(0)
-func _on_call_dutch_pressed(): GameManager.call_dutch(0)
-func _on_confirm_dutch_pressed(): GameManager.confirm_dutch()
-func _on_cancel_dutch_pressed(): GameManager.cancel_dutch()
+func _on_end_turn_pressed():
+	if GameManager.can_player_end_turn(0):
+		GameManager.end_turn()
+	elif GameManager.can_player_cancel_jump_in(0):
+		GameManager.cancel_jump_in()
+
+func _on_jump_in_pressed():
+	if GameManager.can_player_start_jump_in(0):
+		GameManager.start_jump_in(0)
+
+func _on_call_dutch_pressed():
+	if GameManager.can_player_call_dutch(0):
+		GameManager.call_dutch(0)
+
+func _on_confirm_dutch_pressed():
+	if GameManager.can_player_confirm_dutch(0):
+		GameManager.confirm_dutch()
+
+func _on_cancel_dutch_pressed():
+	if GameManager.can_player_cancel_dutch(0):
+		GameManager.cancel_dutch()
 
 func _on_game_state_changed(new_state):
 	_hide_message()
-	
-	# State handling for HUD buttons
+
 	end_turn_btn.hide()
 	jump_in_btn.hide()
 	call_dutch_btn.hide()
 	confirm_dutch_btn.hide()
 	forfeit_dutch_btn.hide()
-	
-	# Always show Jump-In if valid (matched 2D behavior)
-	if GameManager.current_state != GameManager.GameState.INITIAL_PEEK and \
-	   GameManager.current_state != GameManager.GameState.DEAL_CARDS and \
-	   GameManager.current_state != GameManager.GameState.GAME_OVER:
-		if not GameManager.deck_manager.discard_pile.is_empty():
-			jump_in_btn.show()
-	
-	# Update deck/discard highlighting based on state
-	# (In 3D we can raise them or change material emission)
-	
-	var block_cards := false
-	match new_state:
-		GameManager.GameState.TURN_START_DRAW, \
-		GameManager.GameState.TURN_RESOLVE_DRAWN, \
-		GameManager.GameState.TURN_END_CHOICE, \
-		GameManager.GameState.TURN_CONFIRM_DUTCH:
-			block_cards = (GameManager.current_player_index != 0)
-		GameManager.GameState.TURN_PEEK_ABILITY, \
-		GameManager.GameState.TURN_SWAP_ABILITY, \
-		GameManager.GameState.TURN_JUMP_IN_SELECTION, \
-		GameManager.GameState.INITIAL_PEEK:
-			block_cards = false
-		_:
-			block_cards = true
-	_set_all_cards_interactive(not block_cards)
-	
+
+	_refresh_human_interactivity()
+	jump_in_btn.visible = GameManager.should_human_show_jump_in_button(0)
+
 	if new_state == GameManager.GameState.TURN_START_DRAW or \
 	   new_state == GameManager.GameState.TURN_END_CHOICE:
 		_clear_all_highlights()
-	
+
 	match new_state:
 		GameManager.GameState.DEAL_CARDS:
 			turn_label.text = "Dealing cards..."
@@ -502,29 +494,29 @@ func _on_game_state_changed(new_state):
 			_update_turn_lights(-1, true)
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
 			print("GameBoard3D: UI - Showing TURN_RESOLVE_DRAWN")
-			if GameManager.current_player_index == 0:
+			if GameManager.can_player_discard_drawn_card(0):
 				_show_message("Click a card in your hand to swap, or the drawn card to discard.")
-				_highlight_selectable_cards(false) # Highlight & enable player 0 hand
+				_highlight_selectable_cards(false)
 			else:
 				var player_name = GameManager.players_info[GameManager.current_player_index].name
 				_show_message(player_name + " is deciding...")
 		GameManager.GameState.TURN_END_CHOICE:
 			print("GameBoard3D: UI - Showing TURN_END_CHOICE")
-			if GameManager.current_player_index == 0:
+			if GameManager.can_player_end_turn(0):
 				end_turn_btn.show()
-				if GameManager.dutch_caller_index == -1 and GameManager.players_info[0].can_call_dutch:
-					call_dutch_btn.show()
+			if GameManager.can_player_call_dutch(0):
+				call_dutch_btn.show()
 		GameManager.GameState.TURN_JUMP_IN_SELECTION:
 			print("GameBoard3D: UI - Showing TURN_JUMP_IN_SELECTION")
 			var ji_idx = GameManager.jump_in_player_idx
 			var ji_name = GameManager.players_info[ji_idx].name if ji_idx >= 0 else "Someone"
 			_show_message(ji_name + ": pick a matching card, or end turn to cancel.")
-			if ji_idx == 0:
+			if GameManager.can_player_cancel_jump_in(0):
 				end_turn_btn.show()
-				_highlight_selectable_cards(false) # Highlight ONLY player hand, not opponents
+				_highlight_selectable_cards(false)
 		GameManager.GameState.TURN_CONFIRM_DUTCH:
 			print("GameBoard3D: UI - Showing TURN_CONFIRM_DUTCH")
-			if GameManager.current_player_index == 0:
+			if GameManager.can_player_confirm_dutch(0):
 				_show_message("You called Dutch! Confirm or Forfeit?")
 				confirm_dutch_btn.show()
 				forfeit_dutch_btn.show()
@@ -532,29 +524,30 @@ func _on_game_state_changed(new_state):
 			if GameManager.current_player_index == 0:
 				_show_message("Select ANY card to peek at.")
 				_highlight_selectable_cards(true)
-			_update_turn_lights(-1, true) # All lights on for Queen
+			_update_turn_lights(-1, true)
 		GameManager.GameState.TURN_SWAP_ABILITY:
 			if GameManager.current_player_index == 0:
 				_show_message("Select TWO cards to swap.")
-				# User specifically disabled highlighting for this phase, so just enable clicks
-				_set_player_hand_interactive(0, true)
-				# Also allow swapping with opponents
-				for p in range(1, GameManager.num_players):
-					_set_player_hand_interactive(p, true)
+				_highlight_selectable_cards(true)
 			_update_turn_lights(-1, true)
 			swap_sources.clear()
-	
-	# Selection Safety: prevent Deck/Discard from blocking clicks during Jump-In
-	$DeckArea/Area3D.input_ray_pickable = (new_state != GameManager.GameState.TURN_JUMP_IN_SELECTION)
-	$DiscardArea/Area3D.input_ray_pickable = (new_state != GameManager.GameState.TURN_JUMP_IN_SELECTION)
 
-	if new_state != GameManager.GameState.GAME_OVER:
-		if GameManager.deck_manager.discard_pile.size() > 0:
-			jump_in_btn.show()
+	$DeckArea/Area3D.input_ray_pickable = GameManager.can_player_draw(0)
+	$DiscardArea/Area3D.input_ray_pickable = GameManager.can_player_discard_drawn_card(0)
 
 func _set_all_cards_interactive(enabled: bool):
 	for i in range(4):
 		_set_player_hand_interactive(i, enabled)
+
+func _refresh_human_interactivity() -> void:
+	_set_all_cards_interactive(false)
+	if is_instance_valid(pending_card):
+		pending_card.set_interactive(GameManager.can_player_discard_drawn_card(0))
+	for p_idx in range(player_hands.size()):
+		for c_idx in range(player_hands[p_idx].size()):
+			var card = player_hands[p_idx][c_idx]
+			if is_instance_valid(card) and GameManager.can_human_interact_with_hand_card(p_idx, c_idx, card.data.is_face_up):
+				card.set_interactive(true)
 
 func _set_player_hand_interactive(player_idx: int, enabled: bool):
 	if player_idx < 0 or player_idx >= player_hands.size(): return
@@ -564,18 +557,18 @@ func _set_player_hand_interactive(player_idx: int, enabled: bool):
 
 func _highlight_selectable_cards(include_opponents: bool = false):
 	_clear_all_highlights()
-	
-	# Always allow selecting pending card if it exists and it's player 0's interaction phase
-	if is_instance_valid(pending_card):
+	if is_instance_valid(pending_card) and GameManager.can_player_discard_drawn_card(0):
 		pending_card.set_highlight(true)
 		pending_card.set_interactive(true)
-
-	for i in range(4):
-		if i == 0 or include_opponents:
-			for card in player_pos_nodes[i].get_children():
-				if card is Card3D:
-					card.set_highlight(true)
-					card.set_interactive(true)
+	for p_idx in range(player_hands.size()):
+		if not include_opponents and p_idx != 0 and GameManager.current_state != GameManager.GameState.TURN_SWAP_ABILITY:
+			continue
+		for c_idx in range(player_hands[p_idx].size()):
+			var card = player_hands[p_idx][c_idx]
+			if is_instance_valid(card):
+				var allowed := GameManager.can_human_interact_with_hand_card(p_idx, c_idx, card.data.is_face_up)
+				card.set_highlight(allowed)
+				card.set_interactive(allowed)
 
 func _clear_all_highlights():
 	if is_instance_valid(pending_card):
@@ -588,7 +581,7 @@ func _clear_all_highlights():
 			if is_instance_valid(card):
 				card.set_highlight(false)
 				card.set_interactive(false)
-		
+
 		# Heavy-duty clear from physical nodes in case they are out of sync
 		for child in player_pos_nodes[i].get_children():
 			if child is Card3D:
@@ -607,40 +600,40 @@ func _update_hand_visuals(player_idx: int):
 	if player_idx < 0 or player_idx >= 4: return
 	var hand_data = GameManager.players_info[player_idx].hand
 	var nodes = player_hands[player_idx]
-	
+
 	# Sync node count with data count
 	while nodes.size() < hand_data.size():
 		var card_node = card_scene.instantiate()
 		player_pos_nodes[player_idx].add_child(card_node)
 		card_node.card_clicked.connect(_on_card_clicked)
 		nodes.append(card_node)
-	
+
 	while nodes.size() > hand_data.size():
 		var card = nodes.pop_back()
 		if is_instance_valid(card):
 			card.queue_free()
-	
+
 	# Position cards strictly by their index in the nodes array
 	for i in range(nodes.size()):
 		var card_node = nodes[i]
 		if is_instance_valid(card_node):
 			if not card_node.card_clicked.is_connected(_on_card_clicked):
 				card_node.card_clicked.connect(_on_card_clicked)
-			
+
 			card_node.setup(hand_data[i])
 			card_node.name = "Card_%d_%d" % [player_idx, i]
-			
+
 			var target_pos = Vector3((i - (nodes.size()-1)/2.0) * card_spacing, 0.05, 0)
-			
+
 			# If it's already at or near the target, don't restart tween to avoid flickering
 			if card_node.position.distance_to(target_pos) < 0.01: continue
-			
+
 			# Combined movement and lift animation
 			var tween = create_tween().set_parallel(true)
 			tween.tween_property(card_node, "position:x", target_pos.x, 0.3).set_trans(Tween.TRANS_QUAD)
 			tween.tween_property(card_node, "position:z", target_pos.z, 0.3).set_trans(Tween.TRANS_QUAD)
 			tween.tween_property(card_node, "rotation_degrees:x", (270 if hand_data[i].is_face_up else 90), 0.3)
-			
+
 			# Premium "lift" during movement
 			var lift_tween = create_tween()
 			lift_tween.tween_property(card_node, "scale", Vector3(1.1, 1.1, 1.1), 0.15)
@@ -652,30 +645,30 @@ func _handle_initial_deal():
 	for i in range(4): # 4 cards each
 		for p_idx in range(GameManager.num_players):
 			var card_data_dict = GameManager.deck_manager.draw_card()
-			if card_data_dict.is_empty(): 
+			if card_data_dict.is_empty():
 				break
-			
+
 			var card_data = CardData.new(card_data_dict.rank, card_data_dict.suit)
 			card_data.is_face_up = false
 			GameManager.players_info[p_idx].hand.append(card_data)
-			
+
 			# Create the node and animate it from deck to hand
 			var card_node = card_scene.instantiate()
 			add_child(card_node)
 			card_node.setup(card_data)
 			card_node.card_clicked.connect(_on_card_clicked)
 			player_hands[p_idx].append(card_node)
-			
+
 			# Spawn at deck
 			card_node.global_position = deck_area.global_position
 			card_node.rotation_degrees = Vector3(90, 0, 0) # Face down
-			
+
 			# Reparent to player pos node
 			card_node.reparent(player_pos_nodes[p_idx])
-			
+
 			_update_hand_visuals(p_idx)
 			await get_tree().create_timer(0.08, false).timeout
-	
+
 	GameManager.change_state(GameManager.GameState.INITIAL_PEEK)
 
 func _start_peek_phase():
@@ -689,68 +682,67 @@ func _start_peek_phase():
 var peeked_cards: Array = []
 func _on_card_clicked(node, data):
 	print("[INPUT] Card clicked: ", node.name, " (", data.rank, " of ", data.suit, ") in state: ", GameManager.GameState.keys()[GameManager.current_state])
-	var p_idx = -1
+	var is_pending := (node == pending_card or node.name == "PendingCard")
+	var p_idx := -1
 	for i in range(4):
 		if player_hands[i].has(node):
-			p_idx = i; break
-			
+			p_idx = i
+			break
+	var c_idx := -2 if is_pending else (player_hands[p_idx].find(node) if p_idx != -1 else -1)
+
 	match GameManager.current_state:
 		GameManager.GameState.INITIAL_PEEK:
-			if node.get_parent() == player_pos_nodes[0] and not data.is_face_up:
-				if peeked_cards.size() >= 2: return # Strict limit
-				if node in peeked_cards: return
-				node.animate_flip(true)
-				peeked_cards.append(node)
-				if peeked_cards.size() >= 2:
-					await get_tree().create_timer(1.5, false).timeout
-					_clear_all_highlights() # Clear highlights BEFORE flipping back
-					for c in peeked_cards:
-						c.animate_flip(false)
-						c.set_interactive(false)
-					peeked_cards.clear()
-					_clear_all_highlights()
-					GameManager.complete_initial_peek()
-		
-		GameManager.GameState.TURN_RESOLVE_DRAWN:
-			if p_idx == 0:
-				GameManager.player_swap_drawn_card(player_hands[0].find(node))
-		
-		GameManager.GameState.TURN_JUMP_IN_SELECTION:
-			# JUMP-IN SELECTION: Use simple persistent-array index
-			var is_drawn = (node == pending_card or node.name == "PendingCard")
-			var c_idx = -2 if is_drawn else player_hands[0].find(node)
-			
-			if c_idx != -1 or is_drawn:
+			if is_pending or not GameManager.can_human_interact_with_hand_card(p_idx, c_idx, data.is_face_up):
+				return
+			if peeked_cards.size() >= 2 or node in peeked_cards:
+				return
+			node.animate_flip(true)
+			peeked_cards.append(node)
+			if peeked_cards.size() >= 2:
+				await get_tree().create_timer(1.5, false).timeout
 				_clear_all_highlights()
-				if await GameManager.validate_jump_in(c_idx):
-					print("[JUMP-IN] SUCCESS")
-				else:
-					print("[JUMP-IN] FAILED")
-					_on_jump_in_failed(0, c_idx, data)
-				
+				for c in peeked_cards:
+					c.animate_flip(false)
+					c.set_interactive(false)
+				peeked_cards.clear()
+				_clear_all_highlights()
+				GameManager.complete_initial_peek()
+		GameManager.GameState.TURN_RESOLVE_DRAWN:
+			if is_pending:
+				if GameManager.can_player_discard_drawn_card(0):
+					GameManager.player_discard_drawn_card()
+				return
+			if GameManager.can_human_interact_with_hand_card(p_idx, c_idx, data.is_face_up):
+				GameManager.player_swap_drawn_card(c_idx)
+		GameManager.GameState.TURN_JUMP_IN_SELECTION:
+			if is_pending:
+				if not GameManager.can_player_select_jump_in_card(0, 0, -2):
+					return
+			elif not GameManager.can_human_interact_with_hand_card(p_idx, c_idx, data.is_face_up):
+				return
+			_clear_all_highlights()
+			if await GameManager.validate_jump_in(c_idx):
+				print("[JUMP-IN] SUCCESS")
+			else:
+				print("[JUMP-IN] FAILED")
+				_on_jump_in_failed(0, c_idx, data)
 		GameManager.GameState.TURN_PEEK_ABILITY:
-			if node.data.is_face_up: return
+			if is_pending or not GameManager.can_human_interact_with_hand_card(p_idx, c_idx, data.is_face_up):
+				return
 			_set_all_cards_interactive(false)
 			node.animate_flip(true)
 			await get_tree().create_timer(3.0, false).timeout
-			_clear_all_highlights() # Clear highlights BEFORE flipping back
+			_clear_all_highlights()
 			node.animate_flip(false)
-			_set_all_cards_interactive(true)
+			_refresh_human_interactivity()
 			GameManager.complete_peek_ability()
 			_clear_all_highlights()
-			
 		GameManager.GameState.TURN_SWAP_ABILITY:
-			if swap_sources.any(func(s): return s.node == node): return
-			
-			p_idx = -1
-			for i in range(4):
-				if node.get_parent() == player_pos_nodes[i]:
-					p_idx = i; break
-			var c_idx = player_hands[p_idx].find(node)
-			
+			if is_pending or not GameManager.can_human_interact_with_hand_card(p_idx, c_idx, data.is_face_up):
+				return
+			if swap_sources.any(func(s): return s.node == node):
+				return
 			swap_sources.append({"node": node, "player": p_idx, "index": c_idx})
-			# User requested NO highlighting/selection visuals for Jack
-			
 			if swap_sources.size() == 2:
 				var s1 = swap_sources[0]
 				var s2 = swap_sources[1]
@@ -770,36 +762,36 @@ func _on_discard_input_event(_camera, event, _position, _normal, _shape_idx):
 		_on_discard_clicked()
 
 func _on_deck_clicked():
-	if GameManager.current_player_index == 0:
+	if GameManager.can_player_draw(0):
 		GameManager.player_draw_card()
 
 func _on_discard_clicked():
-	if GameManager.current_player_index == 0:
+	if GameManager.can_player_discard_drawn_card(0):
 		GameManager.player_discard_drawn_card()
 
 func _on_scores_ready(results):
 	var overlay = CanvasLayer.new()
 	add_child(overlay)
-	
+
 	var bg = ColorRect.new()
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.color = Color(0, 0, 0, 0.85)
 	overlay.add_child(bg)
-	
+
 	var center = CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	overlay.add_child(center)
-	
+
 	var vbox = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 20)
 	center.add_child(vbox)
-	
+
 	var title = Label.new()
 	title.text = "GAME OVER"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 64)
 	vbox.add_child(title)
-	
+
 	for i in range(results.size()):
 		var entry = results[i]
 		var l = Label.new()
@@ -808,16 +800,16 @@ func _on_scores_ready(results):
 		l.add_theme_font_size_override("font_size", 32)
 		if i == 0: l.add_theme_color_override("font_color", Color.YELLOW)
 		vbox.add_child(l)
-	
+
 	var btn_h = HBoxContainer.new()
 	btn_h.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_child(btn_h)
-	
+
 	var play_again = Button.new()
 	play_again.text = "Play Again"
 	play_again.pressed.connect(func(): get_tree().reload_current_scene())
 	btn_h.add_child(play_again)
-	
+
 	var main_menu = Button.new()
 	main_menu.text = "Main Menu"
 	main_menu.pressed.connect(_on_pause_main_menu)
@@ -827,13 +819,13 @@ func _unhandled_input(event):
 	if event.is_action_pressed("ui_cancel"):
 		if DevConsole.window.is_visible():
 			return
-			
+
 		if pause_menu_instance == null:
 			_pause_game()
 		else:
 			_on_pause_resumed()
 		get_viewport().set_input_as_handled()
-	
+
 	# DEBUG: Press L to toggle all face-down cards face-up.
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_L:
@@ -876,12 +868,12 @@ func _toggle_debug_reveal():
 		_hide_message()
 
 # Signal Handlers
-func _on_jump_in_penalty(player_idx, _card): 
+func _on_jump_in_penalty(player_idx, _card):
 	_update_hand_visuals(player_idx)
 
 func _on_jump_in_failed(player_idx, card_idx, _card_data):
 	if player_idx < 0 or player_idx >= 4: return
-	
+
 	var card_node = null
 	if card_idx == -2:
 		card_node = pending_card
@@ -889,23 +881,23 @@ func _on_jump_in_failed(player_idx, card_idx, _card_data):
 		var hand = player_hands[player_idx]
 		if card_idx >= 0 and card_idx < hand.size():
 			card_node = hand[card_idx]
-			
+
 	if card_node is Card3D:
 		print("GameBoard3D: Atomic reveal for card index ", card_idx)
 		# Use a dedicated tween sequence on the mesh directly to bypass guards
 		var reveal_tween = create_tween()
-		
+
 		# Flip UP
 		reveal_tween.tween_property(card_node, "rotation_degrees:x", 270.0, 0.3).set_trans(Tween.TRANS_QUAD)
 		reveal_tween.parallel().tween_property(card_node, "position:y", 0.8, 0.2).set_trans(Tween.TRANS_QUAD) # Extra lift
-		
+
 		reveal_tween.tween_interval(1.5)
-		
+
 		# Flip DOWN
 		reveal_tween.tween_property(card_node, "rotation_degrees:x", 90.0, 0.3).set_trans(Tween.TRANS_QUAD)
 		reveal_tween.parallel().tween_property(card_node, "position:y", 0.05, 0.2).set_trans(Tween.TRANS_QUAD)
-		
-		reveal_tween.tween_callback(func(): 
+
+		reveal_tween.tween_callback(func():
 			trigger_glitch(0.3, 0.4)
 			shake(0.2, 0.3)
 			card_node.data.is_face_up = false
@@ -937,7 +929,7 @@ func trigger_glitch(intensity: float, duration: float):
 	if not crt_overlay: return
 	var mat = crt_overlay.material as ShaderMaterial
 	if not mat: return
-	
+
 	var tween = create_tween()
 	tween.tween_property(mat, "shader_parameter/glitch_intensity", intensity, duration * 0.2)
 	tween.tween_property(mat, "shader_parameter/glitch_intensity", 0.0, duration * 0.8)
@@ -958,7 +950,7 @@ func _handle_noclip_movement(delta: float) -> void:
 	if Input.is_key_pressed(KEY_D): move_dir += camera.global_transform.basis.x
 	if Input.is_key_pressed(KEY_E): move_dir += Vector3.UP
 	if Input.is_key_pressed(KEY_Q): move_dir += Vector3.DOWN
-	
+
 	camera.global_position += move_dir.normalized() * 10.0 * delta
 	_process_shader_time(delta)
 
@@ -967,7 +959,7 @@ func _input(event: InputEvent) -> void:
 		camera_rot_y -= event.relative.x * 0.005
 		camera_rot_x -= event.relative.y * 0.005
 		camera_rot_x = clamp(camera_rot_x, -PI/2, PI/2)
-		
+
 		camera.basis = Basis() # Reset
 		camera.rotate_y(camera_rot_y)
 		camera.rotate_object_local(Vector3.RIGHT, camera_rot_x)
@@ -977,13 +969,13 @@ func _on_jack_swap_resolved(p1: int, c1: int, p2: int, c2: int) -> void:
 		return
 	var node1 = player_hands[p1][c1]
 	var node2 = player_hands[p2][c2]
-	
+
 	player_hands[p1][c1] = node2
 	player_hands[p2][c2] = node1
-	
+
 	node1.reparent(player_pos_nodes[p2])
 	node2.reparent(player_pos_nodes[p1])
-	
+
 	_update_hand_visuals(p1)
 	_update_hand_visuals(p2)
 
@@ -1001,7 +993,7 @@ func _on_dutch_called(player_idx: int):
 	_show_message(player_name + " called DUTCH!")
 	trigger_glitch(0.5, 0.6)
 	shake(0.4, 0.5)
-	
+
 	# Turn on all lights for the drama
 	_update_turn_lights(-1, true)
 

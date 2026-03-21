@@ -194,20 +194,14 @@ func _on_turn_started(player_idx):
 		_show_message(p_info.name + " is drawing…")
 
 func _on_deck_clicked():
-	if GameManager.current_player_index != 0:
-		print("FSM Blocked: Not your turn to draw.")
-		return
-	if GameManager.current_state != GameManager.GameState.TURN_START_DRAW:
-		print("Warning: FSM prevents drawing from deck right now.")
+	if not GameManager.can_player_draw(0):
+		print("FSM Blocked: Not allowed to draw right now.")
 		return
 	GameManager.player_draw_card()
 
 func _on_discard_clicked():
-	if GameManager.current_player_index != 0:
-		print("FSM Blocked: Not your turn to discard.")
-		return
-	if GameManager.current_state != GameManager.GameState.TURN_RESOLVE_DRAWN:
-		print("Warning: FSM prevents discarding drawn card right now.")
+	if not GameManager.can_player_discard_drawn_card(0):
+		print("FSM Blocked: Not allowed to discard the drawn card right now.")
 		return
 	GameManager.player_discard_drawn_card()
 
@@ -221,58 +215,35 @@ func _on_player_card_clicked(card_node, _card_data):
 			c_idx = idx
 			break
 			
-	if p_idx == -1: return
-	
-	# Guard: during jump-in selection player 0 can always interact even on a bot's turn.
-	var is_jump_in_phase := GameManager.current_state == GameManager.GameState.TURN_JUMP_IN_SELECTION
-	var player_0_acts := (GameManager.current_player_index == 0 or (is_jump_in_phase and GameManager.jump_in_player_idx == 0))
-	if not player_0_acts and GameManager.current_state != GameManager.GameState.INITIAL_PEEK:
-		print("FSM Blocked: Not your turn. Cannot interact with cards.")
+	if p_idx == -1:
+		return
+	if not GameManager.can_human_interact_with_hand_card(p_idx, c_idx, card_node.data.is_face_up):
+		print("FSM Blocked: Cannot interact with that card right now.")
 		return
 
 	match GameManager.current_state:
 		GameManager.GameState.INITIAL_PEEK:
-			if p_idx == 0: # Only player 0 peeks at start in this version
-				_handle_initial_peek_click(card_node)
+			_handle_initial_peek_click(card_node)
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
-			if p_idx == GameManager.current_player_index:
-				GameManager.player_swap_drawn_card(c_idx)
-			else:
-				print("FSM Blocked: Cannot swap drawn card into opponent's hand.")
+			GameManager.player_swap_drawn_card(c_idx)
 		GameManager.GameState.TURN_JUMP_IN_SELECTION:
-			# Only the current jump-in player can select a card.
-			var ji := GameManager.jump_in_player_idx
-			if ji == 0 and p_idx == 0:
-				# validate_jump_in is now a coroutine (it awaits the reveal delay).
-				if await GameManager.validate_jump_in(c_idx):
-					print("Player successfully jumped in!")
-				else:
-					print("Jump in failed! Rank does not match.")
+			if await GameManager.validate_jump_in(c_idx):
+				print("Player successfully jumped in!")
 			else:
-				print("Not your jump-in turn.")
+				print("Jump in failed! Rank does not match.")
 		GameManager.GameState.TURN_PEEK_ABILITY:
-			if card_node.data.is_face_up:
-				print("FSM Blocked: Cannot peek at a card that is already face-up.")
-				return
 			_handle_peek_ability(card_node)
 		GameManager.GameState.TURN_SWAP_ABILITY:
 			_handle_swap_ability(card_node, p_idx, c_idx)
 
 func _handle_peek_ability(card_node):
-	for p_hand in player_hands:
-		for card in p_hand:
-			card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			
+	_set_all_cards_interactive(false)
 	card_node.flip()
 	await get_tree().create_timer(3.0).timeout
 	card_node.flip()
-	
-	for p_hand in player_hands:
-		for card in p_hand:
-			card.mouse_filter = Control.MOUSE_FILTER_STOP
-			
 	GameManager.complete_peek_ability()
 	clear_all_highlights()
+	_refresh_human_card_interactivity()
 
 func _handle_swap_ability(card_node, p_idx, c_idx):
 	# Don't allow clicking the same card twice
@@ -347,9 +318,8 @@ func _hide_message():
 	for child in top_center.get_children():
 		child.queue_free()
 func _on_card_discarded(player_idx, card_data):
-	# Show the jump-in button as soon as there's something to jump into.
-	if jump_in_btn and not GameManager.deck_manager.discard_pile.is_empty():
-		jump_in_btn.show()
+	if jump_in_btn:
+		jump_in_btn.visible = GameManager.should_human_show_jump_in_button(0)
 	
 	var card_to_discard: Node = null
 	
@@ -492,57 +462,35 @@ func _on_game_state_changed(new_state):
 	_hide_message()
 	
 	if end_turn_btn: end_turn_btn.hide()
+	if jump_in_btn: jump_in_btn.hide()
 	if call_dutch_btn: call_dutch_btn.hide()
 	if confirm_dutch_btn: confirm_dutch_btn.hide()
 	if forfeit_dutch_btn: forfeit_dutch_btn.hide()
 	
-	# ── Deck / discard interaction lockout ───────────────────────────────────
-	# Deck is clickable ONLY when it's the player's draw turn.
-	# Discard is clickable ONLY when the player has a pending drawn card.
 	var deck_button = deck_area.get_node("Interaction")
 	var discard_button = discard_area.get_node("Interaction")
-	var player_can_draw: bool = (new_state == GameManager.GameState.TURN_START_DRAW
-		and GameManager.current_player_index == 0)
-	var player_can_discard: bool = (new_state == GameManager.GameState.TURN_RESOLVE_DRAWN
-		and GameManager.current_player_index == 0)
+	var player_can_draw: bool = GameManager.can_player_draw(0)
+	var player_can_discard: bool = GameManager.can_player_discard_drawn_card(0)
 	deck_button.mouse_default_cursor_shape = (
 		Control.CURSOR_POINTING_HAND if player_can_draw else Control.CURSOR_ARROW)
 	deck_button.mouse_filter = (
 		Control.MOUSE_FILTER_STOP if player_can_draw else Control.MOUSE_FILTER_IGNORE)
 	discard_button.mouse_filter = (
 		Control.MOUSE_FILTER_STOP if player_can_discard else Control.MOUSE_FILTER_IGNORE)
+	_refresh_human_card_interactivity()
+	if jump_in_btn:
+		jump_in_btn.visible = GameManager.should_human_show_jump_in_button(0)
 	
-	# ── Card click lockout — disable all hand cards during bot turns and
-	#   special states that don't need card interaction from the player ──────
-	var block_cards := false
-	match new_state:
-		GameManager.GameState.TURN_START_DRAW, \
-		GameManager.GameState.TURN_RESOLVE_DRAWN, \
-		GameManager.GameState.TURN_END_CHOICE, \
-		GameManager.GameState.TURN_CONFIRM_DUTCH:
-			# Block when it's a bot acting; player can still click their own cards
-			# in RESOLVE_DRAWN to swap.
-			block_cards = (GameManager.current_player_index != 0)
-		GameManager.GameState.TURN_PEEK_ABILITY, \
-		GameManager.GameState.TURN_SWAP_ABILITY, \
-		GameManager.GameState.TURN_JUMP_IN_SELECTION:
-			# Never block — player must click cards in these states.
-			block_cards = false
-		_:
-			block_cards = true
-	_set_all_cards_interactive(not block_cards)
-	
-	# ── Per-state UI & messages ────────────────────────────────────────────
 	match new_state:
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
 			if GameManager.current_player_index != 0:
 				var player_name: String = GameManager.players_info[GameManager.current_player_index].name
 				_show_message(player_name + " is deciding…")
 		GameManager.GameState.TURN_END_CHOICE:
-			if GameManager.current_player_index == 0:
+			if GameManager.can_player_end_turn(0):
 				end_turn_btn.show()
-				if GameManager.dutch_caller_index == -1 and GameManager.players_info[0].can_call_dutch:
-					call_dutch_btn.show()
+			if GameManager.can_player_call_dutch(0):
+				call_dutch_btn.show()
 		GameManager.GameState.TURN_JUMP_IN_SELECTION:
 			var ji_name: String = GameManager.players_info[GameManager.jump_in_player_idx].name if GameManager.jump_in_player_idx >= 0 else "Someone"
 			var top_rank: String = ""
@@ -550,10 +498,10 @@ func _on_game_state_changed(new_state):
 				top_rank = GameManager.deck_manager.discard_pile[-1].rank
 			var rank_hint := (" — needs a " + top_rank) if top_rank != "" else ""
 			_show_message(ji_name + ": pick a matching card%s, or cancel." % rank_hint)
-			if GameManager.jump_in_player_idx == 0:
+			if GameManager.can_player_cancel_jump_in(0):
 				end_turn_btn.show()
 		GameManager.GameState.TURN_CONFIRM_DUTCH:
-			if GameManager.current_player_index == 0:
+			if GameManager.can_player_confirm_dutch(0):
 				_show_message("You called Dutch! Confirm or Forfeit?")
 				confirm_dutch_btn.show()
 				forfeit_dutch_btn.show()
@@ -568,26 +516,31 @@ func _on_game_state_changed(new_state):
 		GameManager.GameState.TURN_SWAP_ABILITY:
 			if GameManager.current_player_index == 0:
 				_show_message("Select TWO cards on the board to swap.")
-				_highlight_selectable_cards(true) # Pass true to highlight ALL cards
+				_highlight_selectable_cards(true)
 			swap_sources.clear()
+
 func _set_all_cards_interactive(enabled: bool) -> void:
 	for hand in player_hands:
 		for card in hand:
 			if is_instance_valid(card):
 				card.mouse_filter = Control.MOUSE_FILTER_STOP if enabled else Control.MOUSE_FILTER_IGNORE
 
+func _refresh_human_card_interactivity() -> void:
+	_set_all_cards_interactive(false)
+	for p_idx in range(player_hands.size()):
+		for c_idx in range(player_hands[p_idx].size()):
+			var card = player_hands[p_idx][c_idx]
+			if is_instance_valid(card) and GameManager.can_human_interact_with_hand_card(p_idx, c_idx, card.data.is_face_up):
+				card.mouse_filter = Control.MOUSE_FILTER_STOP
+
 func _highlight_selectable_cards(include_others: bool = false):
-	if GameManager.current_state == GameManager.GameState.INITIAL_PEEK:
-		# Only highlight player 0 cards at start
-		for card in player_hands[0]:
+	for p_idx in range(player_hands.size()):
+		for c_idx in range(player_hands[p_idx].size()):
+			var card = player_hands[p_idx][c_idx]
 			if is_instance_valid(card):
-				card.set_highlighted(true)
-	else:
-		# Highlight based on the ability
-		for hand in player_hands:
-			for card in hand:
-				if is_instance_valid(card):
-					card.set_highlighted(include_others)
+				var allowed := GameManager.can_human_interact_with_hand_card(p_idx, c_idx, card.data.is_face_up)
+				card.set_highlighted(allowed)
+	_refresh_human_card_interactivity()
 
 func clear_all_highlights():
 	for hand in player_hands:
@@ -898,29 +851,23 @@ func _go_to_main_menu() -> void:
 	get_tree().change_scene_to_file("res://main_menu.tscn")
 
 func _on_end_turn_pressed():
-	match GameManager.current_state:
-		GameManager.GameState.TURN_END_CHOICE:
-			if GameManager.current_player_index == 0:
-				GameManager.end_turn()
-		GameManager.GameState.TURN_JUMP_IN_SELECTION:
-			# Player 0 cancels their own jump-in attempt — no penalty, no turn advance.
-			if GameManager.jump_in_player_idx == 0:
-				GameManager.cancel_jump_in()
+	if GameManager.can_player_end_turn(0):
+		GameManager.end_turn()
+	elif GameManager.can_player_cancel_jump_in(0):
+		GameManager.cancel_jump_in()
 
 func _on_jump_in_pressed():
-	# Player 0 can jump in during any bot-turn state.
-	# GameManager.start_jump_in handles all the guards internally.
-	# Requires: it's NOT the player's own turn start/resolve, and there IS a discard pile.
-	GameManager.start_jump_in(0) # 0 = human player
+	if GameManager.can_player_start_jump_in(0):
+		GameManager.start_jump_in(0)
 
 func _on_call_dutch_pressed():
-	if GameManager.current_player_index == 0:
+	if GameManager.can_player_call_dutch(0):
 		GameManager.call_dutch(0)
 
 func _on_confirm_dutch_pressed():
-	if GameManager.current_player_index == 0:
+	if GameManager.can_player_confirm_dutch(0):
 		GameManager.confirm_dutch()
 
 func _on_cancel_dutch_pressed():
-	if GameManager.current_player_index == 0:
+	if GameManager.can_player_cancel_dutch(0):
 		GameManager.cancel_dutch()

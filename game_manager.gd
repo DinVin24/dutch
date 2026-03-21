@@ -44,8 +44,7 @@ var current_player_index: int = 0
 var dutch_caller_index: int = -1 # -1 means no one has called Dutch yet
 var jump_in_player_idx: int = -1 # who is currently attempting the jump-in
 var drawn_card_data: CardData = null
-var jump_in_was_own_draw_phase: bool = false # true when player 0 jumps in at the start of their own turn
-var pre_jump_in_state: GameState = GameState.INITIALIZING
+var jump_in_resume_state: GameState = GameState.INITIALIZING
 var dev_console_enabled: bool = true
 
 func _ready():
@@ -73,9 +72,12 @@ func stop_menu_music() -> void:
 func initialize_game(p_count: int = 4):
 	num_players = p_count
 	players_info.clear()
+	current_state = GameState.INITIALIZING
 	current_player_index = 0
 	dutch_caller_index = -1
 	jump_in_player_idx = -1
+	jump_in_resume_state = GameState.INITIALIZING
+	drawn_card_data = null
 	for i in range(num_players):
 		players_info.append({
 			"id": i,
@@ -95,6 +97,14 @@ func initialize_game(p_count: int = 4):
 	start_game()
 
 func change_state(new_state: GameState):
+	if current_state == new_state:
+		return
+	if not _can_transition_to(new_state):
+		push_warning("FSM Blocked: Illegal state transition %s -> %s" % [
+			GameState.keys()[current_state],
+			GameState.keys()[new_state]
+		])
+		return
 	current_state = new_state
 	game_state_changed.emit(new_state)
 	
@@ -106,10 +116,150 @@ func change_state(new_state: GameState):
 		GameState.GAME_OVER:
 			_handle_game_over()
 
+func _can_transition_to(new_state: GameState) -> bool:
+	match current_state:
+		GameState.INITIALIZING:
+			return new_state == GameState.DEAL_CARDS
+		GameState.DEAL_CARDS:
+			return new_state == GameState.INITIAL_PEEK
+		GameState.INITIAL_PEEK:
+			return new_state == GameState.TURN_START_DRAW
+		GameState.TURN_START_DRAW:
+			return new_state in [GameState.TURN_RESOLVE_DRAWN, GameState.TURN_JUMP_IN_SELECTION]
+		GameState.TURN_RESOLVE_DRAWN:
+			return new_state in [
+				GameState.TURN_PEEK_ABILITY,
+				GameState.TURN_SWAP_ABILITY,
+				GameState.TURN_END_CHOICE
+			]
+		GameState.TURN_PEEK_ABILITY, GameState.TURN_SWAP_ABILITY:
+			return new_state in [
+				GameState.TURN_START_DRAW,
+				GameState.TURN_END_CHOICE,
+				GameState.TURN_CONFIRM_DUTCH
+			]
+		GameState.TURN_END_CHOICE:
+			return new_state in [
+				GameState.TURN_START_DRAW,
+				GameState.TURN_JUMP_IN_SELECTION,
+				GameState.TURN_CONFIRM_DUTCH
+			]
+		GameState.TURN_JUMP_IN_SELECTION:
+			return new_state in [
+				GameState.TURN_START_DRAW,
+				GameState.TURN_END_CHOICE,
+				GameState.TURN_PEEK_ABILITY,
+				GameState.TURN_SWAP_ABILITY,
+				GameState.GAME_OVER
+			]
+		GameState.CHECK_DUTCH:
+			return new_state == GameState.TURN_CONFIRM_DUTCH
+		GameState.TURN_CONFIRM_DUTCH:
+			return new_state in [GameState.TURN_START_DRAW, GameState.GAME_OVER]
+		GameState.GAME_OVER:
+			return new_state == GameState.DEAL_CARDS
+	return false
+
+func _is_valid_player_index(player_idx: int) -> bool:
+	return player_idx >= 0 and player_idx < num_players
+
+func _hand_has_index(player_idx: int, card_idx: int) -> bool:
+	if not _is_valid_player_index(player_idx):
+		return false
+	var hand: Array = players_info[player_idx].hand
+	return card_idx >= 0 and card_idx < hand.size()
+
+func can_player_draw(player_idx: int) -> bool:
+	return _is_valid_player_index(player_idx) 		and player_idx == current_player_index 		and current_state == GameState.TURN_START_DRAW 		and drawn_card_data == null
+
+func can_player_discard_drawn_card(player_idx: int) -> bool:
+	return _is_valid_player_index(player_idx) 		and player_idx == current_player_index 		and current_state == GameState.TURN_RESOLVE_DRAWN 		and drawn_card_data != null
+
+func can_player_swap_drawn_card(player_idx: int, target_player_idx: int, card_idx: int) -> bool:
+	return can_player_discard_drawn_card(player_idx) 		and target_player_idx == current_player_index 		and _hand_has_index(target_player_idx, card_idx)
+
+func can_player_start_jump_in(player_idx: int) -> bool:
+	if not _is_valid_player_index(player_idx):
+		return false
+	if deck_manager == null or deck_manager.discard_pile.is_empty():
+		return false
+	if current_state == GameState.TURN_START_DRAW:
+		return true
+	if current_state == GameState.TURN_END_CHOICE:
+		return player_idx != current_player_index
+	return false
+
+func can_player_cancel_jump_in(player_idx: int) -> bool:
+	return _is_valid_player_index(player_idx) 		and current_state == GameState.TURN_JUMP_IN_SELECTION 		and jump_in_player_idx == player_idx
+
+func can_player_select_jump_in_card(player_idx: int, owner_idx: int, card_idx: int) -> bool:
+	if not can_player_cancel_jump_in(player_idx):
+		return false
+	if owner_idx != player_idx:
+		return false
+	if card_idx == -2:
+		return drawn_card_data != null and player_idx == current_player_index
+	return _hand_has_index(owner_idx, card_idx)
+
+func can_player_complete_peek_ability(player_idx: int) -> bool:
+	return _is_valid_player_index(player_idx) and player_idx == current_player_index and current_state == GameState.TURN_PEEK_ABILITY
+
+func can_player_use_peek_ability(player_idx: int, _owner_idx: int, card_is_face_up: bool) -> bool:
+	return can_player_complete_peek_ability(player_idx) and not card_is_face_up
+
+func can_player_complete_swap_ability(player_idx: int) -> bool:
+	return _is_valid_player_index(player_idx) and player_idx == current_player_index and current_state == GameState.TURN_SWAP_ABILITY
+
+func can_player_select_swap_card(player_idx: int, owner_idx: int, card_idx: int) -> bool:
+	return can_player_complete_swap_ability(player_idx) and _hand_has_index(owner_idx, card_idx)
+
+func can_player_end_turn(player_idx: int) -> bool:
+	return _is_valid_player_index(player_idx) 		and player_idx == current_player_index 		and current_state == GameState.TURN_END_CHOICE
+
+func can_player_call_dutch(player_idx: int) -> bool:
+	return _is_valid_player_index(player_idx) 		and player_idx == current_player_index 		and current_state == GameState.TURN_END_CHOICE 		and dutch_caller_index == -1 		and players_info[player_idx].can_call_dutch
+
+func can_player_confirm_dutch(player_idx: int) -> bool:
+	return _is_valid_player_index(player_idx) 		and player_idx == current_player_index 		and current_state == GameState.TURN_CONFIRM_DUTCH
+
+func can_player_cancel_dutch(player_idx: int) -> bool:
+	return can_player_confirm_dutch(player_idx)
+
+func should_human_show_jump_in_button(player_idx: int = 0) -> bool:
+	return can_player_start_jump_in(player_idx)
+
+func can_human_interact_with_hand_card(owner_idx: int, card_idx: int, card_is_face_up: bool = false) -> bool:
+	if not _is_valid_player_index(owner_idx):
+		return false
+	match current_state:
+		GameState.INITIAL_PEEK:
+			return owner_idx == 0 and _hand_has_index(0, card_idx)
+		GameState.TURN_RESOLVE_DRAWN:
+			return can_player_swap_drawn_card(0, owner_idx, card_idx)
+		GameState.TURN_JUMP_IN_SELECTION:
+			return can_player_select_jump_in_card(0, owner_idx, card_idx)
+		GameState.TURN_PEEK_ABILITY:
+			return can_player_use_peek_ability(0, owner_idx, card_is_face_up) and _hand_has_index(owner_idx, card_idx)
+		GameState.TURN_SWAP_ABILITY:
+			return can_player_select_swap_card(0, owner_idx, card_idx)
+		_:
+			return false
+
+func _consume_jump_in_resume_state() -> GameState:
+	var resume_state := jump_in_resume_state
+	jump_in_resume_state = GameState.INITIALIZING
+	return resume_state
+
+func _resolve_post_interrupt_state() -> GameState:
+	var resume_state := _consume_jump_in_resume_state()
+	if resume_state != GameState.INITIALIZING:
+		return resume_state
+	if current_player_index == dutch_caller_index:
+		return GameState.TURN_CONFIRM_DUTCH
+	return GameState.TURN_END_CHOICE
+
 func next_turn():
 	current_player_index = (current_player_index + 1) % num_players
-	# Bug 1 fix: always go to TURN_START_DRAW; the Dutch-caller check now lives
-	# in _prompt_turn_end() so the caller still draws before confirming.
 	change_state(GameState.TURN_START_DRAW)
 
 func _handle_deal_cards():
@@ -151,113 +301,68 @@ func start_game():
 	change_state(GameState.DEAL_CARDS)
 
 func call_dutch(player_id: int):
-	if current_state != GameState.TURN_END_CHOICE:
+	if not can_player_call_dutch(player_id):
 		print("FSM Blocked: Cannot call Dutch outside of TURN_END_CHOICE state")
 		return
-	if dutch_caller_index == -1 and players_info[player_id].can_call_dutch:
-		dutch_caller_index = player_id
-		print("Player ", player_id, " called DUTCH!")
-		dutch_called.emit(player_id)
-		# Game continues until it returns to this player
-		next_turn()
+	dutch_caller_index = player_id
+	print("Player ", player_id, " called DUTCH!")
+	dutch_called.emit(player_id)
+	next_turn()
 
 func _prompt_turn_end():
-	# If player 0 jumped in at the very start of their own draw turn, give them
-	# their draw back instead of ending the turn.
-	if jump_in_was_own_draw_phase:
-		jump_in_was_own_draw_phase = false
-		change_state(GameState.TURN_START_DRAW)
-		return
-	# Bug 1 fix: Dutch-caller check moved here so the caller always draws first.
-	if current_player_index == dutch_caller_index:
-		change_state(GameState.TURN_CONFIRM_DUTCH)
-		return
-	change_state(GameState.TURN_END_CHOICE)
+	change_state(_resolve_post_interrupt_state())
 
 func end_turn():
-	if current_state != GameState.TURN_END_CHOICE and current_state != GameState.TURN_JUMP_IN_SELECTION:
-		print("FSM Blocked: Cannot end turn outside of END_CHOICE or JUMP_IN state")
+	if not can_player_end_turn(current_player_index):
+		print("FSM Blocked: Cannot end turn outside of TURN_END_CHOICE state")
 		return
 	next_turn()
 
 ## player_idx: who is jumping in. -1 defaults to current_player_index (bot use).
-## Bots may only call this during TURN_END_CHOICE.
-## Player 0 may call this during any bot-turn state to interrupt and select a card.
 func start_jump_in(player_idx: int = -1) -> void:
 	var resolved_idx := player_idx if player_idx != -1 else current_player_index
-	
-	if resolved_idx == 0:
-		# Human player: allow jump-in from any state EXCEPT their own active draw/resolve.
-		var blocked_states := [
-			GameState.INITIALIZING, GameState.DEAL_CARDS, GameState.INITIAL_PEEK,
-			GameState.TURN_JUMP_IN_SELECTION, GameState.GAME_OVER,
-			GameState.TURN_PEEK_ABILITY, GameState.TURN_SWAP_ABILITY
-		]
-		# Block if currently in a forbidden state.
-		if (current_state in blocked_states):
-			return
-		# Require a non-empty discard pile to jump into.
-		if deck_manager.discard_pile.is_empty():
-			return
-	else:
-		# Bots may only jump in during TURN_END_CHOICE.
-		if current_state != GameState.TURN_END_CHOICE:
-			return
-	
-	# Track if player 0 is jumping in at the start of their own draw turn.
-	if resolved_idx == 0 and current_state == GameState.TURN_START_DRAW:
-		jump_in_was_own_draw_phase = true
-	else:
-		jump_in_was_own_draw_phase = false
-
-	if current_state != GameState.TURN_JUMP_IN_SELECTION:
-		pre_jump_in_state = current_state
-	
+	if not can_player_start_jump_in(resolved_idx):
+		print("FSM Blocked: Cannot start jump-in from current state")
+		return
+	jump_in_resume_state = current_state
 	jump_in_player_idx = resolved_idx
 	change_state(GameState.TURN_JUMP_IN_SELECTION)
 
 func validate_jump_in(card_idx: int) -> bool:
 	if current_state != GameState.TURN_JUMP_IN_SELECTION:
 		return false
-	if jump_in_player_idx < 0 or jump_in_player_idx >= num_players:
+	if not can_player_select_jump_in_card(jump_in_player_idx, jump_in_player_idx, card_idx):
 		return false
 
-	var h: Array = players_info[jump_in_player_idx].hand
-	var selected_card: CardData = null
-	
-	if card_idx == -2:
-		selected_card = drawn_card_data
-	elif card_idx >= 0 and card_idx < h.size():
-		selected_card = h[card_idx]
+	var hand: Array = players_info[jump_in_player_idx].hand
+	var selected_card: CardData = drawn_card_data if card_idx == -2 else hand[card_idx]
+	if selected_card == null or deck_manager.discard_pile.is_empty():
+		return false
+
+	var top_discard: CardData = deck_manager.discard_pile[-1]
+	if selected_card.rank.to_lower() == top_discard.rank.to_lower():
+		var msg := "Player %d: %s of %s matches! JUMP IN!" % [
+			jump_in_player_idx, selected_card.rank, selected_card.suit
+		]
+		if card_idx == -2:
+			drawn_card_data = null
+		else:
+			hand.remove_at(card_idx)
+			hand_updated.emit(jump_in_player_idx)
+			memory_shift_required.emit(jump_in_player_idx, card_idx)
 		
-	if selected_card == null:
-		return false
-
-	if deck_manager.discard_pile.size() > 0:
-		var top_discard: CardData = deck_manager.discard_pile[-1]
-		# CASE-INSENSITIVE RANK MATCH
-		if selected_card.rank.to_lower() == top_discard.rank.to_lower():
-			var msg := "Player %d: %s of %s matches! JUMP IN!" % [
-				jump_in_player_idx, selected_card.rank, selected_card.suit
-			]
-			if card_idx == -2:
-				drawn_card_data = null
-				change_state(GameState.TURN_END_CHOICE)
-			else:
-				h.remove_at(card_idx)
-				hand_updated.emit(jump_in_player_idx)
-				memory_shift_required.emit(jump_in_player_idx, card_idx)
-			
-			if h.size() == 0:
-				change_state(GameState.GAME_OVER)
-				return true
-				
-			deck_manager.discard_pile.append(selected_card)
-			card_discarded.emit(jump_in_player_idx, selected_card)
+		if hand.size() == 0:
 			jump_in_player_idx = -1
-			_resolve_discard_effects(selected_card)
-			bot_action.emit(msg)
+			_consume_jump_in_resume_state()
+			change_state(GameState.GAME_OVER)
 			return true
+		
+		deck_manager.discard_pile.append(selected_card)
+		card_discarded.emit(jump_in_player_idx, selected_card)
+		jump_in_player_idx = -1
+		_resolve_discard_effects(selected_card)
+		bot_action.emit(msg)
+		return true
 
 	print("No match. Jump In invalid.")
 	jump_in_failed.emit(jump_in_player_idx, card_idx, selected_card)
@@ -265,45 +370,38 @@ func validate_jump_in(card_idx: int) -> bool:
 
 	var penalty_card_dict: Dictionary = deck_manager.draw_card()
 	if not penalty_card_dict.is_empty():
-		var p_card := CardData.new(penalty_card_dict.rank, penalty_card_dict.suit)
-		p_card.is_face_up = false
-		h.append(p_card)
+		var penalty_card := CardData.new(penalty_card_dict.rank, penalty_card_dict.suit)
+		penalty_card.is_face_up = false
+		hand.append(penalty_card)
 		hand_updated.emit(jump_in_player_idx)
-		jump_in_penalty.emit(jump_in_player_idx, p_card)
+		jump_in_penalty.emit(jump_in_player_idx, penalty_card)
 
-	var was_own_draw := jump_in_was_own_draw_phase
 	jump_in_player_idx = -1
-	jump_in_was_own_draw_phase = false
-	if was_own_draw:
-		change_state(GameState.TURN_START_DRAW)
-	else:
-		change_state(pre_jump_in_state if pre_jump_in_state != GameState.TURN_JUMP_IN_SELECTION else GameState.TURN_END_CHOICE)
+	change_state(_resolve_post_interrupt_state())
 	return false
 
-## Human opted out of a jump-in: return to TURN_END_CHOICE without penalty.
 func cancel_jump_in() -> void:
-	if current_state != GameState.TURN_JUMP_IN_SELECTION:
+	if not can_player_cancel_jump_in(jump_in_player_idx):
 		return
 	jump_in_player_idx = -1
-	change_state(pre_jump_in_state if pre_jump_in_state != GameState.TURN_JUMP_IN_SELECTION else GameState.TURN_END_CHOICE)
+	change_state(_resolve_post_interrupt_state())
 
 func confirm_dutch():
-	if current_state != GameState.TURN_CONFIRM_DUTCH:
+	if not can_player_confirm_dutch(current_player_index):
 		return
 	print("Player ", current_player_index, " CONFIRMED Dutch. Game Over.")
 	change_state(GameState.GAME_OVER)
 
 func cancel_dutch():
-	if current_state != GameState.TURN_CONFIRM_DUTCH:
+	if not can_player_cancel_dutch(current_player_index):
 		return
 	print("Player ", current_player_index, " CANCELLED Dutch. Forfeiting right to call again.")
 	players_info[current_player_index].can_call_dutch = false
 	dutch_caller_index = -1
-	# Give them their normal turn back
 	change_state(GameState.TURN_START_DRAW)
 
 func player_draw_card():
-	if current_state != GameState.TURN_START_DRAW:
+	if not can_player_draw(current_player_index):
 		print("FSM Blocked: Cannot draw card outside of TURN_START_DRAW state")
 		return
 	
@@ -320,7 +418,7 @@ func player_draw_card():
 	card_drawn_to_pending.emit(current_player_index, drawn_card_data)
 
 func player_discard_drawn_card():
-	if current_state != GameState.TURN_RESOLVE_DRAWN:
+	if not can_player_discard_drawn_card(current_player_index):
 		print("FSM Blocked: Cannot discard pending card outside of TURN_RESOLVE_DRAWN state")
 		return
 	
@@ -334,19 +432,14 @@ func player_discard_drawn_card():
 	_resolve_discard_effects(discarded_handled)
 
 func player_swap_drawn_card(card_idx: int):
-	if current_state != GameState.TURN_RESOLVE_DRAWN:
+	if not can_player_swap_drawn_card(current_player_index, current_player_index, card_idx):
 		print("FSM Blocked: Cannot swap outside of TURN_RESOLVE_DRAWN state")
 		return
 	
-	var player_h = players_info[current_player_index].hand
-	if card_idx < 0 or card_idx >= player_h.size():
-		return
-		
-	# Swap cards
+	var player_h: Array = players_info[current_player_index].hand
 	var old_card = player_h[card_idx]
 	print("GameManager: Swapping drawn card with hand card at idx ", card_idx)
 	
-	# Old card goes to discard first so board finds the node in the current hand
 	deck_manager.discard_pile.append(old_card)
 	card_discarded.emit(current_player_index, old_card)
 	
@@ -359,7 +452,6 @@ func player_swap_drawn_card(card_idx: int):
 	_resolve_discard_effects(old_card)
 
 func _resolve_discard_effects(card: CardData):
-	# Wait for the card discard visual tween to complete before changing state
 	await get_tree().create_timer(0.4, false).timeout
 	if card.rank == "Queen":
 		print("Queen discarded! FSM -> TURN_PEEK_ABILITY")
@@ -385,9 +477,12 @@ func complete_swap_ability(player1_idx: int, card1_idx: int, player2_idx: int, c
 	if current_state != GameState.TURN_SWAP_ABILITY:
 		print("FSM Blocked: Cannot complete swap outside of TURN_SWAP_ABILITY state")
 		return
+	if not _hand_has_index(player1_idx, card1_idx) or not _hand_has_index(player2_idx, card2_idx):
+		print("FSM Blocked: Cannot complete swap with invalid card indices")
+		return
 		
-	var h1 = players_info[player1_idx].hand
-	var h2 = players_info[player2_idx].hand
+	var h1: Array = players_info[player1_idx].hand
+	var h2: Array = players_info[player2_idx].hand
 	
 	var temp_data = h1[card1_idx]
 	h1[card1_idx] = h2[card2_idx]
@@ -396,7 +491,5 @@ func complete_swap_ability(player1_idx: int, card1_idx: int, player2_idx: int, c
 	hand_updated.emit(player1_idx)
 	hand_updated.emit(player2_idx)
 	
-	# Emit before _prompt_turn_end so the board can update visual nodes synchronously.
 	jack_swap_resolved.emit(player1_idx, card1_idx, player2_idx, card2_idx)
-	
 	_prompt_turn_end()
