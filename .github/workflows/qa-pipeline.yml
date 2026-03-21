@@ -2,10 +2,18 @@ name: QA Pipeline
 
 on:
   workflow_dispatch:
+    inputs:
+      godot_version:
+        description: 'Optional Godot version to download (defaults to 4.6.1)'
+        required: false
+      godot_download_url:
+        description: 'Optional override URL for the Godot Linux x86_64 archive'
+        required: false
   push:
     branches:
       - main
       - fix/strict-fsm-hardening
+      - fix/qa-pipeline-godot
       - feature/qa-pipeline
   pull_request:
 
@@ -21,18 +29,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y unzip jq
 
-      - name: Download latest Godot
+      - name: Download Godot binary
+        env:
+          GODOT_VERSION_OVERRIDE: ${{ github.event.inputs.godot_version }}
+          GODOT_DOWNLOAD_URL_OVERRIDE: ${{ github.event.inputs.godot_download_url }}
         run: |
-          latest_url=https://api.github.com/repos/godotengine/godot/releases/latest
-          curl -sL "$latest_url" > latest.json
-          download_url=$(jq -r '.assets[] | select(.name | test("linux\\.x86_64.*\\.zip")) | .browser_download_url' latest.json | head -n 1)
+          set -euo pipefail
+          default_version="4.6.1"
+          download_url="${GODOT_DOWNLOAD_URL_OVERRIDE:-}"
           if [ -z "$download_url" ]; then
-            echo "Godot download URL not found" >&2
-            exit 1
+            version="${GODOT_VERSION_OVERRIDE:-$default_version}"
+            download_url="https://downloads.tuxfamily.org/godotengine/$version/Godot_v$version-stable_linux.x86_64.zip"
           fi
+          echo "Downloading Godot from $download_url"
           curl -L -o godot.zip "$download_url"
-          unzip godot.zip -d godot
-          godot_binary=$(ls godot/*linux*.x86_64 2>/dev/null | head -n 1)
+          unzip -q godot.zip -d godot
+          godot_binary=$(ls godot/*linux*.x86_64 2>/dev/null | head -n 1 || true)
           if [ -z "$godot_binary" ]; then
             echo "Godot binary not found inside archive" >&2
             exit 1

@@ -19,6 +19,7 @@ config/icon="res://assets/images/icon.svg"
 
 GameManager="*res://game_manager.gd"
 DevConsole="*res://dev_console.tscn"
+TypeRegistry="res://type_registry.gd"
 
 [input]
 
