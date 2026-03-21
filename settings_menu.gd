@@ -2,8 +2,6 @@ extends Control
 
 signal back_pressed
 
-@onready var GameManager = get_node("/root/GameManager")
-@onready var DevConsole = get_node_or_null("/root/DevConsole")
 @onready var resolution_option: OptionButton = $BackgroundTint/VBoxContainer/GridContainer/ResolutionOption
 @onready var window_mode_option: OptionButton = $BackgroundTint/VBoxContainer/GridContainer/WindowModeOption
 @onready var music_slider: HSlider = $BackgroundTint/VBoxContainer/GridContainer/MusicSlider

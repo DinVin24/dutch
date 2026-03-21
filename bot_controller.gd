@@ -13,7 +13,6 @@ const UNKNOWN_VALUE := 99
 
 var gm: Node = null
 var rng := RandomNumberGenerator.new()
-var _jump_in_probe_id: int = 0
 
 # ─── Lifecycle ───────────────────────────────────────────────
 
@@ -31,7 +30,7 @@ func _is_headless() -> bool:
 	return DisplayServer.get_name() == "headless"
 
 func _wait(seconds: float) -> void:
-	if _is_headless() or _qa_flag_enabled(): return
+	if _is_headless(): return
 	await gm.get_tree().create_timer(seconds, false).timeout
 
 # ─── Memory helpers ──────────────────────────────────────────
@@ -105,8 +104,7 @@ func _on_turn_started(bot_idx: int) -> void:
 
 ## Rule 1: Constant jump-in monitoring — fires every time any card is discarded.
 func _on_card_discarded(_discarder_idx: int, card_data: CardData) -> void:
-	_jump_in_probe_id += 1
-	_try_jump_ins(card_data, _jump_in_probe_id, gm.current_player_index)
+	_try_jump_ins(card_data)
 
 ## Shift memory indices when a card is removed from someone's hand.
 func _on_memory_shift_required(target_player_idx: int, removed_card_idx: int) -> void:
@@ -126,17 +124,10 @@ func _on_memory_shift_required(target_player_idx: int, removed_card_idx: int) ->
 # ─── Jump-In ─────────────────────────────────────────────────
 
 ## Check all bots — if any KNOWS a card in its hand matching the discarded rank, jump in.
-func _try_jump_ins(card_data: CardData, probe_id: int, acting_player_idx: int) -> void:
+func _try_jump_ins(card_data: CardData) -> void:
 	await _wait(0.5)
-	if probe_id != _jump_in_probe_id:
-		return
-	# Bots only auto-jump after the mandatory draw window has closed, and only
-	# for the discard event that is still currently on top of the pile.
+	# Bots only auto-jump after the mandatory draw window has closed.
 	if gm.current_state != GameManager.GameState.TURN_END_CHOICE:
-		return
-	if gm.current_player_index != acting_player_idx:
-		return
-	if gm.deck_manager.discard_pile.is_empty() or gm.deck_manager.discard_pile[-1] != card_data:
 		return
 
 	for bot_idx in range(1, gm.num_players):
@@ -165,9 +156,6 @@ func _try_jump_ins(card_data: CardData, probe_id: int, acting_player_idx: int) -
 			gm.validate_jump_in(match_idx)
 			break  # Only one jump-in per discard event
 
-func _qa_flag_enabled() -> bool:
-	var flag = get_tree().get_root().get_node_or_null("QA_PIPELINE_FLAG")
-	return flag != null and flag.get("skip_anims")
 # ─── Bot Turn Actions ─────────────────────────────────────────
 
 ## INITIAL PEEK: each bot learns exactly 2 of its 4 dealt cards.
@@ -298,7 +286,7 @@ func _execute_jack_swap(bot_idx: int) -> void:
 	if gm.current_state != GameManager.GameState.TURN_SWAP_ABILITY:
 		_update_memory_on_swap(bot_idx, s1.p, s1.c, s2.p, s2.c)
 
-## END CHOICE: call Dutch if all cards are known and score <= 7; otherwise end turn.
+## END CHOICE: call Dutch if all cards are known and score < 7; otherwise end turn.
 func _execute_end_choice(bot_idx: int) -> void:
 	await _wait(0.9)
 	if not gm.can_player_end_turn(bot_idx): return
@@ -313,7 +301,7 @@ func _execute_end_choice(bot_idx: int) -> void:
 	if all_known and hand_size > 0:
 		var score := 0
 		for c in _mem(bot_idx).values(): score += c.point_value
-		if score <= 7 and gm.can_player_call_dutch(bot_idx):
+		if score < 7 and gm.can_player_call_dutch(bot_idx):
 			gm.bot_action.emit("Player %d calls DUTCH! (score: %d)" % [bot_idx, score])
 			gm.call_dutch(bot_idx)
 			return

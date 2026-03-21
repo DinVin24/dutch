@@ -42,7 +42,6 @@ var num_players: int = 4 # Hotseat local play
 var players_info: Array = []
 var current_player_index: int = 0
 var dutch_caller_index: int = -1 # -1 means no one has called Dutch yet
-var dutch_round_turns_remaining: int = 0
 var jump_in_player_idx: int = -1 # who is currently attempting the jump-in
 var drawn_card_data: CardData = null
 var jump_in_resume_state: GameState = GameState.INITIALIZING
@@ -51,41 +50,24 @@ var dev_console_enabled: bool = true
 func _ready():
 	deck_manager = DeckManager.new()
 	add_child(deck_manager)
-
-func _exit_tree() -> void:
-	_release_menu_music_player()
-
-func _ensure_menu_music_player() -> void:
-	if DisplayServer.get_name() == "headless":
-		return
-	if bg_music_player and is_instance_valid(bg_music_player):
-		return
+	
+	# Background Music Setup
 	bg_music_player = AudioStreamPlayer.new()
-	var music_stream = load("res://assets/music/bg_music.ogg")
-	if music_stream is AudioStreamOggVorbis:
-		music_stream.loop = true
-	bg_music_player.stream = music_stream
+	bg_music_player.stream = preload("res://assets/music/bg_music.ogg")
+	if bg_music_player.stream is AudioStreamOggVorbis:
+		bg_music_player.stream.loop = true
 	bg_music_player.volume_db = -10.0
 	bg_music_player.bus = "Music"
 	bg_music_player.process_mode = Node.PROCESS_MODE_ALWAYS # Keep playing when paused
 	add_child(bg_music_player)
-
-func _release_menu_music_player() -> void:
-	if not bg_music_player or not is_instance_valid(bg_music_player):
-		bg_music_player = null
-		return
-	bg_music_player.stop()
-	bg_music_player.stream = null
-	bg_music_player.queue_free()
-	bg_music_player = null
-
+	
 func play_menu_music() -> void:
-	_ensure_menu_music_player()
 	if bg_music_player and not bg_music_player.playing:
 		bg_music_player.play()
 
 func stop_menu_music() -> void:
-	_release_menu_music_player()
+	if bg_music_player and bg_music_player.playing:
+		bg_music_player.stop()
 
 func initialize_game(p_count: int = 4):
 	num_players = p_count
@@ -93,7 +75,6 @@ func initialize_game(p_count: int = 4):
 	current_state = GameState.INITIALIZING
 	current_player_index = 0
 	dutch_caller_index = -1
-	dutch_round_turns_remaining = 0
 	jump_in_player_idx = -1
 	jump_in_resume_state = GameState.INITIALIZING
 	drawn_card_data = null
@@ -293,12 +274,6 @@ func _resolve_post_interrupt_state() -> GameState:
 
 func next_turn():
 	current_player_index = (current_player_index + 1) % num_players
-	if dutch_caller_index != -1:
-		if current_player_index == dutch_caller_index and dutch_round_turns_remaining <= 0:
-			change_state(GameState.TURN_CONFIRM_DUTCH)
-			return
-		if current_player_index != dutch_caller_index and dutch_round_turns_remaining > 0:
-			dutch_round_turns_remaining -= 1
 	change_state(GameState.TURN_START_DRAW)
 
 func _handle_deal_cards():
@@ -344,7 +319,6 @@ func call_dutch(player_id: int):
 		print("FSM Blocked: Cannot call Dutch outside of TURN_END_CHOICE state")
 		return
 	dutch_caller_index = player_id
-	dutch_round_turns_remaining = max(num_players - 1, 0)
 	print("Player ", player_id, " called DUTCH!")
 	dutch_called.emit(player_id)
 	next_turn()
@@ -406,7 +380,7 @@ func validate_jump_in(card_idx: int) -> bool:
 
 	print("No match. Jump In invalid.")
 	jump_in_failed.emit(jump_in_player_idx, card_idx, selected_card)
-	await _qa_delay(1.2)
+	await get_tree().create_timer(1.2, false).timeout
 
 	var penalty_card_dict: Dictionary = deck_manager.draw_card()
 	if not penalty_card_dict.is_empty():
@@ -430,7 +404,6 @@ func confirm_dutch():
 	if not can_player_confirm_dutch(current_player_index):
 		return
 	print("Player ", current_player_index, " CONFIRMED Dutch. Game Over.")
-	dutch_round_turns_remaining = 0
 	change_state(GameState.GAME_OVER)
 
 func cancel_dutch():
@@ -439,7 +412,6 @@ func cancel_dutch():
 	print("Player ", current_player_index, " CANCELLED Dutch. Forfeiting right to call again.")
 	players_info[current_player_index].can_call_dutch = false
 	dutch_caller_index = -1
-	dutch_round_turns_remaining = 0
 	change_state(GameState.TURN_START_DRAW)
 
 func player_draw_card():
@@ -494,7 +466,7 @@ func player_swap_drawn_card(card_idx: int):
 	_resolve_discard_effects(old_card)
 
 func _resolve_discard_effects(card: CardData):
-	await _qa_delay(0.4)
+	await get_tree().create_timer(0.4, false).timeout
 	if card.rank == "Queen":
 		print("Queen discarded! FSM -> TURN_PEEK_ABILITY")
 		change_state(GameState.TURN_PEEK_ABILITY)
@@ -538,15 +510,3 @@ func complete_swap_ability(player1_idx: int, card1_idx: int, player2_idx: int, c
 	
 	jack_swap_resolved.emit(player1_idx, card1_idx, player2_idx, card2_idx)
 	_prompt_turn_end()
-
-func _qa_delay(seconds: float) -> void:
-	if _qa_flag_enabled():
-		return
-	await get_tree().create_timer(seconds, false).timeout
-
-func _qa_flag_enabled() -> bool:
-	var flag = get_tree().get_root().get_node_or_null("QA_PIPELINE_FLAG")
-	if not flag:
-		return false
-	var value = flag.get("skip_anims")
-	return value != null and value

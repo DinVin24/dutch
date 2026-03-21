@@ -1,7 +1,5 @@
 extends Control
 
-@onready var GameManager = get_node("/root/GameManager")
-
 func _ready() -> void:
 	GameManager.play_menu_music()
 

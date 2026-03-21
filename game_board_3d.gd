@@ -1,9 +1,5 @@
 extends Node3D
 
-var QA_SKIP_ANIM: bool = false
-
-@onready var GameManager = get_node("/root/GameManager")
-@onready var DevConsole = get_node_or_null("/root/DevConsole")
 @onready var deck_area = $DeckArea
 @onready var discard_area = $DiscardArea
 @onready var player_pos_nodes = {
@@ -58,7 +54,6 @@ var _shake_timer: float = 0.0
 var _base_camera_pos: Vector3
 
 func _ready():
-	QA_SKIP_ANIM = _qa_flag_enabled()
 	player_hands = [[], [], [], []]
 	print("Game Board 3D: Ready. Connecting signals...")
 	GameManager.stop_menu_music()
@@ -317,7 +312,7 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	pending_card.set_interactive(true)
 
 	# Reveal animations
-	await _delay(0.1)
+	await get_tree().create_timer(0.1, false).timeout
 	pending_card.animate_flip(true)
 	_update_deck_visual() # Refresh deck after drawing
 
@@ -509,7 +504,6 @@ func _on_game_state_changed(new_state):
 				_show_message(player_name + " is deciding...")
 		GameManager.GameState.TURN_END_CHOICE:
 			print("GameBoard3D: UI - Showing TURN_END_CHOICE")
-			end_turn_btn.text = "END TURN"
 			if GameManager.can_player_end_turn(0):
 				end_turn_btn.show()
 			if GameManager.can_player_call_dutch(0):
@@ -518,15 +512,14 @@ func _on_game_state_changed(new_state):
 			print("GameBoard3D: UI - Showing TURN_JUMP_IN_SELECTION")
 			var ji_idx = GameManager.jump_in_player_idx
 			var ji_name = GameManager.players_info[ji_idx].name if ji_idx >= 0 else "Someone"
-			_show_message(ji_name + ": pick a matching card, or cancel.")
-			end_turn_btn.text = "CANCEL JUMP-IN"
+			_show_message(ji_name + ": pick a matching card, or end turn to cancel.")
 			if GameManager.can_player_cancel_jump_in(0):
 				end_turn_btn.show()
 				_highlight_selectable_cards(false)
 		GameManager.GameState.TURN_CONFIRM_DUTCH:
 			print("GameBoard3D: UI - Showing TURN_CONFIRM_DUTCH")
 			if GameManager.can_player_confirm_dutch(0):
-				_show_message("You called Dutch. Confirm to end or forfeit to keep playing.")
+				_show_message("You called Dutch! Confirm or Forfeit?")
 				confirm_dutch_btn.show()
 				forfeit_dutch_btn.show()
 		GameManager.GameState.TURN_PEEK_ABILITY:
@@ -579,7 +572,7 @@ func _highlight_selectable_cards(include_opponents: bool = false):
 		for c_idx in range(player_hands[p_idx].size()):
 			var card = player_hands[p_idx][c_idx]
 			if is_instance_valid(card):
-				var allowed: bool = GameManager.can_human_interact_with_hand_card(p_idx, c_idx, card.data.is_face_up)
+				var allowed := GameManager.can_human_interact_with_hand_card(p_idx, c_idx, card.data.is_face_up)
 				card.set_highlight(allowed)
 				card.set_interactive(allowed)
 
@@ -603,10 +596,6 @@ func _clear_all_highlights():
 
 func _hide_message():
 	_current_ability_message = ""
-	for child in top_center.get_children():
-		child.queue_free()
-
-func _clear_message_only() -> void:
 	for child in top_center.get_children():
 		child.queue_free()
 
@@ -684,7 +673,7 @@ func _handle_initial_deal():
 			card_node.reparent(player_pos_nodes[p_idx])
 
 			_update_hand_visuals(p_idx)
-			await _delay(0.08)
+			await get_tree().create_timer(0.08, false).timeout
 
 	GameManager.change_state(GameManager.GameState.INITIAL_PEEK)
 
@@ -716,7 +705,7 @@ func _on_card_clicked(node, data):
 			node.animate_flip(true)
 			peeked_cards.append(node)
 			if peeked_cards.size() >= 2:
-				await _delay(1.5)
+				await get_tree().create_timer(1.5, false).timeout
 				_clear_all_highlights()
 				for c in peeked_cards:
 					c.animate_flip(false)
@@ -747,7 +736,7 @@ func _on_card_clicked(node, data):
 				return
 			_set_all_cards_interactive(false)
 			node.animate_flip(true)
-			await _delay(3.0)
+			await get_tree().create_timer(3.0, false).timeout
 			_clear_all_highlights()
 			node.animate_flip(false)
 			_refresh_human_interactivity()
@@ -786,16 +775,6 @@ func _on_discard_clicked():
 		GameManager.player_discard_drawn_card()
 
 func _on_scores_ready(results):
-	_set_all_cards_interactive(false)
-	if is_instance_valid(pending_card):
-		pending_card.set_interactive(false)
-		pending_card.set_highlight(false)
-	end_turn_btn.hide()
-	jump_in_btn.hide()
-	call_dutch_btn.hide()
-	confirm_dutch_btn.hide()
-	forfeit_dutch_btn.hide()
-
 	var overlay = CanvasLayer.new()
 	add_child(overlay)
 
@@ -813,8 +792,7 @@ func _on_scores_ready(results):
 	center.add_child(vbox)
 
 	var title = Label.new()
-	var winner_name = results[0].name if results.size() > 0 else "No one"
-	title.text = winner_name + " won!"
+	title.text = "GAME OVER"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 64)
 	vbox.add_child(title)
@@ -822,8 +800,7 @@ func _on_scores_ready(results):
 	for i in range(results.size()):
 		var entry = results[i]
 		var l = Label.new()
-		var score_str := ("%d pts" % entry.score) if entry.score >= 0 else "0 pts (empty hand wins)"
-		l.text = "%d. %s: %s" % [i + 1, entry.name, score_str]
+		l.text = "%d. %s: %d pts" % [i + 1, entry.name, entry.score]
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.add_theme_font_size_override("font_size", 32)
 		if i == 0: l.add_theme_color_override("font_color", Color.YELLOW)
@@ -886,27 +863,14 @@ func _toggle_debug_reveal():
 					card.animate_flip(true)
 					_debug_flipped_nodes.append(card)
 		_debug_reveal = true
-		_clear_message_only()
-		var label := Label.new()
-		label.text = "[DEBUG] All cards revealed"
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.add_theme_color_override("font_color", Color(1, 1, 1))
-		label.add_theme_color_override("outline_color", Color(0, 0, 0))
-		label.add_theme_constant_override("outline_size", 4)
-		top_center.add_child(label)
-		top_center.set_anchors_preset(Control.PRESET_CENTER_TOP)
-		label.show()
+		_show_message("[DEBUG] All cards revealed")
 	else:
 		for card in _debug_flipped_nodes:
 			if is_instance_valid(card):
 				card.animate_flip(false)
 		_debug_flipped_nodes.clear()
 		_debug_reveal = false
-		if _current_ability_message != "":
-			_clear_message_only()
-			_show_message(_current_ability_message)
-		else:
-			_hide_message()
+		_hide_message()
 
 # Signal Handlers
 func _on_jump_in_penalty(player_idx, _card):
@@ -1056,15 +1020,3 @@ func toggle_noclip() -> bool:
 
 func is_noclip_active() -> bool:
 	return noclip_enabled
-
-func _delay(seconds: float) -> void:
-	if QA_SKIP_ANIM:
-		return
-	await get_tree().create_timer(seconds).timeout
-
-func _qa_flag_enabled() -> bool:
-	var flag = get_tree().get_root().get_node_or_null("QA_PIPELINE_FLAG")
-	if not flag:
-		return false
-	var value = flag.get("skip_anims")
-	return value != null and value

@@ -1,8 +1,5 @@
 extends Control
 
-var QA_SKIP_ANIM: bool = false
-
-@onready var GameManager = get_node("/root/GameManager")
 @onready var deck_area = $CenterTable/DeckArea
 @onready var discard_area = $CenterTable/DiscardArea
 @onready var player_pos_bottom = $PlayerPositions/Bottom
@@ -11,14 +8,15 @@ var QA_SKIP_ANIM: bool = false
 @onready var player_pos_right = $PlayerPositions/Right
 @onready var turn_label = $GameUI/MainHUD/TopLeft/TurnLabel
 @onready var top_center = $GameUI/MainHUD/TopCenter
-@onready var action_bar = $GameUI/MainHUD/BottomActions/ActionBar
-@onready var end_turn_btn: Button = $GameUI/MainHUD/BottomActions/ActionBar/LeftSlot/EndTurnButton
-@onready var jump_in_btn: Button = $GameUI/MainHUD/BottomActions/ActionBar/CenterSlot/JumpInButton
-@onready var call_dutch_btn: Button = $GameUI/MainHUD/BottomActions/ActionBar/RightSlot/CallDutchButton
-@onready var confirm_dutch_btn: Button = $GameUI/MainHUD/BottomActions/ActionBar/LeftSlot/ConfirmDutchButton
-@onready var forfeit_dutch_btn: Button = $GameUI/MainHUD/BottomActions/ActionBar/RightSlot/ForfeitDutchButton
+
 
 var bot_controller: BotController = null
+
+var end_turn_btn: Button
+var jump_in_btn: Button
+var call_dutch_btn: Button
+var confirm_dutch_btn: Button
+var forfeit_dutch_btn: Button
 
 var player_hands: Array = [[], [], [], []]
 var card_spacing = 110.0
@@ -45,7 +43,6 @@ var _current_ability_message: String = ""
 
 
 func _ready():
-	QA_SKIP_ANIM = _qa_flag_enabled()
 	print("Game Board: Ready. Connecting signals...")
 	GameManager.stop_menu_music()
 	GameManager.game_state_changed.connect(_on_game_state_changed)
@@ -60,13 +57,14 @@ func _ready():
 	GameManager.all_cards_revealed.connect(_on_all_cards_revealed) # Bug 3
 	GameManager.scores_ready.connect(_on_scores_ready)            # Bug 3
 	resized.connect(_on_resized)
-	_configure_action_buttons()
 	
 	var deck_button = $CenterTable/DeckArea/Slotbg/Interaction
 	if deck_button:
 		deck_button.reparent(deck_area)
 		deck_button.z_index = 10
 		deck_button.pressed.connect(_on_deck_clicked)
+	
+	_create_dutch_ui()
 	
 	var discard_button = $CenterTable/DiscardArea/Slotbg/Interaction
 	if discard_button:
@@ -85,43 +83,84 @@ func _ready():
 	print("Game Board: Starting game...")
 	GameManager.initialize_game(4)
 
-func _configure_action_buttons() -> void:
-	action_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_apply_action_button_style(end_turn_btn, Color(0.19, 0.53, 0.28))
-	_apply_action_button_style(jump_in_btn, Color(0.16, 0.39, 0.75))
-	_apply_action_button_style(call_dutch_btn, Color(0.75, 0.22, 0.18))
-	_apply_action_button_style(confirm_dutch_btn, Color(0.19, 0.53, 0.28))
-	_apply_action_button_style(forfeit_dutch_btn, Color(0.75, 0.22, 0.18))
+func _create_dutch_ui():
+	# Inject standalone buttons (no containers to prevent layout crashes)
+	end_turn_btn = Button.new()
+	end_turn_btn.text = "END TURN"
+	end_turn_btn.add_theme_font_size_override("font_size", 20)
+	var style_green = StyleBoxFlat.new()
+	style_green.bg_color = Color(0.2, 0.6, 0.2)
+	end_turn_btn.add_theme_stylebox_override("normal", style_green)
+	end_turn_btn.pressed.connect(_on_end_turn_pressed)
+	$GameUI/MainHUD.add_child(end_turn_btn)
+	end_turn_btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	end_turn_btn.offset_left = -270
+	end_turn_btn.offset_right = -110
+	end_turn_btn.offset_top = -250
+	end_turn_btn.offset_bottom = -200
 	end_turn_btn.hide()
-	jump_in_btn.hide()
+	
+	jump_in_btn = Button.new()
+	jump_in_btn.text = "JUMP IN"
+	jump_in_btn.add_theme_font_size_override("font_size", 20)
+	var style_blue = StyleBoxFlat.new()
+	style_blue.bg_color = Color(0.2, 0.4, 0.8)
+	jump_in_btn.add_theme_stylebox_override("normal", style_blue)
+	jump_in_btn.pressed.connect(_on_jump_in_pressed)
+	$GameUI/MainHUD.add_child(jump_in_btn)
+	jump_in_btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	jump_in_btn.offset_left = -80
+	jump_in_btn.offset_right = 80
+	jump_in_btn.offset_top = -250
+	jump_in_btn.offset_bottom = -200
+	jump_in_btn.hide() # Hidden until a card lands in the discard pile.
+
+	call_dutch_btn = Button.new()
+	call_dutch_btn.text = "CALL DUTCH!"
+	call_dutch_btn.add_theme_font_size_override("font_size", 20)
+	var style_red = StyleBoxFlat.new()
+	style_red.bg_color = Color(0.8, 0.2, 0.2)
+	call_dutch_btn.add_theme_stylebox_override("normal", style_red)
+	call_dutch_btn.pressed.connect(_on_call_dutch_pressed)
+	$GameUI/MainHUD.add_child(call_dutch_btn)
+	call_dutch_btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	call_dutch_btn.offset_left = 110
+	call_dutch_btn.offset_right = 270
+	call_dutch_btn.offset_top = -250
+	call_dutch_btn.offset_bottom = -200
 	call_dutch_btn.hide()
+	
+	# Bug 7 fix: Separate Confirm and Forfeit buttons to outer slots
+	# to leave the middle slot (Slot 2) for Jump In.
+	confirm_dutch_btn = Button.new()
+	confirm_dutch_btn.text = "CONFIRM DUTCH"
+	confirm_dutch_btn.add_theme_font_size_override("font_size", 20)
+	var style_confirm = StyleBoxFlat.new()
+	style_confirm.bg_color = Color(0.2, 0.6, 0.2)
+	confirm_dutch_btn.add_theme_stylebox_override("normal", style_confirm)
+	confirm_dutch_btn.pressed.connect(_on_confirm_dutch_pressed)
+	$GameUI/MainHUD.add_child(confirm_dutch_btn)
+	confirm_dutch_btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	confirm_dutch_btn.offset_left = -270 # Slot 1
+	confirm_dutch_btn.offset_right = -110
+	confirm_dutch_btn.offset_top = -250
+	confirm_dutch_btn.offset_bottom = -200
 	confirm_dutch_btn.hide()
+	
+	forfeit_dutch_btn = Button.new()
+	forfeit_dutch_btn.text = "FORFEIT DUTCH"
+	forfeit_dutch_btn.add_theme_font_size_override("font_size", 20)
+	var style_forfeit = StyleBoxFlat.new()
+	style_forfeit.bg_color = Color(0.8, 0.2, 0.2)
+	forfeit_dutch_btn.add_theme_stylebox_override("normal", style_forfeit)
+	forfeit_dutch_btn.pressed.connect(_on_cancel_dutch_pressed)
+	$GameUI/MainHUD.add_child(forfeit_dutch_btn)
+	forfeit_dutch_btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	forfeit_dutch_btn.offset_left = 110 # Slot 3
+	forfeit_dutch_btn.offset_right = 270
+	forfeit_dutch_btn.offset_top = -250
+	forfeit_dutch_btn.offset_bottom = -200
 	forfeit_dutch_btn.hide()
-
-func _apply_action_button_style(button: Button, base_color: Color) -> void:
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = base_color
-	normal.corner_radius_top_left = 12
-	normal.corner_radius_top_right = 12
-	normal.corner_radius_bottom_right = 12
-	normal.corner_radius_bottom_left = 12
-	normal.content_margin_left = 18
-	normal.content_margin_right = 18
-	normal.content_margin_top = 12
-	normal.content_margin_bottom = 12
-	var hover := normal.duplicate()
-	hover.bg_color = base_color.lightened(0.12)
-	var pressed := normal.duplicate()
-	pressed.bg_color = base_color.darkened(0.16)
-	button.add_theme_stylebox_override("normal", normal)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_color_override("font_color", Color(1, 1, 1))
-	button.focus_mode = Control.FOCUS_NONE
-
-func _get_slot_card_origin(slot: Control) -> Vector2:
-	var rect := slot.get_global_rect()
-	return rect.position + (rect.size * 0.5) - card_pivot
 
 func _update_deck_visual():
 	for child in deck_area.get_children():
@@ -200,7 +239,7 @@ func _on_player_card_clicked(card_node, _card_data):
 func _handle_peek_ability(card_node):
 	_set_all_cards_interactive(false)
 	card_node.flip()
-	await _delay(3.0)
+	await get_tree().create_timer(3.0).timeout
 	card_node.flip()
 	GameManager.complete_peek_ability()
 	clear_all_highlights()
@@ -248,11 +287,10 @@ func _on_jack_swap_resolved(p1: int, c1: int, p2: int, c2: int) -> void:
 
 func _on_bot_action(message: String) -> void:
 	_show_message(message)
-	if QA_SKIP_ANIM:
-		call_deferred("_hide_message")
-		return
+	# Auto-hide the bot-action message after 2 seconds.
 	var timer := get_tree().create_timer(2.0)
 	timer.timeout.connect(func():
+		# Only clear if no other message replaced it.
 		_hide_message()
 	)
 
@@ -342,12 +380,12 @@ func _on_card_discarded(player_idx, card_data):
 		var temp = card_scene.instantiate()
 		add_child(temp)
 		temp.setup(card_data)
-		temp.global_position = _get_slot_card_origin(deck_area)
+		temp.global_position = deck_area.global_position
 		card_to_discard = temp
 
 	if card_to_discard:
 		card_to_discard.z_index = 100
-		var target_pos = _get_slot_card_origin(discard_area)
+		var target_pos = discard_area.global_position
 		var tween = create_tween()
 		tween.tween_property(card_to_discard, "global_position", target_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tween.tween_callback(func():
@@ -392,13 +430,13 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	card_data.is_face_up = false # Start face-down…
 	pending_card.setup(card_data)
 	
-	var deck_pos = _get_slot_card_origin(deck_area)
+	var deck_pos = deck_area.global_position - card_pivot
 	pending_card.global_position = deck_pos
 	
 	_update_deck_visual()
 	
 	# …then flip to reveal it in place (0.3 s tween inside card.flip()).
-	await _delay(0.1)
+	await get_tree().create_timer(0.1).timeout
 	pending_card.flip()
 
 func _on_jump_in_penalty(player_idx, penalty_card_data):
@@ -410,7 +448,7 @@ func _on_jump_in_penalty(player_idx, penalty_card_data):
 	new_card.card_clicked.connect(_on_player_card_clicked)
 	player_hands[player_idx].append(new_card)
 	
-	var spawn_pos = _get_slot_card_origin(deck_area)
+	var spawn_pos = deck_area.global_position - card_pivot
 	new_card.global_position = spawn_pos
 	
 	# Slide the card down into the updated hand layout
@@ -449,7 +487,6 @@ func _on_game_state_changed(new_state):
 				var player_name: String = GameManager.players_info[GameManager.current_player_index].name
 				_show_message(player_name + " is deciding…")
 		GameManager.GameState.TURN_END_CHOICE:
-			end_turn_btn.text = "END TURN"
 			if GameManager.can_player_end_turn(0):
 				end_turn_btn.show()
 			if GameManager.can_player_call_dutch(0):
@@ -461,12 +498,11 @@ func _on_game_state_changed(new_state):
 				top_rank = GameManager.deck_manager.discard_pile[-1].rank
 			var rank_hint := (" — needs a " + top_rank) if top_rank != "" else ""
 			_show_message(ji_name + ": pick a matching card%s, or cancel." % rank_hint)
-			end_turn_btn.text = "CANCEL JUMP-IN"
 			if GameManager.can_player_cancel_jump_in(0):
 				end_turn_btn.show()
 		GameManager.GameState.TURN_CONFIRM_DUTCH:
 			if GameManager.can_player_confirm_dutch(0):
-				_show_message("You called Dutch. Confirm to end or forfeit to keep playing.")
+				_show_message("You called Dutch! Confirm or Forfeit?")
 				confirm_dutch_btn.show()
 				forfeit_dutch_btn.show()
 		GameManager.GameState.DEAL_CARDS:
@@ -502,7 +538,7 @@ func _highlight_selectable_cards(include_others: bool = false):
 		for c_idx in range(player_hands[p_idx].size()):
 			var card = player_hands[p_idx][c_idx]
 			if is_instance_valid(card):
-				var allowed: bool = GameManager.can_human_interact_with_hand_card(p_idx, c_idx, card.data.is_face_up)
+				var allowed := GameManager.can_human_interact_with_hand_card(p_idx, c_idx, card.data.is_face_up)
 				card.set_highlighted(allowed)
 	_refresh_human_card_interactivity()
 
@@ -537,7 +573,7 @@ func _complete_peek_phase():
 	_show_message("Starting game in 3 seconds...")
 	clear_all_highlights() # Stop pulsing immediately
 		
-	await _delay(3.0)
+	await get_tree().create_timer(3.0).timeout
 	
 	# Flip them back
 	for card in peeked_card_nodes:
@@ -576,13 +612,13 @@ func _handle_initial_deal():
 			card_inst.rotation_degrees = transform.rotation
 			
 			var final_pos = transform.position - card_pivot.rotated(deg_to_rad(transform.rotation))
-			var spawn_pos = _get_slot_card_origin(deck_area)
+			var spawn_pos = deck_area.global_position - card_pivot
 			card_inst.global_position = spawn_pos
 			
 			var tween = create_tween()
 			tween.tween_property(card_inst, "global_position", final_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 			
-			await _delay(0.05)
+			await get_tree().create_timer(0.05).timeout
 	
 	GameManager.change_state(GameManager.GameState.INITIAL_PEEK)
 
@@ -687,18 +723,6 @@ func _toggle_debug_reveal() -> void:
 		else:
 			_hide_message()
 
-func _delay(seconds: float) -> void:
-	if QA_SKIP_ANIM:
-		return
-	await get_tree().create_timer(seconds).timeout
-
-func _qa_flag_enabled() -> bool:
-	var flag = get_tree().get_root().get_node_or_null("QA_PIPELINE_FLAG")
-	if not flag:
-		return false
-	var value = flag.get("skip_anims")
-	return value != null and value
-
 # ── Bug 2: briefly show the failed jump-in card then hide it ────────────────
 func _on_jump_in_failed(player_idx: int, card_idx: int, _card_data: CardData) -> void:
 	if player_idx < 0 or player_idx >= player_hands.size():
@@ -713,7 +737,7 @@ func _on_jump_in_failed(player_idx: int, card_idx: int, _card_data: CardData) ->
 	card_node.front_face.show()
 	card_node.back_face.hide()
 	card_node._apply_atlas_textures()
-	await _delay(1.0)
+	await get_tree().create_timer(1.0).timeout
 	if is_instance_valid(card_node) and not card_node.data.is_face_up:
 		card_node.front_face.hide()
 		card_node.back_face.show()
@@ -751,7 +775,7 @@ func _on_scores_ready(results: Array) -> void:
 	# UI Polish: Create a styled panel for the results content
 	var panel := PanelContainer.new()
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.09, 0.18, 0.22, 0.92)
+	style.bg_color = Color(0.2, 0.05, 0.3, 0.9) # deep purple
 	style.set_corner_radius_all(15)
 	style.set_content_margin_all(30)
 	style.shadow_color = Color(0, 0, 0, 0.5)
@@ -764,8 +788,7 @@ func _on_scores_ready(results: Array) -> void:
 	panel.add_child(vbox)
 
 	var title := Label.new()
-	var winner_name: String = results[0].name if results.size() > 0 else "No one"
-	title.text = winner_name + " won!"
+	title.text = "Game Over!"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 48)
 	vbox.add_child(title)
@@ -773,9 +796,9 @@ func _on_scores_ready(results: Array) -> void:
 	for i in range(results.size()):
 		var entry: Dictionary = results[i]
 		var row := Label.new()
-		var score_str := ("%d pts" % entry.score) if entry.score >= 0 else "0 pts (empty hand wins)"
+		var score_str := str(entry.score) if entry.score >= 0 else "0 (empty hand — wins!)"
 		var place := str(i + 1) + "."
-		row.text = "%s %s — %s" % [place, entry.name, score_str]
+		row.text = "%s %s — %s pts" % [place, entry.name, score_str]
 		row.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		row.add_theme_font_size_override("font_size", 28)
 		if i == 0:
@@ -788,7 +811,7 @@ func _on_scores_ready(results: Array) -> void:
 	vbox.add_child(btn_box)
 
 	var play_again_btn := Button.new()
-	play_again_btn.text = "New Game"
+	play_again_btn.text = "Play Again"
 	play_again_btn.add_theme_font_size_override("font_size", 24)
 	play_again_btn.custom_minimum_size = Vector2(160, 55)
 	play_again_btn.pressed.connect(func():
@@ -797,7 +820,7 @@ func _on_scores_ready(results: Array) -> void:
 	btn_box.add_child(play_again_btn)
 
 	var main_menu_btn := Button.new()
-	main_menu_btn.text = "Back to Main Menu"
+	main_menu_btn.text = "Main Menu"
 	main_menu_btn.add_theme_font_size_override("font_size", 24)
 	main_menu_btn.custom_minimum_size = Vector2(160, 55)
 	main_menu_btn.pressed.connect(func():
