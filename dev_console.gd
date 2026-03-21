@@ -1,5 +1,4 @@
 extends CanvasLayer
-const TYPE_REGISTRY = preload("res://type_registry.gd")
 
 @onready var GameManager = get_node("/root/GameManager")
 @onready var window = $ConsoleWindow

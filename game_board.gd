@@ -1,5 +1,4 @@
 extends Control
-const TYPE_REGISTRY = preload("res://type_registry.gd")
 
 var QA_SKIP_ANIM: bool = false
 

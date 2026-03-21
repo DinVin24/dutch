@@ -1,5 +1,4 @@
 extends Node
-const TYPE_REGISTRY = preload("res://type_registry.gd")
 
 # Strict FSM Game States
 enum GameState {

@@ -1,6 +1,5 @@
 extends Node3D
 class_name Card3D
-const TYPE_REGISTRY = preload("res://type_registry.gd")
 
 signal card_clicked(card_node, card_data)
 signal card_flipped(card_node, card_data)
