@@ -267,7 +267,7 @@ func phase_jump_in_all_players():
 	else:
 		print("[QA FAIL] Bot start-turn jump-in request changed FSM")
 
-func _make_card(rank: String, suit: String) -> CardData:
+func _make_card(rank: String, suit: String):
 	return load("res://card_data.gd").new(rank, suit)
 
 func _set_discard_top(rank: String, suit: String) -> void:
