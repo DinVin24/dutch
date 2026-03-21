@@ -1,0 +1,37 @@
+name: QA Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - fix/codex-issue-sweep
+      - feature/qa-pipeline
+  pull_request:
+
+jobs:
+  run-qa:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install unzip and jq (needed for Godot archive)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip jq
+
+      - name: Download latest Godot
+        run: |
+          latest_url=https://api.github.com/repos/godotengine/godot/releases/latest
+          curl -sL "$latest_url" > latest.json
+          download_url=$(jq -r '.assets[] | select(.name | test("linux\\.x86_64\\.zip")) | .browser_download_url' latest.json | head -n 1)
+          if [ -z "$download_url" ]; then
+            echo "Godot download URL not found" >&2
+            exit 1
+          fi
+          curl -L -o godot.zip "$download_url"
+          unzip godot.zip -d godot
+          chmod +x godot/*.x86_64
+
+      - name: Run the QA pipeline
+        run: godot/Godot_v4.6.1-stable_linux.x86_64 --headless --path ${{ github.workspace }} --script res://qa_pipeline.gd
