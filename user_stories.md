@@ -157,21 +157,3 @@
     * **Given** a player has enough currency on their turn
     * **When** they click the chicken
     * **Then** money is deducted, an egg spawns and cracks, and a separate Ability component is added face-down to their play area.
-
-- [ ] **Story**: As a player, I want to deploy the "Uno Reverse" Ability Card during my turn to instantly reverse the turn order direction, so that I can strategically deflect gameplay flow back to the previous player.
-  * **Acceptance Criteria**:
-    * **Given** the turn order is proceeding clockwise
-    * **When** a player flips the Uno Reverse ability card
-    * **Then** the FSM turn_direction integer inverts and the previous player immediately takes their turn.
-
-- [ ] **Story**: As a player, I want to use the "Double Score" Ability Card to select a targeted opponent and visually double the point penalty of their hand, so that I can manipulate end-game standings.
-  * **Acceptance Criteria**:
-    * **Given** an opponent has an active hand of cards
-    * **When** the Double Score card is activated against them
-    * **Then** a 2x multiplier debuff is applied to their seat for the final End Game calculation phase.
-
-- [ ] **Story**: As a player, I want to deploy the "Embezzle Funds" Ability Card to steal exactly $50 randomly from another player, accelerating my economy while crippling theirs.
-  * **Acceptance Criteria**:
-    * **Given** another player holds currency
-    * **When** the Embezzle Funds ability is activated
-    * **Then** the EconomyManager deducts $50 from their total and deposits it strictly into the casting player's balance.
