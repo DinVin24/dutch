@@ -170,3 +170,90 @@ offset_bottom = 120.0
 grow_horizontal = 2
 theme_override_constants/separation = 10
 alignment = 1
+
+[node name="BottomActions" type="MarginContainer" parent="GameUI/MainHUD"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -108.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="ActionBar" type="HBoxContainer" parent="GameUI/MainHUD/BottomActions"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="LeftSlot" type="MarginContainer" parent="GameUI/MainHUD/BottomActions/ActionBar"]
+custom_minimum_size = Vector2(170, 56)
+layout_mode = 2
+
+[node name="EndTurnButton" type="Button" parent="GameUI/MainHUD/BottomActions/ActionBar/LeftSlot"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 20
+text = "END TURN"
+visible = false
+
+[node name="ConfirmDutchButton" type="Button" parent="GameUI/MainHUD/BottomActions/ActionBar/LeftSlot"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 20
+text = "CONFIRM DUTCH"
+visible = false
+
+[node name="CenterSlot" type="MarginContainer" parent="GameUI/MainHUD/BottomActions/ActionBar"]
+custom_minimum_size = Vector2(170, 56)
+layout_mode = 2
+
+[node name="JumpInButton" type="Button" parent="GameUI/MainHUD/BottomActions/ActionBar/CenterSlot"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 20
+text = "JUMP IN"
+visible = false
+
+[node name="RightSlot" type="MarginContainer" parent="GameUI/MainHUD/BottomActions/ActionBar"]
+custom_minimum_size = Vector2(170, 56)
+layout_mode = 2
+
+[node name="CallDutchButton" type="Button" parent="GameUI/MainHUD/BottomActions/ActionBar/RightSlot"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 20
+text = "CALL DUTCH!"
+visible = false
+
+[node name="ForfeitDutchButton" type="Button" parent="GameUI/MainHUD/BottomActions/ActionBar/RightSlot"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 20
+text = "FORFEIT DUTCH"
+visible = false
+
+[connection signal="pressed" from="GameUI/MainHUD/BottomActions/ActionBar/LeftSlot/EndTurnButton" to="." method="_on_end_turn_pressed"]
+[connection signal="pressed" from="GameUI/MainHUD/BottomActions/ActionBar/CenterSlot/JumpInButton" to="." method="_on_jump_in_pressed"]
+[connection signal="pressed" from="GameUI/MainHUD/BottomActions/ActionBar/RightSlot/CallDutchButton" to="." method="_on_call_dutch_pressed"]
+[connection signal="pressed" from="GameUI/MainHUD/BottomActions/ActionBar/LeftSlot/ConfirmDutchButton" to="." method="_on_confirm_dutch_pressed"]
+[connection signal="pressed" from="GameUI/MainHUD/BottomActions/ActionBar/RightSlot/ForfeitDutchButton" to="." method="_on_cancel_dutch_pressed"]

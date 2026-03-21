@@ -3,6 +3,7 @@ extends CanvasLayer
 signal resumed
 signal main_menu_requested
 
+@onready var DevConsole = get_node_or_null("/root/DevConsole")
 @onready var vbox: VBoxContainer = $CenterContainer/PanelContainer/VBoxContainer
 
 var settings_menu_scene = preload("res://settings_menu.tscn")
@@ -14,7 +15,7 @@ func _ready() -> void:
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		# Let the developer console handle Esc if it's visible
-		if DevConsole.window.is_visible():
+		if DevConsole and DevConsole.window.is_visible():
 			return
 			
 		if settings_instance != null:

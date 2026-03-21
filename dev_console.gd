@@ -1,5 +1,6 @@
 extends CanvasLayer
 
+@onready var GameManager = get_node("/root/GameManager")
 @onready var window = $ConsoleWindow
 @onready var panel = $ConsoleWindow/Panel
 @onready var output = $ConsoleWindow/Panel/Output
