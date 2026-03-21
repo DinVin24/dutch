@@ -51,6 +51,7 @@ var camera_rot_y: float = 0.0
 var player_beers_nodes: Array = [[], [], [], []]
 var money_labels: Array = []
 var _chicken_node: CSGSphere3D = null
+var _chicken_zoom_active: bool = false
 
 @onready var camera = $Camera3D
 var _current_ability_message: String = ""
@@ -266,8 +267,14 @@ func _create_beer_placeholders():
 			foam.material = foam_mat
 			beer.add_child(foam)
 			
-			var offset_x = (b - 2) * 0.25
-			beer.position = Vector3(offset_x, 0.125, -1.8) # Behind cards
+			# GRID LAYOUT: 2 rows (3 front, 2 back)
+			var row = b / 3
+			var col = b % 3
+			var grid_x = (col - 1.0) * 0.25
+			var grid_z = row * 0.25
+			
+			# Stationed on the RIGHT of the cards
+			beer.position = Vector3(grid_x + 1.8, 0.11, -1.8 + grid_z) 
 			pos_node.add_child(beer)
 			player_beers_nodes[i].append(beer)
 
@@ -337,6 +344,27 @@ func _drop_egg_for(p_idx: int):
 		var tween = create_tween()
 		tween.tween_property(_chicken_node, "position:y", 2.0, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tween.tween_property(_chicken_node, "position:y", 1.5, 0.2).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+
+		# Camera cinematic zoom - GUARD against re-entry
+		if not _chicken_zoom_active:
+			_chicken_zoom_active = true
+			var target_pos = _chicken_node.global_position + Vector3(0, 0.2, 1.0)
+			var cam_tween = create_tween()
+			var old_base = _base_camera_pos
+			var original_fov = camera.fov
+			var original_rot = camera.rotation_degrees
+			
+			cam_tween.tween_property(camera, "global_position", target_pos, 0.3).set_trans(Tween.TRANS_CUBIC)
+			cam_tween.tween_property(camera, "rotation_degrees", Vector3(-10, 0, 0), 0.3).set_trans(Tween.TRANS_CUBIC)
+			cam_tween.parallel().tween_property(camera, "fov", 45.0, 0.3).set_trans(Tween.TRANS_CUBIC)
+			cam_tween.tween_interval(0.8)
+			cam_tween.tween_property(camera, "global_position", old_base, 0.4).set_trans(Tween.TRANS_QUAD)
+			cam_tween.parallel().tween_property(camera, "rotation_degrees", original_rot, 0.4).set_trans(Tween.TRANS_QUAD)
+			cam_tween.parallel().tween_property(camera, "fov", original_fov, 0.4).set_trans(Tween.TRANS_QUAD)
+			cam_tween.tween_callback(func():
+				_base_camera_pos = old_base
+				_chicken_zoom_active = false
+			)
 	GameManager.players_info[p_idx].abilities.append(ab)
 	print("Player ", p_idx, " bought ability: ", ab)
 	
@@ -346,9 +374,10 @@ func _drop_egg_for(p_idx: int):
 	token.setup(ab)
 	token.token_clicked.connect(_on_ability_token_clicked)
 	
-	# Layout the tokens far to the right of the cards to prevent overlap
+	# Layout the tokens on the LEFT side station
 	var count = GameManager.players_info[p_idx].abilities.size()
-	token.position = Vector3(2.5 + (count * 0.6), 0.1, 0.0)
+	# Spread them in a grid too if they get too many? For now just a compact line at -1.8
+	token.position = Vector3(-1.8 - (count * 0.4), 0.1, -1.8)
 	
 func _on_ability_token_clicked(token):
 	var p_idx = -1
@@ -839,6 +868,23 @@ func _hide_message():
 func _on_hand_updated(player_idx):
 	_update_hand_visuals(player_idx)
 
+func _on_card_hover_enter(card_node: Node3D):
+	if not is_instance_valid(card_node): return
+	if card_node.is_highlighted: return # Don't override highlight state
+	var tween = create_tween().set_parallel(true)
+	tween.tween_property(card_node, "scale", Vector3(1.15, 1.15, 1.15), 0.15).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(card_node, "position:y", card_node.position.y + 0.25, 0.15).set_trans(Tween.TRANS_QUAD)
+	card_node.set_meta("hover_lift_y", card_node.position.y + 0.25)
+
+func _on_card_hover_exit(card_node: Node3D):
+	if not is_instance_valid(card_node): return
+	if card_node.is_highlighted: return
+	var tween = create_tween().set_parallel(true)
+	tween.tween_property(card_node, "scale", Vector3(1.0, 1.0, 1.0), 0.15).set_trans(Tween.TRANS_QUAD)
+	# Return to the base y position that _update_hand_visuals gave it
+	var base_y = card_node.get_meta("hover_lift_y", card_node.position.y) - 0.25
+	tween.tween_property(card_node, "position:y", base_y, 0.15).set_trans(Tween.TRANS_QUAD)
+
 func _update_hand_visuals(player_idx: int):
 	if player_idx < 0 or player_idx >= 4: return
 	var hand_data = GameManager.players_info[player_idx].hand
@@ -856,31 +902,44 @@ func _update_hand_visuals(player_idx: int):
 		if is_instance_valid(card):
 			card.queue_free()
 	
-	# Position cards strictly by their index in the nodes array
-	for i in range(nodes.size()):
+	# HYBRID LAYOUT: flat up to 6 cards, overlapping spread beyond 6
+	var total_cards = nodes.size()
+	const MAX_FLAT = 6
+	const FLAT_SPACING = 1.3
+	const MIN_SPACING = 0.55 # Compressed overlap spacing
+	
+	var spacing = FLAT_SPACING if total_cards <= MAX_FLAT else MIN_SPACING
+	var total_width = (total_cards - 1) * spacing
+	
+	for i in range(total_cards):
 		var card_node = nodes[i]
 		if is_instance_valid(card_node):
 			if not card_node.card_clicked.is_connected(_on_card_clicked):
 				card_node.card_clicked.connect(_on_card_clicked)
+			# Connect hover signals for the lift effect if not already done
+			if not card_node.get_meta("hover_connected", false):
+				var area = card_node.get_node_or_null("Area3D")
+				if area:
+					area.mouse_entered.connect(_on_card_hover_enter.bind(card_node))
+					area.mouse_exited.connect(_on_card_hover_exit.bind(card_node))
+					card_node.set_meta("hover_connected", true)
 			
 			card_node.setup(hand_data[i])
 			card_node.name = "Card_%d_%d" % [player_idx, i]
 			
-			var target_pos = Vector3((i - (nodes.size()-1)/2.0) * card_spacing, 0.05, 0)
+			var target_pos = Vector3(i * spacing - total_width / 2.0, 0.05 + i * 0.002, 0)
+			var target_rot_x = (270 if hand_data[i].is_face_up else 90)
 			
-			# If it's already at or near the target, don't restart tween to avoid flickering
 			if card_node.position.distance_to(target_pos) < 0.01: continue
 			
-			# Combined movement and lift animation
 			var tween = create_tween().set_parallel(true)
-			tween.tween_property(card_node, "position:x", target_pos.x, 0.3).set_trans(Tween.TRANS_QUAD)
-			tween.tween_property(card_node, "position:z", target_pos.z, 0.3).set_trans(Tween.TRANS_QUAD)
-			tween.tween_property(card_node, "rotation_degrees:x", (270 if hand_data[i].is_face_up else 90), 0.3)
+			tween.tween_property(card_node, "position", target_pos, 0.3).set_trans(Tween.TRANS_QUAD)
+			tween.tween_property(card_node, "rotation_degrees:x", target_rot_x, 0.3)
+			tween.tween_property(card_node, "rotation_degrees:y", 0.0, 0.3) # Reset fan rotation
 			
-			# Premium "lift" during movement
 			var lift_tween = create_tween()
-			lift_tween.tween_property(card_node, "scale", Vector3(1.1, 1.1, 1.1), 0.15)
-			lift_tween.tween_property(card_node, "scale", Vector3(1.0, 1.0, 1.0), 0.15)
+			lift_tween.tween_property(card_node, "scale", Vector3(1.05, 1.05, 1.05), 0.1)
+			lift_tween.tween_property(card_node, "scale", Vector3(1.0, 1.0, 1.0), 0.2)
 
 func _handle_initial_deal():
 	print("GameBoard3D: _handle_initial_deal started")

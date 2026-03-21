@@ -146,7 +146,7 @@ func _print_player_cards(player: Dictionary):
 
 func _cmd_give(args: Array):
 	if args.size() < 2:
-		output.append_text("\n[color=red]Usage: give <PlayerName> '<Card or Ability Name>'[/color]")
+		output.append_text("\n[color=red]Usage: give <PlayerName> '<Card/Ability Name>' or '$Amount'[/color]")
 		return
 	
 	var p_name = args[0].to_lower()
@@ -154,6 +154,18 @@ func _cmd_give(args: Array):
 	
 	var player = _find_player(p_name)
 	if not player: return
+	
+	if target_name.begins_with("$"):
+		var amount_str = target_name.substr(1)
+		if amount_str.is_valid_int():
+			var amount = amount_str.to_int()
+			player.money += amount
+			GameManager.player_gained_money.emit(player.id, amount, player.money)
+			output.append_text("\n[color=yellow]Gave $" + str(amount) + " to " + player.name + "![/color]")
+			return
+		else:
+			output.append_text("\n[color=red]Invalid money amount: " + target_name + "[/color]")
+			return
 	
 	# Mapping for human-friendly ability names to internal IDs
 	var ability_map = {
