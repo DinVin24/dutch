@@ -58,6 +58,10 @@ var _shake_intensity: float = 0.0
 var _shake_timer: float = 0.0
 var _base_camera_pos: Vector3
 
+# Targeting state
+var _is_waiting_for_target: bool = false
+var _pending_ability: Dictionary = {} # {id, token, activator}
+
 func _ready():
 	player_hands = [[], [], [], []]
 	print("Game Board 3D: Ready. Connecting signals...")
@@ -104,6 +108,7 @@ func _ready():
 	_base_camera_pos = $Camera3D.position
 	_setup_table_noise()
 	_update_turn_lights(-1, false) # Ensure all off
+	_create_player_targeting_areas()
 	
 	# HUD PASS-THROUGH: Ensure UI containers don't block clicks to the 3D cards
 	for node_name in ["PostProcessing", "MainHUD", "TopCenter", "GameUI"]:
@@ -324,7 +329,7 @@ func _try_buy_ability(p_idx: int):
 		_show_message("Chicken wants $50 for an egg!")
 
 func _drop_egg_for(p_idx: int):
-	var abilities = ["drink_beer", "extra_beer", "remove_highest_card", "give_highest_deck_card", "uno_reverse", "skip_turn", "chaotic_reset", "double_values", "halve_values", "jumpscare", "shuffle_hand"]
+	var abilities = ["bottoms_up", "refuel", "trim_off", "boulder", "reverse", "skip", "perfect_match", "inflation", "half_off", "jumpscare", "shuffle"]
 	var ab = abilities[randi() % abilities.size()]
 	_show_message("You got: " + ab.capitalize() + "!")
 	
@@ -352,16 +357,84 @@ func _on_ability_token_clicked(token):
 			p_idx = i; break
 	
 	if p_idx == GameManager.current_player_index:
-		# Simple execution targeting nearest opponent or random stuff for Phase 1
-		# In a real game, this would enter a target selection sub-phase.
-		var target = (p_idx + 1) % 4
-		if GameManager.play_ability(p_idx, token.ability_id, target):
-			token.queue_free()
-			var ab_idx = GameManager.players_info[p_idx].abilities.find(token.ability_id)
-			if ab_idx != -1:
-				GameManager.players_info[p_idx].abilities.remove_at(ab_idx)
+		var targeting_abilities = ["bottoms_up", "boulder", "skip", "inflation", "half_off", "shuffle"]
+		
+		if token.ability_id in targeting_abilities:
+			_is_waiting_for_target = true
+			_set_targeting_areas_enabled(true)
+			_highlight_selectable_cards(true)
+			_update_turn_lights(-1, true) # Reveal all zones for targeting
+			_pending_ability = {
+				"id": token.ability_id,
+				"token": token,
+				"activator": p_idx
+			}
+			_show_message("SELECT TARGET PLAYER (click their cards or zone)")
+			# Optional: highlight target zones
+		else:
+			# Non-targeting or self-targeting
+			var target = p_idx # Default to self for things like refuel/trim_off
+			if GameManager.play_ability(p_idx, token.ability_id, target):
+				token.queue_free()
+				var ab_idx = GameManager.players_info[p_idx].abilities.find(token.ability_id)
+				if ab_idx != -1:
+					GameManager.players_info[p_idx].abilities.remove_at(ab_idx)
 	else:
 		_show_message("Not your turn to play abilities!")
+
+func _create_player_targeting_areas():
+	for i in range(4):
+		var area = Area3D.new()
+		area.name = "TargetArea"
+		var col = CollisionShape3D.new()
+		var shape = BoxShape3D.new()
+		shape.size = Vector3(4.0, 1.0, 4.0) # Larger area
+		col.shape = shape
+		area.add_child(col)
+		player_pos_nodes[i].add_child(area)
+		# Position it slightly above table
+		area.position = Vector3(0, 0.5, 0)
+		
+		# DEBUG FIX: non-pickable by default so we don't block cards
+		area.input_ray_pickable = false
+		area.collision_layer = 1
+		area.collision_mask = 1
+		
+		area.input_event.connect(_on_player_area_input.bind(i))
+		print("DEBUG: Created TargetArea for player ", i)
+
+func _set_targeting_areas_enabled(enabled: bool):
+	print("DEBUG: Setting targeting areas to: ", enabled)
+	for i in range(4):
+		var area = player_pos_nodes[i].find_child("TargetArea")
+		if area:
+			area.input_ray_pickable = enabled
+			print("  - Player ", i, " area pickable: ", area.input_ray_pickable)
+
+func _on_player_area_input(_camera, event, _position, _normal, _shape_idx, player_idx: int):
+	if not _is_waiting_for_target: return
+	
+	# Handle both Area3D events AND direct card clicks (where event is null)
+	if event == null or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
+		print("DEBUG: Clicked TargetArea for player ", player_idx)
+		var ab_id = _pending_ability.id
+		var activator = _pending_ability.activator
+		var token = _pending_ability.token
+		
+		print("DEBUG: Executing ability '", ab_id, "' from ", activator, " on ", player_idx)
+		
+		if GameManager.play_ability(activator, ab_id, player_idx):
+			_is_waiting_for_target = false
+			_set_targeting_areas_enabled(false)
+			_clear_all_highlights()
+			_update_turn_lights(activator) # Reset lights to activator's turn
+			_hide_message()
+			if is_instance_valid(token):
+				token.queue_free()
+			var ab_idx = GameManager.players_info[activator].abilities.find(ab_id)
+			if ab_idx != -1:
+				GameManager.players_info[activator].abilities.remove_at(ab_idx)
+			_pending_ability.clear()
 
 func _on_player_drank_beer(player_idx, remaining):
 	if player_idx < 0 or player_idx >= 4: return
@@ -376,7 +449,7 @@ func _on_player_eliminated(player_idx):
 	player_lights[player_idx].light_color = Color(1, 0, 0)
 	player_lights[player_idx].light_energy = 10.0
 
-func _on_player_gained_money(player_idx, amount, total):
+func _on_player_gained_money(player_idx, _amount, total):
 	if player_idx == 0 and money_labels.size() > 0:
 		money_labels[0].text = "$" + str(total)
 
@@ -856,6 +929,11 @@ func _on_card_clicked(node, data):
 	for i in range(4):
 		if player_hands[i].has(node):
 			p_idx = i; break
+	
+	if _is_waiting_for_target:
+		if p_idx != -1:
+			_on_player_area_input(null, null, Vector3.ZERO, Vector3.ZERO, 0, p_idx)
+			return
 			
 	match GameManager.current_state:
 		GameManager.GameState.INITIAL_PEEK:

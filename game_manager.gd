@@ -99,6 +99,7 @@ func initialize_game(p_count: int = 4):
 			"money": 0,
 			"abilities": [],
 			"is_eliminated": false,
+			"is_skipped": false,
 			# bot_memory: { player_idx: { card_idx: CardData } }
 			# Populated by BotController during INITIAL_PEEK.
 			"bot_memory": {}
@@ -131,10 +132,14 @@ func change_state(new_state: GameState):
 			_handle_game_over()
 
 func next_turn():
-	# Loop until we find a player who is not eliminated
+	# Loop until we find a player who is not eliminated and not skipped
 	for _i in range(num_players):
 		current_player_index = (current_player_index + turn_direction + num_players) % num_players
 		if not players_info[current_player_index].is_eliminated:
+			if players_info[current_player_index].is_skipped:
+				players_info[current_player_index].is_skipped = false
+				print("Player ", current_player_index, " turn SKIPPED.")
+				continue
 			break
 			
 	# Bug 1 fix: always go to TURN_START_DRAW; the Dutch-caller check now lives
@@ -197,10 +202,10 @@ func drink_beer(p_idx: int):
 		players_info[p_idx].is_eliminated = true
 		player_eliminated.emit(p_idx)
 		print("Player ", p_idx, " is ELIMINATED!")
-		var game_over = _check_elimination_win_condition()
+		var was_game_over = _check_elimination_win_condition()
 		
 		# If the player died during their own active turn, instantly end it
-		if not game_over and current_player_index == p_idx:
+		if not was_game_over and current_player_index == p_idx:
 			print("Player died on their turn. Forcing next turn.")
 			next_turn()
 

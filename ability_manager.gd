@@ -10,33 +10,31 @@ func execute(player_idx: int, ability_id: String, target_idx: int = -1):
 	print("AbilityManager executing: ", ability_id, " by P", player_idx, " targeting P", target_idx)
 	
 	match ability_id:
-		"drink_beer":
+		"bottoms_up":
 			if target_idx != -1:
 				gm.drink_beer(target_idx)
-		"extra_beer":
+		"refuel":
 			if not gm.players_info[player_idx].is_eliminated:
 				gm.players_info[player_idx].beers = min(gm.players_info[player_idx].beers + 1, 5)
 				gm.player_drank_beer.emit(player_idx, gm.players_info[player_idx].beers)
-		"remove_highest_card":
-			_remove_highest_card(player_idx)
-		"give_highest_deck_card":
+		"trim_off":
+			_trim_off(player_idx)
+		"boulder":
 			if target_idx != -1:
-				_give_highest_deck_card(target_idx)
-		"uno_reverse":
+				_boulder(target_idx)
+		"reverse":
 			gm.turn_direction *= -1
 			print("Turn direction reversed!")
-		"skip_turn":
+		"skip":
 			if target_idx != -1:
-				# We don't have a rigid skip array, but we can instantly advance turn if it's their turn
-				# Actually, skip turn just forces them to drink a beer, or we need a skipped array in gm.
-				# Let's add skipping functionality down the line or just drink beer for now.
-				pass
-		"chaotic_reset":
-			_chaotic_reset(player_idx)
-		"double_values":
+				gm.players_info[target_idx].is_skipped = true
+				print("Player ", target_idx, " marked for skip.")
+		"perfect_match":
+			_perfect_match(player_idx)
+		"inflation":
 			if target_idx != -1:
 				_modify_values(target_idx, 2.0)
-		"halve_values":
+		"half_off":
 			if target_idx != -1:
 				_modify_values(target_idx, 0.5)
 		"jumpscare":
@@ -48,7 +46,7 @@ func execute(player_idx: int, ability_id: String, target_idx: int = -1):
 					gm.players_info[target_idx].hand.append(p_card)
 					gm.hand_updated.emit(target_idx)
 				# Jumpscare signal can be added later for UI
-		"shuffle_hand":
+		"shuffle":
 			if target_idx != -1:
 				gm.players_info[target_idx].hand.shuffle()
 				gm.hand_updated.emit(target_idx)
@@ -57,7 +55,7 @@ func execute(player_idx: int, ability_id: String, target_idx: int = -1):
 	await get_tree().create_timer(1.0).timeout
 	gm.resume_from_ability()
 
-func _remove_highest_card(p_idx: int):
+func _trim_off(p_idx: int):
 	var hand = gm.players_info[p_idx].hand
 	if hand.is_empty(): return
 	var highest_val = -1
@@ -75,7 +73,7 @@ func _remove_highest_card(p_idx: int):
 		gm.card_discarded.emit(p_idx, card)
 		gm.gain_money_for_discard(p_idx, card)
 
-func _give_highest_deck_card(t_idx: int):
+func _boulder(t_idx: int):
 	var deck = gm.deck_manager.deck
 	if deck.is_empty(): return
 	
@@ -98,8 +96,9 @@ func _give_highest_deck_card(t_idx: int):
 func _modify_values(t_idx: int, modifier: float):
 	for card in gm.players_info[t_idx].hand:
 		card.point_modifier *= modifier
+	gm.hand_updated.emit(t_idx)
 
-func _chaotic_reset(activator_idx: int):
+func _perfect_match(activator_idx: int):
 	# Collect all board cards
 	var all_cards = []
 	for i in range(gm.num_players):
@@ -150,3 +149,6 @@ func _chaotic_reset(activator_idx: int):
 		discard_start.is_face_up = true
 		gm.deck_manager.discard_pile.append(discard_start)
 		gm.card_discarded.emit(-1, discard_start) # -1 means dealer
+	
+	# Reinstate peeking phase for the new cards
+	gm.change_state(gm.GameState.INITIAL_PEEK)

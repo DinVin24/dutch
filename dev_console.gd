@@ -146,23 +146,61 @@ func _print_player_cards(player: Dictionary):
 
 func _cmd_give(args: Array):
 	if args.size() < 2:
-		output.append_text("\n[color=red]Usage: give <PlayerName> '<Card Name>'[/color]")
+		output.append_text("\n[color=red]Usage: give <PlayerName> '<Card or Ability Name>'[/color]")
 		return
 	
 	var p_name = args[0].to_lower()
-	var c_name = args[1].to_lower()
+	var target_name = args[1].to_lower()
 	
 	var player = _find_player(p_name)
 	if not player: return
 	
-	# Try to find card
-	var card = _find_and_remove_card_globally(c_name)
-	if card:
-		player.hand.append(card)
-		GameManager.hand_updated.emit(player.id)
-		output.append_text("\n[color=cyan]Gave " + card.display_name() + " to " + player.name + "[/color]")
+	# Mapping for human-friendly ability names to internal IDs
+	var ability_map = {
+		"bottoms up": "bottoms_up",
+		"refuel": "refuel",
+		"trim off": "trim_off",
+		"boulder": "boulder",
+		"reverse": "reverse",
+		"skip": "skip",
+		"perfect match": "perfect_match",
+		"inflation": "inflation",
+		"half off": "half_off",
+		"jumpscare": "jumpscare",
+		"shuffle": "shuffle"
+	}
+	
+	if ability_map.has(target_name):
+		var ab_id = ability_map[target_name]
+		player.abilities.append(ab_id)
+		output.append_text("\n[color=cyan]Gave Ability '" + target_name.capitalize() + "' to " + player.name + "[/color]")
+		
+		# Visually spawn the token if we are in the 3D board scene
+		var scene = get_tree().current_scene
+		if scene.has_method("_on_hand_updated"): # Check if it's the board
+			# We can't easily call private board methods, but we can mimic the logic
+			# or just wait for the next turn. Let's try to find if there's a signal.
+			# Actually, the board listens to nothing for abilities additions.
+			# Let's just suggest the user restarts or wait for my next improvement.
+			# BETTER: Manually spawn if we find the node.
+			var pos_node = scene.player_pos_nodes[player.id]
+			var token_scene = load("res://ability_token_3d.gd")
+			if pos_node and token_scene:
+				var token = token_scene.new()
+				pos_node.add_child(token)
+				token.setup(ab_id)
+				token.token_clicked.connect(scene._on_ability_token_clicked)
+				var count = player.abilities.size()
+				token.position = Vector3(2.5 + (count * 0.6), 0.1, 0.0)
 	else:
-		output.append_text("\n[color=red]Card '" + c_name + "' not found in deck or discard pile.[/color]")
+		# Try to find card
+		var card = _find_and_remove_card_globally(target_name)
+		if card:
+			player.hand.append(card)
+			GameManager.hand_updated.emit(player.id)
+			output.append_text("\n[color=cyan]Gave " + card.display_name() + " to " + player.name + "[/color]")
+		else:
+			output.append_text("\n[color=red]'" + target_name + "' is not a recognized ability or card.[/color]")
 
 func _cmd_remove(args: Array):
 	if args.size() < 2:

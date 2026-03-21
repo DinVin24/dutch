@@ -8,6 +8,7 @@ signal card_flipped(card_node, card_data)
 @onready var back_face: MeshInstance3D = $Visuals/BackFace
 @onready var area: Area3D = $Area3D
 
+var multiplier_label: Label3D
 var data: CardData
 var is_flipping: bool = false
 var is_selected: bool = false
@@ -34,6 +35,17 @@ func setup(p_data: CardData) -> void:
 
 func _ready():
 	_base_visual_pos = $Visuals.position
+	
+	multiplier_label = Label3D.new()
+	multiplier_label.name = "MultiplierLabel"
+	multiplier_label.font_size = 48
+	multiplier_label.outline_size = 32
+	multiplier_label.outline_modulate = Color(0, 0, 0, 1) # Solid black outline for deep contrast
+	multiplier_label.position = Vector3(0, 0.015, 0) 
+	multiplier_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	multiplier_label.no_depth_test = true # Ensure it's always on top of the card
+	back_face.add_child(multiplier_label)
+	
 	_update_visuals()
 	if area:
 		area.input_event.connect(_on_input_event)
@@ -44,6 +56,19 @@ func _ready():
 func _update_visuals() -> void:
 	if not data: return
 	_apply_atlas_textures()
+	
+	# Update multiplier label
+	if multiplier_label:
+		if data.point_modifier > 1.0:
+			multiplier_label.text = "x" + str(data.point_modifier)
+			multiplier_label.modulate = Color(1.0, 0.0, 1.0) # Neon Magenta
+			multiplier_label.show()
+		elif data.point_modifier < 1.0:
+			multiplier_label.text = "1/2"
+			multiplier_label.modulate = Color(0.0, 1.0, 1.0) # Neon Cyan
+			multiplier_label.show()
+		else:
+			multiplier_label.hide()
 	
 	# In 3D, both faces are always physically there, just on opposite sides.
 	# We rely on rotation to show the correct side.
