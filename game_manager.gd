@@ -553,10 +553,13 @@ func validate_jump_in(card_idx: int) -> bool:
 		return false
 
 	var top_discard: CardData = deck_manager.discard_pile[-1]
+	# CASE-INSENSITIVE RANK MATCH
 	if selected_card.rank.to_lower() == top_discard.rank.to_lower():
 		var msg := "Player %d: %s of %s matches! JUMP IN!" % [
 			jump_in_player_idx, selected_card.rank, selected_card.suit
 		]
+		
+		# Remove card from source
 		if card_idx == -2:
 			drawn_card_data = null
 		else:
@@ -564,52 +567,32 @@ func validate_jump_in(card_idx: int) -> bool:
 			hand_updated.emit(jump_in_player_idx)
 			memory_shift_required.emit(jump_in_player_idx, card_idx)
 		
-	if selected_card == null:
-		return false
-
-	if deck_manager.discard_pile.size() > 0:
-		var top_discard: CardData = deck_manager.discard_pile[-1]
-		# CASE-INSENSITIVE RANK MATCH
-		if selected_card.rank.to_lower() == top_discard.rank.to_lower():
-			var msg := "Player %d: %s of %s matches! JUMP IN!" % [
-				jump_in_player_idx, selected_card.rank, selected_card.suit
-			]
-			if card_idx == -2:
-				drawn_card_data = null
-			else:
-				hand.remove_at(card_idx)
-				hand_updated.emit(jump_in_player_idx)
-				memory_shift_required.emit(jump_in_player_idx, card_idx)
-			
-			if hand.size() == 0:
-				jump_in_player_idx = -1
-				_consume_jump_in_resume_state()
-				change_state(GameState.GAME_OVER)
-				return true
-				
-			deck_manager.discard_pile.append(selected_card)
-			card_discarded.emit(jump_in_player_idx, selected_card)
-			gain_money_for_discard(jump_in_player_idx, selected_card)
-			var played_by = jump_in_player_idx
+		# Check for win condition (out of cards)
+		if hand.size() == 0:
 			jump_in_player_idx = -1
-			_resolve_discard_effects(selected_card, played_by)
-			bot_action.emit(msg)
+			_consume_jump_in_resume_state()
+			change_state(GameState.GAME_OVER)
 			return true
-		
+			
+		# Successfully jumped in
 		deck_manager.discard_pile.append(selected_card)
 		card_discarded.emit(jump_in_player_idx, selected_card)
+		gain_money_for_discard(jump_in_player_idx, selected_card)
+		
+		var played_by = jump_in_player_idx
 		jump_in_player_idx = -1
-		_resolve_discard_effects(selected_card)
+		
+		_resolve_discard_effects(selected_card, played_by)
 		bot_action.emit(msg)
 		return true
 
+	# NO MATCH: Penalty
 	print("No match. Jump In invalid.")
 	jump_in_failed.emit(jump_in_player_idx, card_idx, selected_card)
 	drink_beer(jump_in_player_idx)
 	
 	if players_info[jump_in_player_idx].is_eliminated:
 		jump_in_player_idx = -1
-		jump_in_was_own_draw_phase = false
 		return false
 		
 	await get_tree().create_timer(1.2, false).timeout
@@ -619,7 +602,7 @@ func validate_jump_in(card_idx: int) -> bool:
 		p_card.is_face_up = false
 		hand.append(p_card)
 		hand_updated.emit(jump_in_player_idx)
-		jump_in_penalty.emit(jump_in_player_idx, penalty_card)
+		jump_in_penalty.emit(jump_in_player_idx, p_card)
 
 	jump_in_player_idx = -1
 	change_state(_resolve_post_interrupt_state())
