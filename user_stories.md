@@ -130,8 +130,10 @@
 
 ## Epic 17: Quality of Life & Accessibility
 - [ ] **Story**: As a player who struggles with memory, I want an "Easy Mode" toggle that keeps my cards face-up at all times, so that I can focus on strategy rather than memorization.
-- [ ] **Story**: As a developer, I want a standardized keybinding system (Jump-In, End Turn, Dutch) so that I can play efficiently without a mouse.
+- [ ] **Story**: As a developer, I want a standardized keybinding system (Jump-In, End Turn, Dutch, Forfeit) so that I can play efficiently without a mouse.
+- [ ] **Story**: As a player, I want my volume, resolution, and keybind settings saved persistently so I don't have to reconfigure them every launch.
 
-## Epic 18: Social & Multiplayer (Roadmap Phase 3)
-- [ ] **Story**: As a winner, I want to trigger a unique emote animation to celebrate my victory.
-- [ ] **Story**: As a player in a multiplayer match, I want to use voice chat to talk to my opponents, enhancing the "bar" atmosphere.
+## Epic 18: Social & Multiplayer (Roadmap Phase 3 & 4)
+- [ ] **Story**: As a player, I want to host or join a multiplayer room from a lobby list and pick my own username.
+- [ ] **Story**: As a winner, I want to see my "Matches Won" stat increase and trigger a unique emote animation.
+- [ ] **Story**: As a player in a multiplayer match, I want to use spatial voice chat in the bar to interact with others.

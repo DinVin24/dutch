@@ -8,38 +8,43 @@ Dutch is a rules-heavy card game of memory, strategy, and high-stakes social int
 - **Winning**: The player with the lowest score when the game ends wins. If you discard all your cards, you win immediately.
 
 ## 🍻 Penalty System (Beers)
-Each player starts with **5 Beers**. Certain mistakes force you to "drink":
+Each player starts with **3 Beers**. Certain mistakes force you to "drink":
 - **Failed Jump-In**: Trying to jump in with a card that doesn't match.
 - **Instant Discard**: Drawing a card and immediately discarding it without swapping or using its ability (if applicable).
-- **Passing Out**: Once you drink all 5 beers, you are eliminated from the round.
+- **Elimination**: Once you drink all 3 beers, you pass out and are out of the game.
 
 ## 💰 Economy & Abilities
 - **Money**: Discarding cards earns you money based on the card's value. 
-    - **Aces & King of Diamonds**: High value.
-    - **Other Kings**: Zero value.
+    - **Aces**: High value.
+    - **Kings of Spades, Hearts, Clubs**: Zero money.
 - **The Chicken**: A 3D chicken hovers over the table. Click its legs to spend money and receive an **Ability Card**.
-- **Ability Cards**: These are kept face-down and can be used on your turn. They do not count toward your hand score.
+- **Ability Cards**: Kept face-down; view them once, then use them on your turn. They are a separate component and don't clash with your hand cards.
 
-### Standard Card Abilities (Discarded)
-- **Queen**: Look at any face-down card on the table.
+### Standard Card Rules
+- **Queen**: Look at any face-down card on the table (yours or an opponent's).
 - **Jack**: Swap any two cards on the table.
-- **King of Diamonds**: 0 points (lowest possible).
+- **King of Diamonds**: Counts as **0 points** (lowest possible value). Must be held in your hand to count toward your score.
 
-### Special Ability Tokens
-- **Force Drink**: Make another player drink a beer.
-- **Extra Beer**: Recover one of your beer slots.
-- **Purge**: Remove the highest card from your hand.
-- **Sabotage**: Give an opponent the highest card from the deck.
-- **Uno Reverse**: Reverse the turn order.
-- **Block**: Skip an opponent's turn.
-- **Doubler/Halver**: Manipulate the scoring value of a player's hand.
+### Special Ability Tokens (Chicken Eggs)
+- **Bottoms Up**: Force a chosen player to drink a beer.
+- **Refuel**: Receive an extra beer (max 3).
+- **Trim Off**: Remove the highest card from your hand.
+- **Boulder**: Give a chosen player the highest card presently in the deck.
+- **Uno Reverse**: Reverse the playing order.
+- **Skip**: Block a chosen player's turn.
+- **Perfect Match**: Resets the game but you receive Ace, 2, 3, 4. Others get random cards; everyone keeps their money/abilities.
+- **Inflation**: Double a player's card values (scoring only; original rank stays for Jump-Ins).
+- **Half Off**: Halve a player's card values (scoring only).
+- **Jumpscare**: Receive a card but choose a player to get jumpscared.
+- **Shuffle**: Shuffle a player's cards.
+- **Polarity Shift**: Invert the game's win condition (Highest Wins vs. Lowest Wins).
 
 ## ⚡ Special Moves
-- **Jump-In**: If you have a card matching the last one discarded, you can play it even if it's not your turn. 
-    - **Success**: Your hand size decreases.
-    - **Failure**: You draw a penalty card and drink a beer.
+- **Jump-In**: If you have a card matching the last one discarded, play it at any time! 
+    - **Success**: Hand size decreases.
+    - **Failure**: Draw a penalty card and drink a beer.
 - **Calling Dutch**: If you think you have the lowest score, call "Dutch". Everyone gets one last turn. You then **Confirm** to end or **Cancel** (forfeiting your right to call again).
 
 ## 🛠️ Developer Setup
 - Run `git config core.hooksPath .githooks` after cloning.
-- See `DESIGN.md` for technical architecture and FSM details.
+- See [DESIGN.md](DESIGN.md) for technical architecture and FSM details.
