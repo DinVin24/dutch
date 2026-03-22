@@ -1037,6 +1037,9 @@ func _on_card_clicked(node, data):
 	var p_idx: int = -1
 	for i in range(4):
 		if player_hands[i].has(node):
+			p_idx = i
+			break
+	
 	if _is_waiting_for_target:
 		if p_idx != -1:
 			_on_player_area_input(null, null, Vector3.ZERO, Vector3.ZERO, 0, p_idx)
@@ -1054,22 +1057,23 @@ func _on_card_clicked(node, data):
 					await get_tree().create_timer(2.0, false).timeout
 					_clear_all_highlights()
 					for c in peeked_cards:
-						c.is_being_peeked = false
-						c.animate_flip(false)
-						c.set_interactive(false)
+						if is_instance_valid(c):
+							c.is_being_peeked = false
+							c.animate_flip(false)
+							c.set_interactive(false)
 					peeked_cards.clear()
 					GameManager.complete_initial_peek()
 		
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
 			if p_idx == 0:
 				GameManager.player_swap_drawn_card(player_hands[0].find(node))
+			elif is_pending:
+				if GameManager.can_player_discard_drawn_card(0):
+					GameManager.player_discard_drawn_card()
 		
 		GameManager.GameState.TURN_JUMP_IN_SELECTION:
-			# JUMP-IN SELECTION: Use simple persistent-array index
-			var is_drawn = (node == pending_card or node.name == "PendingCard")
-			var c_idx = -2 if is_drawn else player_hands[0].find(node)
-			
-			if c_idx != -1 or is_drawn:
+			var c_idx = -2 if is_pending else player_hands[0].find(node)
+			if c_idx != -1 or is_pending:
 				_clear_all_highlights()
 				if await GameManager.validate_jump_in(c_idx):
 					print("[JUMP-IN] SUCCESS")
@@ -1077,7 +1081,7 @@ func _on_card_clicked(node, data):
 					print("[JUMP-IN] FAILED")
 
 		GameManager.GameState.TURN_PEEK_ABILITY:
-			if is_pending or not GameManager.can_human_interact_with_hand_card(p_idx, c_idx, data.is_face_up):
+			if is_pending or not GameManager.can_human_interact_with_hand_card(p_idx, -2 if is_pending else player_hands[p_idx].find(node), data.is_face_up):
 				return
 			_set_all_cards_interactive(false)
 			node.is_being_peeked = true
@@ -1088,45 +1092,9 @@ func _on_card_clicked(node, data):
 			node.animate_flip(false)
 			_refresh_human_interactivity()
 			GameManager.complete_peek_ability()
-				_clear_all_highlights()
-				for c in peeked_cards:
-					c.animate_flip(false)
-					c.set_interactive(false)
-				peeked_cards.clear()
-				_clear_all_highlights()
-				GameManager.complete_initial_peek()
-		GameManager.GameState.TURN_RESOLVE_DRAWN:
-			if is_pending:
-				if GameManager.can_player_discard_drawn_card(0):
-					GameManager.player_discard_drawn_card()
-				return
-			if GameManager.can_human_interact_with_hand_card(p_idx, c_idx, data.is_face_up):
-				GameManager.player_swap_drawn_card(c_idx)
-		GameManager.GameState.TURN_JUMP_IN_SELECTION:
-			if is_pending:
-				if not GameManager.can_player_select_jump_in_card(0, 0, -2):
-					return
-			elif not GameManager.can_human_interact_with_hand_card(p_idx, c_idx, data.is_face_up):
-				return
-			_clear_all_highlights()
-			if await GameManager.validate_jump_in(c_idx):
-				print("[JUMP-IN] SUCCESS")
-			else:
-				print("[JUMP-IN] FAILED")
-		GameManager.GameState.TURN_PEEK_ABILITY:
-			if is_pending or not GameManager.can_human_interact_with_hand_card(p_idx, c_idx, data.is_face_up):
-				return
-			_set_all_cards_interactive(false)
-			node.is_being_peeked = true
-			node.animate_flip(true)
-			await get_tree().create_timer(3.5, false).timeout
-			_clear_all_highlights()
-			node.is_being_peeked = false
-			node.animate_flip(false)
-			_refresh_human_interactivity()
-			GameManager.complete_peek_ability()
-			_clear_all_highlights()
+
 		GameManager.GameState.TURN_SWAP_ABILITY:
+			var c_idx = -2 if is_pending else (player_hands[p_idx].find(node) if p_idx != -1 else -1)
 			if is_pending or not GameManager.can_human_interact_with_hand_card(p_idx, c_idx, data.is_face_up):
 				return
 			if swap_sources.any(func(s): return s.node == node):
