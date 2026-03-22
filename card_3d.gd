@@ -15,6 +15,7 @@ var is_flipping: bool = false
 var is_selected: bool = false
 var is_highlighted: bool = false
 var is_being_peeked: bool = false
+var is_discarding: bool = false # NEW: Deletion guard for animations
 var highlight_tween: Tween = null
 var _wobble_time: float = 0.0
 var _base_visual_pos: Vector3

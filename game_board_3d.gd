@@ -634,11 +634,9 @@ func _on_card_discarded(player_idx, card_data):
 			var node = hand_nodes[i]
 			if is_instance_valid(node) and (node.data == card_data or (node.data.rank == card_data.rank and node.data.suit == card_data.suit)):
 				card_to_discard = node
-				# We do NOT remove from 'hand_nodes' array here.
-				# _update_hand_visuals() will reconcile the nodes with the new board state.
 				break
 
-	# 3. FALLBACK (If node not found, create a temp for animation)
+	# 3. FALLBACK
 	if card_to_discard == null and player_idx >= 0:
 		card_to_discard = card_scene.instantiate()
 		add_child(card_to_discard)
@@ -647,6 +645,7 @@ func _on_card_discarded(player_idx, card_data):
 
 	# 4. ANIMATE DISCARD
 	if card_to_discard:
+		card_to_discard.is_discarding = true # SET FLAG IMMEDIATELY
 		card_to_discard.set_highlight(false)
 		card_to_discard.set_interactive(false)
 		
@@ -912,6 +911,9 @@ func _update_hand_visuals(player_idx: int):
 	# Cleanup orphans
 	for node in pool:
 		if is_instance_valid(node):
+			if node.is_discarding:
+				print("GameBoard3D: Sparing node from cleanup (is_discarding=true)")
+				continue
 			node.queue_free()
 			
 	player_hands[player_idx] = new_node_list

@@ -162,26 +162,29 @@ func _can_transition_to(new_state: GameState) -> bool:
 		GameState.INITIAL_PEEK:
 			return new_state == GameState.TURN_START_DRAW
 		GameState.TURN_START_DRAW:
-			return new_state in [GameState.TURN_RESOLVE_DRAWN, GameState.TURN_JUMP_IN_SELECTION]
+			return new_state in [GameState.TURN_RESOLVE_DRAWN, GameState.TURN_JUMP_IN_SELECTION, GameState.STATE_PLAYING_ABILITY]
 		GameState.TURN_RESOLVE_DRAWN:
 			return new_state in [
 				GameState.TURN_PEEK_ABILITY,
 				GameState.TURN_SWAP_ABILITY,
 				GameState.TURN_END_CHOICE,
 				GameState.TURN_JUMP_IN_SELECTION,
-				GameState.TURN_CONFIRM_DUTCH
+				GameState.TURN_CONFIRM_DUTCH,
+				GameState.STATE_PLAYING_ABILITY
 			]
 		GameState.TURN_PEEK_ABILITY, GameState.TURN_SWAP_ABILITY:
 			return new_state in [
 				GameState.TURN_START_DRAW,
 				GameState.TURN_END_CHOICE,
-				GameState.TURN_CONFIRM_DUTCH
+				GameState.TURN_CONFIRM_DUTCH,
+				GameState.STATE_PLAYING_ABILITY
 			]
 		GameState.TURN_END_CHOICE:
 			return new_state in [
 				GameState.TURN_START_DRAW,
 				GameState.TURN_JUMP_IN_SELECTION,
-				GameState.TURN_CONFIRM_DUTCH
+				GameState.TURN_CONFIRM_DUTCH,
+				GameState.STATE_PLAYING_ABILITY
 			]
 		GameState.TURN_JUMP_IN_SELECTION:
 			return new_state in [
