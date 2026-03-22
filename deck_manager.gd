@@ -31,41 +31,38 @@ func create_deck():
 	discard_pile.clear()
 	for suit in SUITS:
 		for rank in RANKS:
-			var card_info = {
-				"suit": suit,
-				"rank": rank.name,
-				"value": rank.value
-			}
-			# Special rule: King of Diamonds = 0 points
-			if suit == "Diamonds" and rank.name == "King":
-				card_info.value = 0
-			
-			deck.append(card_info)
+			var card = CardData.new(rank.name, suit)
+			deck.append(card)
 	
 	shuffle_deck()
 
 func shuffle_deck():
 	deck.shuffle()
 
-func draw_card() -> Dictionary:
+func draw_card() -> CardData:
 	if deck.is_empty():
 		if discard_pile.size() > 1:
 			# Keep the top card of discard, shuffle the rest back into deck
 			var top_discard = discard_pile.pop_back()
+			# discard is an array of CardData
 			deck = discard_pile.duplicate()
 			discard_pile = [top_discard]
 			deck.shuffle()
 			deck_reshuffled.emit()
+			
+			# Ensure recycled cards are face down
+			for card in deck:
+				card.is_face_up = false
 		else:
-			return {} # No cards left anywhere
+			return null # No cards left anywhere
 			
 	return deck.pop_back()
 
-func discard_card(card: Dictionary):
+func discard_card(card: CardData):
 	discard_pile.append(card)
 	discard_pile_updated.emit()
 
-func get_top_discard() -> Dictionary:
+func get_top_discard() -> CardData:
 	if discard_pile.is_empty():
-		return {}
+		return null
 	return discard_pile.back()

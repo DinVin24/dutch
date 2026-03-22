@@ -13,6 +13,7 @@ enum GameState {
 	TURN_JUMP_IN_SELECTION,
 	CHECK_DUTCH,
 	TURN_CONFIRM_DUTCH,
+	STATE_PLAYING_ABILITY,
 	GAME_OVER
 }
 
@@ -20,8 +21,8 @@ enum GameState {
 signal game_state_changed(new_state)
 signal turn_started(player_id)
 signal game_over(winner_id)
-signal scores_ready(results: Array)      # Bug 3: carries sorted leaderboard
-signal all_cards_revealed                 # Bug 3: tells board to flip all cards face-up
+signal scores_ready(results: Array) # Bug 3: carries sorted leaderboard
+signal all_cards_revealed # Bug 3: tells board to flip all cards face-up
 signal deck_ready
 signal card_drawn_to_pending(player_id, card_data)
 signal card_discarded(player_id, card_data)
@@ -32,24 +33,40 @@ signal memory_shift_required(player_idx, removed_card_idx)
 signal jack_swap_resolved(p1: int, c1: int, p2: int, c2: int)
 signal hand_updated(player_idx: int)
 signal dutch_called(player_idx: int)
+signal pending_card_consumed # Notifies board to clear the floating drawn card node
+
+# New Economy Signals
+signal player_drank_beer(player_idx, remaining)
+signal player_eliminated(player_idx)
+signal player_gained_money(player_idx, amount, total)
+signal ability_unlocked(player_idx, ability_id)
+signal polarity_shifted(new_state: bool)
 
 var current_state: GameState = GameState.INITIALIZING
 var deck_manager: DeckManager
 var bg_music_player: AudioStreamPlayer
+var ability_manager: AbilityManager
 
 # Match Settings
 var num_players: int = 4 # Hotseat local play
 var players_info: Array = []
 var current_player_index: int = 0
+var turn_direction: int = 1 # 1 for clockwise, -1 for counter-clockwise (Uno Reverse)
 var dutch_caller_index: int = -1 # -1 means no one has called Dutch yet
 var jump_in_player_idx: int = -1 # who is currently attempting the jump-in
 var drawn_card_data: CardData = null
 var jump_in_resume_state: GameState = GameState.INITIALIZING
 var dev_console_enabled: bool = true
+var active_ability_player: int = -1
+var win_condition_lowest_wins: bool = true
+var jump_in_was_own_draw_phase: bool = false
 
 func _ready():
 	deck_manager = DeckManager.new()
 	add_child(deck_manager)
+	
+	ability_manager = AbilityManager.new()
+	add_child(ability_manager)
 	
 	# Background Music Setup
 	bg_music_player = AudioStreamPlayer.new()
@@ -74,8 +91,10 @@ func initialize_game(p_count: int = 4):
 	players_info.clear()
 	current_state = GameState.INITIALIZING
 	current_player_index = 0
+	turn_direction = 1
 	dutch_caller_index = -1
 	jump_in_player_idx = -1
+	win_condition_lowest_wins = true
 	jump_in_resume_state = GameState.INITIALIZING
 	drawn_card_data = null
 	for i in range(num_players):
@@ -85,6 +104,11 @@ func initialize_game(p_count: int = 4):
 			"score": 0,
 			"hand": [], # CardData objects
 			"can_call_dutch": true,
+			"beers": 3,
+			"money": 0,
+			"abilities": [],
+			"is_eliminated": false,
+			"is_skipped": false,
 			# bot_memory: { player_idx: { card_idx: CardData } }
 			# Populated by BotController during INITIAL_PEEK.
 			"bot_memory": {}
@@ -96,15 +120,28 @@ func initialize_game(p_count: int = 4):
 	
 	start_game()
 
-func change_state(new_state: GameState):
-	if current_state == new_state:
+func change_state(new_state: GameState, force_signal: bool = false):
+	if current_state == new_state and not force_signal:
+		# Still emit signal if we are forcing a refresh (e.g. after an interrupt)
+		# but avoid redundant work if not needed.
 		return
-	if not _can_transition_to(new_state):
+		
+	# Transition validation from main
+	if not force_signal and not _can_transition_to(new_state):
 		push_warning("FSM Blocked: Illegal state transition %s -> %s" % [
 			GameState.keys()[current_state],
 			GameState.keys()[new_state]
 		])
 		return
+
+	# Automatic pass-through override from HEAD: never grant an interactive turn 
+	# to an eliminated player. Instantly skip to safety.
+	if new_state in [GameState.TURN_START_DRAW, GameState.TURN_RESOLVE_DRAWN, GameState.TURN_END_CHOICE, GameState.TURN_CONFIRM_DUTCH]:
+		if players_info[current_player_index].is_eliminated:
+			print("FSM Guard: Skipping turn state for eliminated player ", current_player_index)
+			next_turn()
+			return
+			
 	current_state = new_state
 	game_state_changed.emit(new_state)
 	
@@ -125,26 +162,29 @@ func _can_transition_to(new_state: GameState) -> bool:
 		GameState.INITIAL_PEEK:
 			return new_state == GameState.TURN_START_DRAW
 		GameState.TURN_START_DRAW:
-			return new_state in [GameState.TURN_RESOLVE_DRAWN, GameState.TURN_JUMP_IN_SELECTION]
+			return new_state in [GameState.TURN_RESOLVE_DRAWN, GameState.TURN_JUMP_IN_SELECTION, GameState.STATE_PLAYING_ABILITY]
 		GameState.TURN_RESOLVE_DRAWN:
 			return new_state in [
 				GameState.TURN_PEEK_ABILITY,
 				GameState.TURN_SWAP_ABILITY,
 				GameState.TURN_END_CHOICE,
 				GameState.TURN_JUMP_IN_SELECTION,
-				GameState.TURN_CONFIRM_DUTCH
+				GameState.TURN_CONFIRM_DUTCH,
+				GameState.STATE_PLAYING_ABILITY
 			]
 		GameState.TURN_PEEK_ABILITY, GameState.TURN_SWAP_ABILITY:
 			return new_state in [
 				GameState.TURN_START_DRAW,
 				GameState.TURN_END_CHOICE,
-				GameState.TURN_CONFIRM_DUTCH
+				GameState.TURN_CONFIRM_DUTCH,
+				GameState.STATE_PLAYING_ABILITY
 			]
 		GameState.TURN_END_CHOICE:
 			return new_state in [
 				GameState.TURN_START_DRAW,
 				GameState.TURN_JUMP_IN_SELECTION,
-				GameState.TURN_CONFIRM_DUTCH
+				GameState.TURN_CONFIRM_DUTCH,
+				GameState.STATE_PLAYING_ABILITY
 			]
 		GameState.TURN_JUMP_IN_SELECTION:
 			return new_state in [
@@ -216,13 +256,16 @@ func can_player_select_jump_in_card(player_idx: int, owner_idx: int, card_idx: i
 	return _hand_has_index(owner_idx, card_idx)
 
 func can_player_complete_peek_ability(player_idx: int) -> bool:
-	return _is_valid_player_index(player_idx) and player_idx == current_player_index and current_state == GameState.TURN_PEEK_ABILITY
+	# RECENT FIX: Use active_ability_player instead of current_player_index!
+	# This allows jump-ins to correctly authorize the player who discarded the Queen.
+	return _is_valid_player_index(player_idx) and player_idx == active_ability_player and current_state == GameState.TURN_PEEK_ABILITY
 
 func can_player_use_peek_ability(player_idx: int, _owner_idx: int, card_is_face_up: bool) -> bool:
 	return can_player_complete_peek_ability(player_idx) and not card_is_face_up
 
 func can_player_complete_swap_ability(player_idx: int) -> bool:
-	return _is_valid_player_index(player_idx) and player_idx == current_player_index and current_state == GameState.TURN_SWAP_ABILITY
+	# RECENT FIX: Use active_ability_player instead of current_player_index!
+	return _is_valid_player_index(player_idx) and player_idx == active_ability_player and current_state == GameState.TURN_SWAP_ABILITY
 
 func can_player_select_swap_card(player_idx: int, owner_idx: int, card_idx: int) -> bool:
 	return can_player_complete_swap_ability(player_idx) and _hand_has_index(owner_idx, card_idx)
@@ -257,8 +300,8 @@ func can_human_interact_with_hand_card(owner_idx: int, card_idx: int, card_is_fa
 		GameState.TURN_SWAP_ABILITY:
 			return can_player_select_swap_card(0, owner_idx, card_idx)
 		_:
-			return false
-
+			# FALLBACK: If human can jump-in, their cards should always be interactive
+			return owner_idx == 0 and can_player_start_jump_in(0)
 func _consume_jump_in_resume_state() -> GameState:
 	var resume_state := jump_in_resume_state
 	jump_in_resume_state = GameState.INITIALIZING
@@ -267,13 +310,27 @@ func _consume_jump_in_resume_state() -> GameState:
 func _resolve_post_interrupt_state() -> GameState:
 	var resume_state := _consume_jump_in_resume_state()
 	if resume_state != GameState.INITIALIZING:
+		# FORCE SIGNAL: This is an interrupt completion, we MUST wake up agents
+		change_state(resume_state, true)
 		return resume_state
 	if current_player_index == dutch_caller_index:
 		return GameState.TURN_CONFIRM_DUTCH
 	return GameState.TURN_END_CHOICE
 
 func next_turn():
-	current_player_index = (current_player_index + 1) % num_players
+	# Loop until we find a player who is not eliminated and not skipped
+	for _i in range(num_players):
+		current_player_index = (current_player_index + turn_direction + num_players) % num_players
+		if not players_info[current_player_index].is_eliminated:
+			if players_info[current_player_index].is_skipped:
+				players_info[current_player_index].is_skipped = false
+				print("Player ", current_player_index, " turn SKIPPED.")
+				continue
+			break
+			
+	# Final turn for caller: 
+	# Even if current_player_index == dutch_caller_index, we allow them one 
+	# final normal turn (draw/jump-in/abilities) before confirming.
 	change_state(GameState.TURN_START_DRAW)
 
 func _handle_deal_cards():
@@ -295,21 +352,89 @@ func _calculate_scores() -> Array:
 	for i in range(num_players):
 		var info = players_info[i]
 		var hand: Array = info.hand
-		# Edge case: player with 0 cards wins outright.
-		if hand.size() == 0:
-			entries.append({"id": i, "name": info.name, "score": -1, "card_count": 0})
-			continue
+		
 		var total := 0
-		for card in hand:
-			total += (card as CardData).recalc_point_value()
-		entries.append({"id": i, "name": info.name, "score": total, "card_count": hand.size()})
-	# Sort: lowest score first; tiebreak by fewer cards.
+		if info.is_eliminated:
+			# Eliminated players get a massive penalty score and cannot win
+			total = 99
+		elif hand.size() == 0:
+			# Edge case: player with 0 cards wins outright.
+			total = -1
+		else:
+			for card in hand:
+						total += (card as CardData).recalc_point_value()
+				
+		entries.append({"id": i, "name": info.name, "score": total, "card_count": hand.size(), "is_eliminated": info.is_eliminated})
+	# Sort entries based on score and win condition
 	entries.sort_custom(func(a, b):
+		# 0-card winners (-1) always come first
+		if a.score == -1: return true
+		if b.score == -1: return false
+		
+		# Eliminated players (99) always come last
+		if a.score == 99: return false
+		if b.score == 99: return true
+		
+		# For everyone else, sort based on current win condition polarity
 		if a.score != b.score:
-			return a.score < b.score
+			if win_condition_lowest_wins:
+				return a.score < b.score
+			else:
+				return a.score > b.score
+				
+		# Tiebreak by card count (fewer is always better)
 		return a.card_count < b.card_count
 	)
 	return entries
+
+func _check_elimination_win_condition() -> bool:
+	var active_players = 0
+	for i in range(num_players):
+		if not players_info[i].is_eliminated:
+			active_players += 1
+	if active_players <= 1:
+		print("Only one player remains! Game Over.")
+		change_state(GameState.GAME_OVER)
+		return true
+	return false
+
+func drink_beer(p_idx: int):
+	if players_info[p_idx].is_eliminated: return
+	players_info[p_idx].beers -= 1
+	player_drank_beer.emit(p_idx, players_info[p_idx].beers)
+	print("Player ", p_idx, " drank a beer! Remaining: ", players_info[p_idx].beers)
+	
+	if players_info[p_idx].beers <= 0:
+		players_info[p_idx].is_eliminated = true
+		player_eliminated.emit(p_idx)
+		print("Player ", p_idx, " is ELIMINATED!")
+		var was_game_over = _check_elimination_win_condition()
+		
+		# If the player died during their own active turn, instantly end it
+		if not was_game_over and current_player_index == p_idx:
+			print("Player died on their turn. Forcing next turn.")
+			next_turn()
+
+func gain_money_for_discard(p_idx: int, card: CardData):
+	if players_info[p_idx].is_eliminated: return
+	var amount = 0
+	var r = card.rank
+	var s = card.suit
+	
+	if r == "King":
+		if s == "Diamonds": amount = 200
+		else: amount = 10
+	elif r == "Ace": amount = 100
+	elif r == "Queen" or r == "Jack": amount = 80
+	elif r == "10" or r == "9": amount = 70
+	elif r == "8" or r == "7": amount = 50
+	elif r == "6" or r == "5": amount = 40
+	else: amount = 30
+	
+	players_info[p_idx].money += amount
+	player_gained_money.emit(p_idx, amount, players_info[p_idx].money)
+	print("Player ", p_idx, " gained $", amount, " for discarding ", r, " of ", s)
+
 
 func start_game():
 	change_state(GameState.DEAL_CARDS)
@@ -318,27 +443,136 @@ func call_dutch(player_id: int):
 	if not can_player_call_dutch(player_id):
 		print("FSM Blocked: Cannot call Dutch outside of TURN_END_CHOICE state")
 		return
+	
+	_clear_interrupt_state()
 	dutch_caller_index = player_id
 	print("Player ", player_id, " called DUTCH!")
 	dutch_called.emit(player_id)
 	next_turn()
 
+func shift_polarity():
+	win_condition_lowest_wins = !win_condition_lowest_wins
+	polarity_shifted.emit(win_condition_lowest_wins)
+	print("Game Polarity SHIFTED! Lowest wins: ", win_condition_lowest_wins)
+
 func _prompt_turn_end():
-	change_state(_resolve_post_interrupt_state())
+	# If player 0 jumped in at the very start of their own draw turn, give them
+	# their draw back instead of ending the turn.
+	if jump_in_was_own_draw_phase:
+		_clear_interrupt_state() # Consumed
+		change_state(GameState.TURN_START_DRAW)
+		return
+		
+	var post_interrupt := _resolve_post_interrupt_state()
+	change_state(post_interrupt)
+
+func _clear_interrupt_state():
+	"""Resets all flags related to jump-in interrupts to ensure state purity."""
+	jump_in_resume_state = GameState.INITIALIZING
+	jump_in_was_own_draw_phase = false
+	jump_in_player_idx = -1
+	active_ability_player = -1
+
+## Abilities API
+var state_before_ability: GameState = GameState.INITIALIZING
+signal ability_played(player_idx, ability_id)
+signal ability_finished
+
+func play_ability(player_idx: int, ability_id: String, target_idx: int = -1) -> bool:
+	print("[GM DEBUG] play_ability request: P", player_idx, " using ", ability_id, " on T", target_idx, " | State: ", GameState.keys()[current_state])
+	
+	if current_player_index != player_idx:
+		print("[GM DEBUG] REJECTED: Not player's turn (Turn: ", current_player_index, ", Activator: ", player_idx, ")")
+		return false
+		
+	var valid_states = [
+		GameState.TURN_START_DRAW,
+		GameState.TURN_RESOLVE_DRAWN,
+		GameState.TURN_END_CHOICE,
+		GameState.TURN_PEEK_ABILITY,
+		GameState.TURN_SWAP_ABILITY
+	]
+	
+	if current_state not in valid_states:
+		print("[GM DEBUG] REJECTED: Game state ", GameState.keys()[current_state], " prevents playing abilities.")
+		return false
+
+	# If this is a primary turn action (not already in an ability state), clear interrupt markers
+	if current_state != GameState.STATE_PLAYING_ABILITY:
+		_clear_interrupt_state()
+
+	# For targetable abilities, ensure target_idx is provided and valid
+	var targeting_abilities = ["bottoms_up", "boulder", "skip", "inflation", "half_off", "shuffle", "jumpscare"]
+	if ability_id in targeting_abilities and target_idx == -1:
+		print("[GM DEBUG] REJECTED: Ability ", ability_id, " requires a valid target.")
+		return false
+
+	state_before_ability = current_state
+	change_state(GameState.STATE_PLAYING_ABILITY)
+	print("[GM DEBUG] ACCEPTED. State -> PLAYING_ABILITY. Executing manager...")
+	
+	# Centralized removal from inventory
+	var idx = players_info[player_idx].abilities.find(ability_id)
+	if idx != -1:
+		players_info[player_idx].abilities.remove_at(idx)
+	
+	ability_played.emit(player_idx, ability_id)
+	ability_manager.execute(player_idx, ability_id, target_idx)
+	return true
+	
+func resume_from_ability():
+	"""Called by AbilityManager when visual effects and internal logic are complete."""
+	if current_state != GameState.STATE_PLAYING_ABILITY:
+		return
+	# FORCE SIGNAL: Resume from ability must always wake up bots/UI
+	change_state(state_before_ability, true)
+	ability_finished.emit()
 
 func end_turn():
 	if not can_player_end_turn(current_player_index):
 		print("FSM Blocked: Cannot end turn outside of TURN_END_CHOICE state")
 		return
-	next_turn()
+		
+	# If the caller just finished their final turn, prompt for confirmation
+	if current_player_index == dutch_caller_index:
+		change_state(GameState.TURN_CONFIRM_DUTCH)
+	else:
+		next_turn()
 
 ## player_idx: who is jumping in. -1 defaults to current_player_index (bot use).
 func start_jump_in(player_idx: int = -1) -> void:
 	var resolved_idx := player_idx if player_idx != -1 else current_player_index
-	if not can_player_start_jump_in(resolved_idx):
-		print("FSM Blocked: Cannot start jump-in from current state")
+	
+	if players_info[resolved_idx].is_eliminated:
+		print("FSM Guard: Eliminated player cannot start a jump-in.")
 		return
-	jump_in_resume_state = current_state
+		
+	if resolved_idx == 0:
+		# Human player: allow jump-in from any state EXCEPT their own active draw/resolve.
+		var blocked_states := [
+			GameState.INITIALIZING, GameState.DEAL_CARDS, GameState.INITIAL_PEEK,
+			GameState.TURN_JUMP_IN_SELECTION, GameState.GAME_OVER,
+			GameState.TURN_PEEK_ABILITY, GameState.TURN_SWAP_ABILITY
+		]
+		# Block if currently in a forbidden state.
+		if (current_state in blocked_states):
+			return
+		# Require a non-empty discard pile to jump into.
+		if deck_manager.discard_pile.is_empty():
+			return
+	else:
+		# Bots may only jump in during TURN_END_CHOICE.
+		if current_state != GameState.TURN_END_CHOICE:
+			return
+	
+	# Track if player 0 is jumping in at the start of their own draw turn.
+	if resolved_idx == 0 and current_state == GameState.TURN_START_DRAW:
+		jump_in_was_own_draw_phase = true
+	else:
+		jump_in_was_own_draw_phase = false
+
+	if current_state != GameState.TURN_JUMP_IN_SELECTION:
+		jump_in_resume_state = current_state
 	jump_in_player_idx = resolved_idx
 	change_state(GameState.TURN_JUMP_IN_SELECTION)
 
@@ -354,41 +588,60 @@ func validate_jump_in(card_idx: int) -> bool:
 		return false
 
 	var top_discard: CardData = deck_manager.discard_pile[-1]
+	# CASE-INSENSITIVE RANK MATCH
 	if selected_card.rank.to_lower() == top_discard.rank.to_lower():
 		var msg := "Player %d: %s of %s matches! JUMP IN!" % [
 			jump_in_player_idx, selected_card.rank, selected_card.suit
 		]
+		
+		# Remove card from source
 		if card_idx == -2:
 			drawn_card_data = null
 		else:
 			hand.remove_at(card_idx)
-			hand_updated.emit(jump_in_player_idx)
+			# NOTE: we DON'T emit hand_updated here because card_discarded 
+			# will handle the surgical node removal and subsequent layout refresh.
 			memory_shift_required.emit(jump_in_player_idx, card_idx)
 		
+		# Check for win condition (out of cards)
 		if hand.size() == 0:
 			jump_in_player_idx = -1
 			_consume_jump_in_resume_state()
 			change_state(GameState.GAME_OVER)
 			return true
-		
+			
+		# Successfully jumped in
+		print("[GM DEBUG] JUMP-IN MATCH! Removing card at idx ", card_idx, " from P", jump_in_player_idx, " hand.")
 		deck_manager.discard_pile.append(selected_card)
-		card_discarded.emit(jump_in_player_idx, selected_card)
+		
+		var p_idx_for_signal = jump_in_player_idx
+		card_discarded.emit(p_idx_for_signal, selected_card)
+		gain_money_for_discard(p_idx_for_signal, selected_card)
+		
+		var played_by = p_idx_for_signal
 		jump_in_player_idx = -1
-		_resolve_discard_effects(selected_card)
+		
+		_resolve_discard_effects(selected_card, played_by)
 		bot_action.emit(msg)
 		return true
 
+	# NO MATCH: Penalty
 	print("No match. Jump In invalid.")
 	jump_in_failed.emit(jump_in_player_idx, card_idx, selected_card)
+	drink_beer(jump_in_player_idx)
+	
+	if players_info[jump_in_player_idx].is_eliminated:
+		jump_in_player_idx = -1
+		return false
+		
 	await get_tree().create_timer(1.2, false).timeout
 
-	var penalty_card_dict: Dictionary = deck_manager.draw_card()
-	if not penalty_card_dict.is_empty():
-		var penalty_card := CardData.new(penalty_card_dict.rank, penalty_card_dict.suit)
-		penalty_card.is_face_up = false
-		hand.append(penalty_card)
+	var p_card = deck_manager.draw_card()
+	if p_card != null:
+		p_card.is_face_up = false
+		hand.append(p_card)
 		hand_updated.emit(jump_in_player_idx)
-		jump_in_penalty.emit(jump_in_player_idx, penalty_card)
+		jump_in_penalty.emit(jump_in_player_idx, p_card)
 
 	jump_in_player_idx = -1
 	change_state(_resolve_post_interrupt_state())
@@ -419,12 +672,14 @@ func player_draw_card():
 		print("FSM Blocked: Cannot draw card outside of TURN_START_DRAW state")
 		return
 	
+	_clear_interrupt_state()
+	
 	var card_info = deck_manager.draw_card()
-	if card_info.is_empty():
+	if card_info == null:
 		print("Deck is empty!")
 		return
 		
-	drawn_card_data = CardData.new(card_info.rank, card_info.suit)
+	drawn_card_data = card_info
 	drawn_card_data.is_face_up = true
 	
 	change_state(GameState.TURN_RESOLVE_DRAWN)
@@ -436,12 +691,23 @@ func player_discard_drawn_card():
 		print("FSM Blocked: Cannot discard pending card outside of TURN_RESOLVE_DRAWN state")
 		return
 	
+	_clear_interrupt_state()
+	
 	print("GameManager: Discarding drawn card.")
 	deck_manager.discard_pile.append(drawn_card_data)
 	card_discarded.emit(current_player_index, drawn_card_data)
+	gain_money_for_discard(current_player_index, drawn_card_data)
+	
+	var p_idx = current_player_index
+	drink_beer(p_idx)
+	
+	if players_info[p_idx].is_eliminated:
+		drawn_card_data = null
+		return
 	
 	var discarded_handled = drawn_card_data
 	drawn_card_data = null
+	pending_card_consumed.emit()
 	
 	_resolve_discard_effects(discarded_handled)
 
@@ -450,23 +716,31 @@ func player_swap_drawn_card(card_idx: int):
 		print("FSM Blocked: Cannot swap outside of TURN_RESOLVE_DRAWN state")
 		return
 	
+	_clear_interrupt_state()
+	
 	var player_h: Array = players_info[current_player_index].hand
 	var old_card = player_h[card_idx]
 	print("GameManager: Swapping drawn card with hand card at idx ", card_idx)
 	
 	deck_manager.discard_pile.append(old_card)
 	card_discarded.emit(current_player_index, old_card)
+	gain_money_for_discard(current_player_index, old_card)
 	
 	drawn_card_data.is_face_up = false # Must be face-down in hand
 	player_h[card_idx] = drawn_card_data
 	hand_updated.emit(current_player_index)
 	
 	drawn_card_data = null
+	pending_card_consumed.emit()
 	
 	_resolve_discard_effects(old_card)
 
-func _resolve_discard_effects(card: CardData):
+func _resolve_discard_effects(card: CardData, player_idx: int = -1):
+	active_ability_player = player_idx if player_idx != -1 else current_player_index
+	
+	# Wait for the card discard visual tween to complete before changing state
 	await get_tree().create_timer(0.4, false).timeout
+	if current_state == GameState.GAME_OVER: return
 	if card.rank == "Queen":
 		print("Queen discarded! FSM -> TURN_PEEK_ABILITY")
 		change_state(GameState.TURN_PEEK_ABILITY)
@@ -479,7 +753,11 @@ func _resolve_discard_effects(card: CardData):
 func complete_initial_peek():
 	if current_state != GameState.INITIAL_PEEK:
 		return
+	# SECURITY FIX: only Player 0 (human) or the system (after a global timer) 
+	# should be able to end the initial peek phase.
+	# For now, we assume this is called by the human board.
 	change_state(GameState.TURN_START_DRAW)
+	print("[FSM] INITIAL_PEEK -> TURN_START_DRAW")
 
 func complete_peek_ability():
 	if current_state != GameState.TURN_PEEK_ABILITY:
@@ -510,3 +788,19 @@ func complete_swap_ability(player1_idx: int, card1_idx: int, player2_idx: int, c
 	
 	jack_swap_resolved.emit(player1_idx, card1_idx, player2_idx, card2_idx)
 	_prompt_turn_end()
+
+func buy_ability(p_idx: int) -> bool:
+	"""Centralized purchase logic for both Human UI and Bot Controller."""
+	var cost = 50
+	if players_info[p_idx].money >= cost:
+		players_info[p_idx].money -= cost
+		player_gained_money.emit(p_idx, -cost, players_info[p_idx].money)
+		
+		# Generate random ability
+		var list = ["bottoms_up", "refuel", "trim_off", "boulder", "reverse", "skip", "perfect_match", "inflation", "half_off", "jumpscare", "shuffle", "polarity_shift"]
+		var ab = list[randi() % list.size()]
+		players_info[p_idx].abilities.append(ab)
+		ability_unlocked.emit(p_idx, ab)
+		print("GM: Player ", p_idx, " bought ability: ", ab)
+		return true
+	return false

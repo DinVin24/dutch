@@ -5,6 +5,7 @@ class_name CardData
 @export var rank: String = "Ace"
 @export var point_value: int = 1
 @export var is_face_up: bool = false
+@export var point_modifier: float = 1.0
 
 func _init(p_rank: String = "Ace", p_suit: String = "Clubs"):
 	rank = p_rank
@@ -27,7 +28,7 @@ func recalc_point_value() -> int:
 	if r == "KING" and s == "Diamonds":
 		point_value = 0
 		
-	return point_value
+	return int(point_value * point_modifier)
 
 func display_name() -> String:
 	return "%s of %s" % [rank, suit]
