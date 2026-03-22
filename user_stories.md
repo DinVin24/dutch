@@ -97,7 +97,7 @@
 - [ ] **Story**: As a player, I want every card move, swap, and draw to have "juice" (screen shake, card wobble, subtle particle trails). [KAN-46]
 
 ## Epic 8: The Tavern Expansion [KAN-36]
-- [x] **Story**: As a player, I want 5 physical 3D beers spawned at my side, representing lives, which I must drink from if I fail a Jump-In or instantly discard a drawn card. [KAN-47]
+- [x] **Story**: As a player, I want 3 physical 3D beers spawned at my side, representing lives, which I must drink from if I fail a Jump-In or instantly discard a drawn card. [KAN-47]
 - [x] **Story**: As a player, I want to earn money scaled to the rank of discarded cards to create an economic layer. [KAN-48]
 - [x] **Story**: As a player, I want to click a hovering chicken to spend money and spawn an egg that cracks into a face-down Ability Card. [KAN-49]
 - [x] **Story**: As a player, I want to be able to use a variety of disruption and utility abilities (Shuffle, Reverse, Skip, Boulder, etc.).
@@ -109,31 +109,28 @@
 ## Epic 10: Cosmetic Unlock System [KAN-50]
 - [ ] **Story**: As a player, I want to earn experience points from matches to unlock new card backs and character skins.
 
-## Epic 11: Ranked Elo Leaderboards [KAN-51]
-- [ ] **Story**: As a player, I want to compete in ranked matches to increase my Elo and see my position on a global leaderboard.
 
-## Epic 12: Battle Pass Progression [KAN-52]
-- [ ] **Story**: As a player, I want a seasonal progression track with tiered rewards to keep the game engaging over time.
-
-## Epic 13: Voice Chat Integration [KAN-53]
+## Epic 11: Voice Chat Integration [KAN-53]
 - [ ] **Story**: As a player, I want spatial voice chat in the tavern to interact with other players during matches.
 
-## Epic 14: Virtual Reality Support [KAN-54]
-- [ ] **Story**: As a player, I want to play the game in VR to immerse myself fully in the tavern atmosphere.
-
-## Epic 15: Polarity Shift (Advanced Mechanics) [KAN-67]
+## Epic 12: Polarity Shift (Advanced Mechanics) [KAN-67]
 - [x] **Story**: As a player, I want to be able to use a 'Polarity Shift' ability to invert the game's win condition between Lowest Wins and Highest Wins. [KAN-69]
   * **Acceptance Criteria**:
     * **Given** a Polarity Shift ability is played
     * **When** the effect triggers
     * **Then** the win condition flips, and the final scoring reflects the new goal (Lowest or Highest score).
 
-## Epic 17: Quality of Life & Accessibility
+## Epic 13: Quality of Life, Analytics & Accessibility [KAN-72]
 - [ ] **Story**: As a player who struggles with memory, I want an "Easy Mode" toggle that keeps my cards face-up at all times, so that I can focus on strategy rather than memorization.
-- [ ] **Story**: As a developer, I want a standardized keybinding system (Jump-In, End Turn, Dutch, Forfeit) so that I can play efficiently without a mouse.
+- [ ] **Story**: As a player, I want a standardized keybinding system (Jump-In, End Turn, Dutch, Forfeit, Choosing cards) so that I can play efficiently without a mouse.
 - [ ] **Story**: As a player, I want my volume, resolution, and keybind settings saved persistently so I don't have to reconfigure them every launch.
+- [ ] **Story**: As a persistent winner, I want my "Matches Won" stat saved to my profile so I can flex on my enemies.
 
-## Epic 18: Social & Multiplayer (Roadmap Phase 3 & 4)
+## Epic 14: The Immersive Tavern (Roadmap Phase 2) [KAN-73]
+- [ ] **Story**: As a player, I want to feel the atmosphere of a "Run-down Bar" with thematic table, chairs, and surroundings.
+- [ ] **Story**: As a player, I want to see the 3D Chicken animated and reacting to my purchases.
+- [ ] **Story**: As a player, I want to see 3D Beer mugs that visually empty as I drink them for penalties.
+
+## Epic 15: Social & Multiplayer (Roadmap Phase 3 & 4) [KAN-74]
 - [ ] **Story**: As a player, I want to host or join a multiplayer room from a lobby list and pick my own username.
-- [ ] **Story**: As a winner, I want to see my "Matches Won" stat increase and trigger a unique emote animation.
-- [ ] **Story**: As a player in a multiplayer match, I want to use spatial voice chat in the bar to interact with others.
+- [ ] **Story**: As a winner, I want to trigger a unique emote animation and celebrate in spatial voice chat.

@@ -1,6 +1,6 @@
 # 🇳🇱 Dutch: Strategic Roadmap
 
-This roadmap defines the transition of Dutch from its current prototype to a polished, multiplayer-ready experience. Tasks are ordered logically to minimize clashing and ensure a steady merge flow.
+This roadmap defines the transition of Dutch from its current prototype to a polished, immersive multiplayer experience. It includes all essential features for gameplay, visuals, and persistence.
 
 ## 📊 Visual Roadmap (Gantt)
 ```mermaid
@@ -8,86 +8,86 @@ gantt
     title Dutch Development Timeline
     dateFormat  YYYY-MM-DD
     section Phase 1: UX & Input
-    Keybinds & UX Polish   :active, des1, 2026-03-23, 7d
-    Easy Mode Logic        :des2, after des1, 3d
-    section Phase 2: Visuals
-    3D Scene Rework        :des3, 2026-03-30, 10d
-    Chicken & Beer Models  :des4, after des3, 5d
+    Keybinds & Navigation    :active, des1, 2026-03-23, 7d
+    Easy Mode & UI Polish     :des2, after des1, 5d
+    section Phase 2: Immersive Bar
+    Environment & Atmosphere :des3, 2026-04-01, 12d
+    Chicken & Beer Models    :des4, after des3, 5d
+    Ability Card Textures    :des5, after des4, 4d
     section Phase 3: Networking
-    Multiplayer Foundation :des5, 2026-04-10, 14d
-    Lobby & Persistence    :des6, after des5, 7d
+    Lobby & User Management  :des6, 2026-04-15, 14d
+    Persistence & Stats      :des7, after des6, 7d
     section Phase 4: Social
-    Voice Chat & Emotes    :des7, 2026-05-01, 10d
-    Mobile/Browser Support :des8, after des7, 14d
+    Voice Chat & Emotes      :des8, 2026-05-10, 10d
+    Mobile/Browser Support   :des9, after des8, 14d
 ```
 
 ---
 
-## 📅 PHASE 1: UX, Input & Optimization (Immediate)
-*Goal: Make the game playable and comfortable for all users.*
+## 📅 PHASE 1: UX, Input & Optimization
+*Goal: Solidify the gameplay feel and reach technical parity.*
 
 ### 🛠️ Tasks
-1.  **Keybinds**: Standardize keyboard controls for efficiency.
+1.  **Standardized Keybinds**:
     - [ ] `Space` (Jump-In), `Enter` (End Turn), `D` (Call Dutch), `C` (Confirm Dutch), `F` (Forfeit Dutch).
+    - [ ] Numeric keys or arrow-based card selection.
 2.  **Easy Mode**:
-    - [ ] Toggle to keep player cards face-up at all times (Accessibility).
-3.  **Optimization**:
-    - [ ] Rework view angle for better board coverage.
-    - [ ] Reduce UI saturation/bloat (cleaner headers and buttons).
-4.  **Persistence (Settings)**:
-    - [ ] Save Volume, Resolution, and Keybinds to `user://` config file.
+    - [ ] Accessibility toggle to keep player cards face-up at all times.
+3.  **UI/Scene Optimization**:
+    - [ ] Rework 3D view angle for optimal board visibility.
+    - [ ] Reduce UI saturation and "bloat" for a premium, clean aesthetic.
+4.  **Sound Design**:
+    - [ ] High-fidelity foley for card moves and environment sounds.
 
 ---
 
-## 🎨 PHASE 2: Visual & Audio Overhaul
-*Goal: Replace prototypes with high-quality thematic assets.*
+## 🎨 PHASE 2: The "Run-Down Bar" Rework
+*Goal: Create an immersive, thematic environment.*
 
 ### 🛠️ Tasks
-1.  **Scene Rework**: Replace table/background with a "Run-down Bar" environment.
-    - [ ] 3D Model: The Chicken (animated legs for interaction).
-    - [ ] 3D Models: Realistic Beer mugs (3 per player).
-2.  **Animations & Sound**:
-    - [ ] Better animations for pulling cards and using abilities.
-    - [ ] Procedural sound effects for card flipping/drawing.
+1.  **Atmosphere & Scene**:
+    - [ ] Complete rework of the surroundings into a "Run-down Bar".
+    - [ ] Thematic table and chairs.
+2.  **Interactive 3D Models**:
+    - [ ] **The Chicken**: Animated model that interacts with money/eggs.
+    - [ ] **Beers**: 3D rendered mugs (3 per player) that disappear upon consumption.
+3.  **Visual Polish**:
+    - [ ] Custom textures for all Ability Cards.
+    - [ ] Enhanced animations for drawing, swapping, and ability execution.
 
 ---
 
-## 🌐 PHASE 3: Multiplayer & Connectivity
-*Goal: Transition from Local/Bot play to Online matches.*
+## 🌐 PHASE 3: Networking & Progression
+*Goal: Connectivity and persistent data.*
 
 ### 🛠️ Tasks
-1.  **Networking**:
-    - [ ] Host/Join logic via Godot Multiplayer API.
-    - [ ] Lobby list (Join a room from a list of active rooms).
-    - [ ] Picking a persistent Username.
-2.  **Progress Tracking**:
-    - [ ] Save "Matches Won" to player stats for "Enemy Flexing".
+1.  **Multiplayer Networking**:
+    - [ ] Lobby System: Host a room and view a list of Joinable rooms.
+    - [ ] Player Identity: Picking and displaying a Username.
+2.  **Progression & Saving**:
+    - [ ] **Persistent Settings**: Save Volume, Resolution, and Keybinds.
+    - [ ] **Player Stats**: Save "Matches Won" to player profiles to show off skill.
 
 ---
 
-## 🚀 PHASE 4: Social & Platforms
-*Goal: Community features and final release.*
+## 🚀 PHASE 4: Social & Accessibility
+*Goal: Finalize the social layer and target platforms.*
 
 ### 🛠️ Tasks
-1.  **Player Expression**:
-    - [ ] Character Models (seated at the table).
-    - [ ] Player Emotes (Winning/Losing animations).
-    - [ ] Spatial Voice Chat.
-2.  **Platform Support**:
-    - [ ] Adaptive UI for Browser (WebAssembly) and Mobile (Android/iOS).
+1.  **Social Layer**:
+    - [ ] **Player Models**: 3D avatars seated at the table.
+    - [ ] **Voice Chat**: Spatial interaction in the bar.
+    - [ ] **Emotes**: Triggerable animations for when a player wins.
+2.  **Platform Reach**:
+    - [ ] Complete Browser (WebAssembly) and Mobile (Android/iOS) UI adaptive support.
 
 ---
 
 ## 🧑‍💼 Project Manager's Desk (Assignment Log)
-*Programmers and AI agents should check this section for their active assignments.*
 
 | Task ID | Component | Description | Assignee | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| PM-001 | Docs | Rules & Roadmap Correction | Antigravity | [COMPLETED] |
-| SYS-002 | Logic | Keybinds Foundation | [UNASSIGNED] | [BACKLOG] |
-| VIS-001 | Assets | 3D Model: The Chicken | [UNASSIGNED] | [BACKLOG] |
-
----
-
-> [!TIP]
-> **To create your own visual chart**: I have included a **Mermaid.js** chart at the top. You can edit this directly in GitHub/VS Code to update the dates and status. For a more "infographic" look, I recommend using **Canva** or **Miro** with a "Product Roadmap" template.
+| PM-001 | Docs | Logic & Roadmap Correction | Antigravity | [COMPLETED] |
+| VIS-001 | Env | Immersive Bar Rework | [UNASSIGNED] | [BACKLOG] |
+| NET-001 | Sync | Multiplayer Lobby System | [UNASSIGNED] | [BACKLOG] |
+| SYS-002 | Save | Persistence: Settings/Stats | [UNASSIGNED] | [BACKLOG] |
