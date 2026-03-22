@@ -321,12 +321,10 @@ func next_turn():
 				continue
 			break
 			
-	# Correct Dutch Flow: if the turn returns to the caller, they must confirm/forfeit 
-	# BEFORE anything else happens (including drawing cards).
-	if current_player_index == dutch_caller_index:
-		change_state(GameState.TURN_CONFIRM_DUTCH)
-	else:
-		change_state(GameState.TURN_START_DRAW)
+	# Final turn for caller: 
+	# Even if current_player_index == dutch_caller_index, we allow them one 
+	# final normal turn (draw/jump-in/abilities) before confirming.
+	change_state(GameState.TURN_START_DRAW)
 
 func _handle_deal_cards():
 	# The board will handle the visual instantiation in its signal handler
@@ -514,7 +512,12 @@ func end_turn():
 	if not can_player_end_turn(current_player_index):
 		print("FSM Blocked: Cannot end turn outside of TURN_END_CHOICE state")
 		return
-	next_turn()
+		
+	# If the caller just finished their final turn, prompt for confirmation
+	if current_player_index == dutch_caller_index:
+		change_state(GameState.TURN_CONFIRM_DUTCH)
+	else:
+		next_turn()
 
 ## player_idx: who is jumping in. -1 defaults to current_player_index (bot use).
 func start_jump_in(player_idx: int = -1) -> void:
