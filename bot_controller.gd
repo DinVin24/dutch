@@ -80,12 +80,7 @@ func _on_game_state_changed(new_state: int) -> void:
 		_execute_initial_peek()
 		return
 
-	var idx: int
-	if new_state == GameManager.GameState.TURN_PEEK_ABILITY or new_state == GameManager.GameState.TURN_SWAP_ABILITY:
-		idx = gm.active_ability_player
-	else:
-		idx = gm.current_player_index
-		
+	var idx: int = gm.current_player_index
 	if idx == 0: return  # Human handles their own turns
 
 	match new_state:
@@ -103,13 +98,7 @@ func _on_game_state_changed(new_state: int) -> void:
 ## Rule 2: Mandatory draw at the start of a bot's turn.
 func _on_turn_started(bot_idx: int) -> void:
 	if bot_idx == 0: return
-	# Proactive buy logic: if I have money, buy an egg!
-	if gm.players_info[bot_idx].money >= 50:
-		await _wait(0.5)
-		gm.buy_ability(bot_idx)
-		await _wait(1.0) # Wait for animation
-		
-	await _wait(1.0)
+	await _wait(1.5)
 	if not gm.can_player_draw(bot_idx): return
 	gm.player_draw_card()
 
@@ -297,33 +286,11 @@ func _execute_jack_swap(bot_idx: int) -> void:
 	if gm.current_state != GameManager.GameState.TURN_SWAP_ABILITY:
 		_update_memory_on_swap(bot_idx, s1.p, s1.c, s2.p, s2.c)
 
-## END CHOICE: call Dutch if all cards are known and score < 7.
-## Also proactively use abilities if I have them.
+## END CHOICE: call Dutch if all cards are known and score < 7; otherwise end turn.
 func _execute_end_choice(bot_idx: int) -> void:
 	await _wait(0.9)
 	if not gm.can_player_end_turn(bot_idx): return
 
-	# 1. Use Abilities first
-	var pool: Array = gm.players_info[bot_idx].abilities
-	if not pool.is_empty():
-		var ab = pool[0] # Just use the first one for now
-		
-		var should_use = true
-		if ab == "polarity_shift":
-			should_use = _should_flip_polarity(bot_idx)
-			
-		if should_use:
-			var target = _get_best_target_for(bot_idx, ab)
-			print("Bot ", bot_idx, " using ability: ", ab, " on target ", target)
-			if gm.play_ability(bot_idx, ab, target):
-				await gm.ability_finished # Wait for it to complete
-			
-			await _wait(0.5)
-			if gm.current_state != GameManager.GameState.TURN_END_CHOICE: return
-		else:
-			print("Bot ", bot_idx, " holding polarity_shift for later.")
-		
-	# 2. Dutch Logic
 	var hand_size: int = gm.players_info[bot_idx].hand.size()
 	var all_known := true
 	for i in range(hand_size):
@@ -340,72 +307,6 @@ func _execute_end_choice(bot_idx: int) -> void:
 			return
 
 	gm.end_turn()
-
-func _get_best_target_for(bot_idx: int, ab: String) -> int:
-	match ab:
-		"refuel", "trim_off", "perfect_match", "half_off":
-			return bot_idx # Self-benefit
-		"bottoms_up", "boulder", "jumpscare", "inflation", "shuffle":
-			return _get_leading_opponent_idx(bot_idx)
-		"skip":
-			# Target next player
-			return (bot_idx + gm.turn_direction + gm.num_players) % gm.num_players
-		"polarity_shift":
-			return bot_idx # Target self or doesn't matter (global)
-	return -1
-
-func _should_flip_polarity(bot_idx: int) -> bool:
-	# Calculate average score of all alive players (using our memory)
-	var total_estimated_score = 0
-	var count = 0
-	var bot_score = 0
-	
-	for i in range(gm.num_players):
-		if gm.players_info[i].is_eliminated: continue
-		
-		var est = 0
-		var memories = gm.players_info[bot_idx].bot_memory.get(i, {})
-		for c_idx in range(gm.players_info[i].hand.size()):
-			if memories.has(c_idx):
-				est += memories[c_idx].point_value
-			else:
-				est += 7
-		
-		total_estimated_score += est
-		count += 1
-		if i == bot_idx: bot_score = est
-		
-	if count <= 1: return false
-	var avg = total_estimated_score / float(count)
-	
-	# If Lowest Wins is active, flip if I'm ABOVE average (bad)
-	if gm.win_condition_lowest_wins:
-		return bot_score > avg
-	else:
-		# If Highest Wins is active, flip if I'm BELOW average (bad)
-		return bot_score < avg
-
-func _get_leading_opponent_idx(bot_idx: int) -> int:
-	var best_p = -1
-	var min_score = 1000
-	
-	for i in range(gm.num_players):
-		if i == bot_idx or gm.players_info[i].is_eliminated: continue
-		
-		# We estimate their score based on what we've memorized
-		var estimated_score = 0
-		var memories = gm.players_info[bot_idx].bot_memory.get(i, {})
-		for c_idx in range(gm.players_info[i].hand.size()):
-			if memories.has(c_idx):
-				estimated_score += memories[c_idx].point_value
-			else:
-				estimated_score += 7 # Assume average value for unknown cards
-		
-		if estimated_score < min_score:
-			min_score = estimated_score
-			best_p = i
-			
-	return best_p if best_p != -1 else 0
 
 ## CONFIRM DUTCH: bot always confirms.
 func _execute_confirm_dutch(bot_idx: int) -> void:
