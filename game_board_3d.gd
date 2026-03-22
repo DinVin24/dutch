@@ -620,9 +620,14 @@ func _on_card_discarded(player_idx, card_data):
 		pending_card = null
 	elif player_idx != -1:
 		var hand_nodes = player_hands[player_idx]
+		print("[BOARD DEBUG] _on_card_discarded: searching P", player_idx, " hand (", hand_nodes.size(), " nodes) for ", card_data.rank, " of ", card_data.suit)
 		for i in range(hand_nodes.size()):
 			var hand_card = hand_nodes[i]
-			if hand_card.data == card_data or (hand_card.data.rank == card_data.rank and hand_card.data.suit == card_data.suit):
+			var match_by_ref = hand_card.data == card_data
+			var match_by_val = (hand_card.data.rank == card_data.rank and hand_card.data.suit == card_data.suit)
+			
+			if match_by_ref or match_by_val:
+				print("[BOARD DEBUG] Match found! Ref: ", match_by_ref, " Val: ", match_by_val, " at node index ", i)
 				card_to_discard = hand_card
 
 				if pending_card:

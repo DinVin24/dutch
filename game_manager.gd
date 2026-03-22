@@ -583,11 +583,14 @@ func validate_jump_in(card_idx: int) -> bool:
 			return true
 			
 		# Successfully jumped in
+		print("[GM DEBUG] JUMP-IN MATCH! Removing card at idx ", card_idx, " from P", jump_in_player_idx, " hand.")
 		deck_manager.discard_pile.append(selected_card)
-		card_discarded.emit(jump_in_player_idx, selected_card)
-		gain_money_for_discard(jump_in_player_idx, selected_card)
 		
-		var played_by = jump_in_player_idx
+		var p_idx_for_signal = jump_in_player_idx
+		card_discarded.emit(p_idx_for_signal, selected_card)
+		gain_money_for_discard(p_idx_for_signal, selected_card)
+		
+		var played_by = p_idx_for_signal
 		jump_in_player_idx = -1
 		
 		_resolve_discard_effects(selected_card, played_by)
