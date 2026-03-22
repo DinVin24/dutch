@@ -103,7 +103,6 @@ func _on_game_state_changed(new_state: int) -> void:
 ## Rule 2: Mandatory draw at the start of a bot's turn.
 func _on_turn_started(bot_idx: int) -> void:
 	if bot_idx == 0: return
-	
 	# Proactive buy logic: if I have money, buy an egg!
 	if gm.players_info[bot_idx].money >= 50:
 		await _wait(0.5)
@@ -111,8 +110,7 @@ func _on_turn_started(bot_idx: int) -> void:
 		await _wait(1.0) # Wait for animation
 		
 	await _wait(1.0)
-	if gm.current_state != GameManager.GameState.TURN_START_DRAW: return
-	if gm.current_player_index != bot_idx: return
+	if not gm.can_player_draw(bot_idx): return
 	gm.player_draw_card()
 
 ## Rule 1: Constant jump-in monitoring — fires every time any card is discarded.
@@ -139,10 +137,13 @@ func _on_memory_shift_required(target_player_idx: int, removed_card_idx: int) ->
 ## Check all bots — if any KNOWS a card in its hand matching the discarded rank, jump in.
 func _try_jump_ins(card_data: CardData) -> void:
 	await _wait(0.5)
-	if gm.current_state != GameManager.GameState.TURN_END_CHOICE: return
+	# Bots only auto-jump after the mandatory draw window has closed.
+	if gm.current_state != GameManager.GameState.TURN_END_CHOICE:
+		return
 
 	for bot_idx in range(1, gm.num_players):
-		if gm.current_state != GameManager.GameState.TURN_END_CHOICE: break
+		if not gm.can_player_start_jump_in(bot_idx):
+			continue
 		
 		var match_idx := -1
 		for c_idx in _mem(bot_idx):
@@ -153,8 +154,10 @@ func _try_jump_ins(card_data: CardData) -> void:
 
 		if match_idx != -1:
 			await _wait(0.3)
-			if gm.current_state != GameManager.GameState.TURN_END_CHOICE: break
-			if match_idx >= gm.players_info[bot_idx].hand.size(): break
+			if not gm.can_player_start_jump_in(bot_idx):
+				continue
+			if match_idx >= gm.players_info[bot_idx].hand.size():
+				continue
 			var jumped_card: CardData = _mem(bot_idx)[match_idx]
 			var top_card: CardData = gm.deck_manager.discard_pile[-1] if gm.deck_manager.discard_pile.size() > 0 else null
 			var over_str: String = top_card.display_name() if top_card != null else "?"
@@ -194,8 +197,7 @@ func _execute_initial_peek() -> void:
 ## RESOLVE DRAWN: compare drawn card against worst effective card and decide.
 func _execute_resolve_drawn(bot_idx: int) -> void:
 	await _wait(1.5)
-	if gm.current_state != GameManager.GameState.TURN_RESOLVE_DRAWN: return
-	if gm.current_player_index != bot_idx: return
+	if not gm.can_player_discard_drawn_card(bot_idx): return
 
 	var drawn: CardData = gm.drawn_card_data
 	if drawn == null: return
@@ -229,8 +231,7 @@ func _execute_resolve_drawn(bot_idx: int) -> void:
 ## QUEEN ABILITY: learn an unknown own card first; otherwise learn any card on the board.
 func _execute_queen_peek(bot_idx: int) -> void:
 	await _wait(1.0)
-	if gm.current_state != GameManager.GameState.TURN_PEEK_ABILITY: return
-	if gm.current_player_index != bot_idx: return
+	if not gm.can_player_complete_peek_ability(bot_idx): return
 
 	# Priority: own unknown card
 	var own_unknowns := []
@@ -267,8 +268,7 @@ func _execute_queen_peek(bot_idx: int) -> void:
 ## JACK ABILITY: swap 2 random cards from any two different opponent slots.
 func _execute_jack_swap(bot_idx: int) -> void:
 	await _wait(1.5)
-	if gm.current_state != GameManager.GameState.TURN_SWAP_ABILITY: return
-	if gm.current_player_index != bot_idx: return
+	if not gm.can_player_complete_swap_ability(bot_idx): return
 
 	gm.bot_action.emit("Player %d used a Jack." % bot_idx)
 
@@ -280,7 +280,8 @@ func _execute_jack_swap(bot_idx: int) -> void:
 			slots.append({"p": p, "c": c})
 
 	if slots.size() < 2:
-		gm.complete_swap_ability(0, 0, 0, 0)  # Failsafe edge case
+		gm.bot_action.emit("Player %d used a Jack, but no valid swap was available." % bot_idx)
+		gm.complete_swap_ability(-1, -1, -1, -1)
 		return
 
 	slots.shuffle()
@@ -292,15 +293,15 @@ func _execute_jack_swap(bot_idx: int) -> void:
 			break
 	if s2 == null: s2 = slots[1]  # fallback: same player, different card
 
-	_update_memory_on_swap(bot_idx, s1.p, s1.c, s2.p, s2.c)
 	gm.complete_swap_ability(s1.p, s1.c, s2.p, s2.c)
+	if gm.current_state != GameManager.GameState.TURN_SWAP_ABILITY:
+		_update_memory_on_swap(bot_idx, s1.p, s1.c, s2.p, s2.c)
 
 ## END CHOICE: call Dutch if all cards are known and score < 7.
 ## Also proactively use abilities if I have them.
 func _execute_end_choice(bot_idx: int) -> void:
 	await _wait(0.9)
-	if gm.current_state != GameManager.GameState.TURN_END_CHOICE: return
-	if gm.current_player_index != bot_idx: return
+	if not gm.can_player_end_turn(bot_idx): return
 
 	# 1. Use Abilities first
 	var pool: Array = gm.players_info[bot_idx].abilities
@@ -332,7 +333,7 @@ func _execute_end_choice(bot_idx: int) -> void:
 	if all_known and hand_size > 0:
 		var score := 0
 		for c in _mem(bot_idx).values(): score += c.point_value
-		if score < 7 and gm.dutch_caller_index == -1 and gm.players_info[bot_idx].can_call_dutch:
+		if score < 7 and gm.can_player_call_dutch(bot_idx):
 			gm.bot_action.emit("Player %d calls DUTCH! (score: %d)" % [bot_idx, score])
 			gm.call_dutch(bot_idx)
 			return
@@ -408,8 +409,7 @@ func _get_leading_opponent_idx(bot_idx: int) -> int:
 ## CONFIRM DUTCH: bot always confirms.
 func _execute_confirm_dutch(bot_idx: int) -> void:
 	await _wait(1.5)
-	if gm.current_state != GameManager.GameState.TURN_CONFIRM_DUTCH: return
-	if gm.current_player_index != bot_idx: return
+	if not gm.can_player_confirm_dutch(bot_idx): return
 	gm.confirm_dutch()
 
 # ─── Memory Utility ───────────────────────────────────────────
