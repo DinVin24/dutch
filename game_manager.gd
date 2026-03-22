@@ -440,6 +440,8 @@ func call_dutch(player_id: int):
 	if not can_player_call_dutch(player_id):
 		print("FSM Blocked: Cannot call Dutch outside of TURN_END_CHOICE state")
 		return
+	
+	_clear_interrupt_state()
 	dutch_caller_index = player_id
 	print("Player ", player_id, " called DUTCH!")
 	dutch_called.emit(player_id)
@@ -454,12 +456,18 @@ func _prompt_turn_end():
 	# If player 0 jumped in at the very start of their own draw turn, give them
 	# their draw back instead of ending the turn.
 	if jump_in_was_own_draw_phase:
-		jump_in_was_own_draw_phase = false
+		_clear_interrupt_state() # Consumed
 		change_state(GameState.TURN_START_DRAW)
 		return
 		
 	var post_interrupt := _resolve_post_interrupt_state()
 	change_state(post_interrupt)
+
+func _clear_interrupt_state():
+	"""Resets all flags related to jump-in interrupts to ensure state purity."""
+	jump_in_resume_state = GameState.INITIALIZING
+	jump_in_was_own_draw_phase = false
+	jump_in_player_idx = -1
 
 ## Abilities API
 var state_before_ability: GameState = GameState.INITIALIZING
@@ -484,6 +492,10 @@ func play_ability(player_idx: int, ability_id: String, target_idx: int = -1) -> 
 	if current_state not in valid_states:
 		print("[GM DEBUG] REJECTED: Game state ", GameState.keys()[current_state], " prevents playing abilities.")
 		return false
+
+	# If this is a primary turn action (not already in an ability state), clear interrupt markers
+	if current_state != GameState.STATE_PLAYING_ABILITY:
+		_clear_interrupt_state()
 
 	# For targetable abilities, ensure target_idx is provided and valid
 	var targeting_abilities = ["bottoms_up", "boulder", "skip", "inflation", "half_off", "shuffle", "jumpscare"]
@@ -656,6 +668,8 @@ func player_draw_card():
 		print("FSM Blocked: Cannot draw card outside of TURN_START_DRAW state")
 		return
 	
+	_clear_interrupt_state()
+	
 	var card_info = deck_manager.draw_card()
 	if card_info == null:
 		print("Deck is empty!")
@@ -672,6 +686,8 @@ func player_discard_drawn_card():
 	if not can_player_discard_drawn_card(current_player_index):
 		print("FSM Blocked: Cannot discard pending card outside of TURN_RESOLVE_DRAWN state")
 		return
+	
+	_clear_interrupt_state()
 	
 	print("GameManager: Discarding drawn card.")
 	deck_manager.discard_pile.append(drawn_card_data)
@@ -695,6 +711,8 @@ func player_swap_drawn_card(card_idx: int):
 	if not can_player_swap_drawn_card(current_player_index, current_player_index, card_idx):
 		print("FSM Blocked: Cannot swap outside of TURN_RESOLVE_DRAWN state")
 		return
+	
+	_clear_interrupt_state()
 	
 	var player_h: Array = players_info[current_player_index].hand
 	var old_card = player_h[card_idx]
