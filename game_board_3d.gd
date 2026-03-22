@@ -731,11 +731,8 @@ func _show_message(text: String):
 
 	var label = Label.new()
 	label.text = text
-<<<<<<< HEAD
 	label.add_theme_font_size_override("font_size", 32)
-=======
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
->>>>>>> main
 	label.add_theme_color_override("font_color", Color(1, 1, 1))
 	label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	label.add_theme_constant_override("outline_size", 6)
@@ -774,41 +771,8 @@ func _on_game_state_changed(new_state):
 	call_dutch_btn.hide()
 	confirm_dutch_btn.hide()
 	forfeit_dutch_btn.hide()
-<<<<<<< HEAD
-	
-	# Always show Jump-In if valid (matched 2D behavior)
-	if GameManager.current_state != GameManager.GameState.INITIAL_PEEK and \
-	   GameManager.current_state != GameManager.GameState.DEAL_CARDS and \
-	   GameManager.current_state != GameManager.GameState.GAME_OVER:
-		if not GameManager.deck_manager.discard_pile.is_empty():
-			if not GameManager.players_info[0].is_eliminated:
-				jump_in_btn.show()
-	
-	# Update deck/discard highlighting based on state
-	# (In 3D we can raise them or change material emission)
-	
-	var block_cards := false
-	match new_state:
-		GameManager.GameState.TURN_START_DRAW, \
-		GameManager.GameState.TURN_RESOLVE_DRAWN, \
-		GameManager.GameState.TURN_END_CHOICE, \
-		GameManager.GameState.TURN_CONFIRM_DUTCH:
-			block_cards = (GameManager.current_player_index != 0)
-		GameManager.GameState.TURN_PEEK_ABILITY, \
-		GameManager.GameState.TURN_SWAP_ABILITY, \
-		GameManager.GameState.TURN_JUMP_IN_SELECTION, \
-		GameManager.GameState.INITIAL_PEEK:
-			block_cards = false
-		_:
-			block_cards = true
-	_set_all_cards_interactive(not block_cards)
-	
-=======
-
 	_refresh_human_interactivity()
 	jump_in_btn.visible = GameManager.should_human_show_jump_in_button(0)
-
->>>>>>> main
 	if new_state == GameManager.GameState.TURN_START_DRAW or \
 	   new_state == GameManager.GameState.TURN_END_CHOICE:
 		_clear_all_highlights()
@@ -861,15 +825,8 @@ func _on_game_state_changed(new_state):
 			_update_turn_lights(-1, true)
 			swap_sources.clear()
 
-<<<<<<< HEAD
-	if new_state != GameManager.GameState.GAME_OVER:
-		if GameManager.deck_manager.discard_pile.size() > 0:
-			if not GameManager.players_info[0].is_eliminated:
-				jump_in_btn.show()
-=======
 	$DeckArea/Area3D.input_ray_pickable = GameManager.can_player_draw(0)
 	$DiscardArea/Area3D.input_ray_pickable = GameManager.can_player_discard_drawn_card(0)
->>>>>>> main
 
 func _set_all_cards_interactive(enabled: bool):
 	for i in range(4):
@@ -979,8 +936,6 @@ func _update_hand_visuals(player_idx: int):
 		var card = nodes.pop_back()
 		if is_instance_valid(card):
 			card.queue_free()
-<<<<<<< HEAD
-	
 	# REFINED HAND LAYOUT: Aggressive bundling and conditional spreading
 	var total_cards = nodes.size()
 	const BASE_SPACING = 1.05 # Near-touching spacing
@@ -1036,52 +991,15 @@ func _update_hand_visuals(player_idx: int):
 			var target_rot_y = 180.0 if (player_idx == 0 or player_idx == 2) else 0.0
 			var target_basis = Basis.from_euler(Vector3(deg_to_rad(90), deg_to_rad(target_rot_y), 0))
 			tween.tween_property(card_node, "quaternion", target_basis.get_rotation_quaternion(), 0.25)
-=======
-
-	# Position cards strictly by their index in the nodes array
-	for i in range(nodes.size()):
-		var card_node = nodes[i]
-		if is_instance_valid(card_node):
-			if not card_node.card_clicked.is_connected(_on_card_clicked):
-				card_node.card_clicked.connect(_on_card_clicked)
-
-			card_node.setup(hand_data[i])
-			card_node.name = "Card_%d_%d" % [player_idx, i]
-
-			var target_pos = Vector3((i - (nodes.size()-1)/2.0) * card_spacing, 0.05, 0)
-
-			# If it's already at or near the target, don't restart tween to avoid flickering
-			if card_node.position.distance_to(target_pos) < 0.01: continue
-
-			# Combined movement and lift animation
-			var tween = create_tween().set_parallel(true)
-			tween.tween_property(card_node, "position:x", target_pos.x, 0.3).set_trans(Tween.TRANS_QUAD)
-			tween.tween_property(card_node, "position:z", target_pos.z, 0.3).set_trans(Tween.TRANS_QUAD)
-			tween.tween_property(card_node, "rotation_degrees:x", (270 if hand_data[i].is_face_up else 90), 0.3)
-
-			# Premium "lift" during movement
-			var lift_tween = create_tween()
-			lift_tween.tween_property(card_node, "scale", Vector3(1.1, 1.1, 1.1), 0.15)
-			lift_tween.tween_property(card_node, "scale", Vector3(1.0, 1.0, 1.0), 0.15)
->>>>>>> main
 
 func _handle_initial_deal():
 	print("GameBoard3D: _handle_initial_deal started")
 	_show_message("Dealing cards...")
 	for i in range(4): # 4 cards each
 		for p_idx in range(GameManager.num_players):
-<<<<<<< HEAD
 			var card_data = GameManager.deck_manager.draw_card()
 			if card_data == null:
 				break
-			
-=======
-			var card_data_dict = GameManager.deck_manager.draw_card()
-			if card_data_dict.is_empty():
-				break
-
-			var card_data = CardData.new(card_data_dict.rank, card_data_dict.suit)
->>>>>>> main
 			card_data.is_face_up = false
 			GameManager.players_info[p_idx].hand.append(card_data)
 
@@ -1119,9 +1037,6 @@ func _on_card_clicked(node, data):
 	var p_idx: int = -1
 	for i in range(4):
 		if player_hands[i].has(node):
-<<<<<<< HEAD
-			p_idx = i; break
-	
 	if _is_waiting_for_target:
 		if p_idx != -1:
 			_on_player_area_input(null, null, Vector3.ZERO, Vector3.ZERO, 0, p_idx)
@@ -1155,22 +1070,24 @@ func _on_card_clicked(node, data):
 			var c_idx = -2 if is_drawn else player_hands[0].find(node)
 			
 			if c_idx != -1 or is_drawn:
-=======
-			p_idx = i
-			break
-	var c_idx: int = -2 if is_pending else (player_hands[p_idx].find(node) if p_idx != -1 else -1)
+				_clear_all_highlights()
+				if await GameManager.validate_jump_in(c_idx):
+					print("[JUMP-IN] SUCCESS")
+				else:
+					print("[JUMP-IN] FAILED")
 
-	match GameManager.current_state:
-		GameManager.GameState.INITIAL_PEEK:
+		GameManager.GameState.TURN_PEEK_ABILITY:
 			if is_pending or not GameManager.can_human_interact_with_hand_card(p_idx, c_idx, data.is_face_up):
 				return
-			if peeked_cards.size() >= 2 or node in peeked_cards:
-				return
+			_set_all_cards_interactive(false)
+			node.is_being_peeked = true
 			node.animate_flip(true)
-			peeked_cards.append(node)
-			if peeked_cards.size() >= 2:
-				await get_tree().create_timer(1.5, false).timeout
->>>>>>> main
+			await get_tree().create_timer(3.5, false).timeout
+			_clear_all_highlights()
+			node.is_being_peeked = false
+			node.animate_flip(false)
+			_refresh_human_interactivity()
+			GameManager.complete_peek_ability()
 				_clear_all_highlights()
 				for c in peeked_cards:
 					c.animate_flip(false)
@@ -1202,22 +1119,13 @@ func _on_card_clicked(node, data):
 			_set_all_cards_interactive(false)
 			node.is_being_peeked = true
 			node.animate_flip(true)
-<<<<<<< HEAD
 			await get_tree().create_timer(3.5, false).timeout
 			_clear_all_highlights()
 			node.is_being_peeked = false
-=======
-			await get_tree().create_timer(3.0, false).timeout
-			_clear_all_highlights()
->>>>>>> main
 			node.animate_flip(false)
 			_refresh_human_interactivity()
 			GameManager.complete_peek_ability()
-<<<<<<< HEAD
-			
-=======
 			_clear_all_highlights()
->>>>>>> main
 		GameManager.GameState.TURN_SWAP_ABILITY:
 			if is_pending or not GameManager.can_human_interact_with_hand_card(p_idx, c_idx, data.is_face_up):
 				return
@@ -1272,8 +1180,6 @@ func _on_scores_ready(results):
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 64)
 	vbox.add_child(title)
-<<<<<<< HEAD
-	
 	var win_mode = Label.new()
 	var mode_text = "Lowest Score Wins" if GameManager.win_condition_lowest_wins else "Highest Score Wins"
 	win_mode.text = "(" + mode_text + ")"
@@ -1281,10 +1187,6 @@ func _on_scores_ready(results):
 	win_mode.add_theme_font_size_override("font_size", 32)
 	win_mode.modulate = Color(1.0, 0.8, 0.0) # Golden yellow
 	vbox.add_child(win_mode)
-	
-=======
-
->>>>>>> main
 	for i in range(results.size()):
 		var entry = results[i]
 		var l = Label.new()
@@ -1384,8 +1286,6 @@ func _on_jump_in_failed(player_idx, card_idx, _card_data):
 
 	if card_node is Card3D:
 		print("GameBoard3D: Atomic reveal for card index ", card_idx)
-<<<<<<< HEAD
-		
 		# Flip UP with barrel roll
 		card_node.animate_flip(true)
 		
@@ -1397,26 +1297,6 @@ func _on_jump_in_failed(player_idx, card_idx, _card_data):
 		
 		trigger_glitch(0.3, 0.4)
 		shake(0.2, 0.3)
-=======
-		# Use a dedicated tween sequence on the mesh directly to bypass guards
-		var reveal_tween = create_tween()
-
-		# Flip UP
-		reveal_tween.tween_property(card_node, "rotation_degrees:x", 270.0, 0.3).set_trans(Tween.TRANS_QUAD)
-		reveal_tween.parallel().tween_property(card_node, "position:y", 0.8, 0.2).set_trans(Tween.TRANS_QUAD) # Extra lift
-
-		reveal_tween.tween_interval(1.5)
-
-		# Flip DOWN
-		reveal_tween.tween_property(card_node, "rotation_degrees:x", 90.0, 0.3).set_trans(Tween.TRANS_QUAD)
-		reveal_tween.parallel().tween_property(card_node, "position:y", 0.05, 0.2).set_trans(Tween.TRANS_QUAD)
-
-		reveal_tween.tween_callback(func():
-			trigger_glitch(0.3, 0.4)
-			shake(0.2, 0.3)
-			card_node.data.is_face_up = false
-		)
->>>>>>> main
 
 func _on_bot_action(message):
 	_show_message(message)
@@ -1485,13 +1365,7 @@ func _input(event: InputEvent) -> void:
 	if noclip_enabled and not DevConsole.window.visible and event is InputEventMouseMotion:
 		camera_rot_y -= event.relative.x * 0.005
 		camera_rot_x -= event.relative.y * 0.005
-<<<<<<< HEAD
 		camera_rot_x = clamp(camera_rot_x, -PI / 2, PI / 2)
-		
-=======
-		camera_rot_x = clamp(camera_rot_x, -PI/2, PI/2)
-
->>>>>>> main
 		camera.basis = Basis() # Reset
 		camera.rotate_y(camera_rot_y)
 		camera.rotate_object_local(Vector3.RIGHT, camera_rot_x)
