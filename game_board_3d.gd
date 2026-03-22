@@ -851,20 +851,34 @@ func _set_player_hand_interactive(player_idx: int, enabled: bool):
 		if is_instance_valid(card):
 			card.set_interactive(enabled)
 
-func _highlight_selectable_cards(include_opponents: bool = false):
+func _highlight_selectable_cards(is_target_phase: bool = false):
 	_clear_all_highlights()
+	
+	# Handle pending card highlighting
 	if is_instance_valid(pending_card) and (
 		GameManager.can_player_discard_drawn_card(0) or GameManager.can_player_select_jump_in_card(0, 0, -2)
 	):
 		pending_card.set_highlight(true)
 		pending_card.set_interactive(true)
+
 	for p_idx in range(player_hands.size()):
-		if not include_opponents and p_idx != 0 and GameManager.current_state != GameManager.GameState.TURN_SWAP_ABILITY:
+		# During regular play, we usually only care about human's hand (p_idx=0)
+		# EXCEPT for swap abilities (which allow cross-player selection)
+		var is_swap_state = GameManager.current_state == GameManager.GameState.TURN_SWAP_ABILITY
+		if not is_target_phase and not is_swap_state and p_idx != 0:
 			continue
+			
 		for c_idx in range(player_hands[p_idx].size()):
 			var card = player_hands[p_idx][c_idx]
 			if is_instance_valid(card):
-				var allowed := GameManager.can_human_interact_with_hand_card(p_idx, c_idx, card.data.is_face_up)
+				var allowed := false
+				if is_target_phase:
+					# Targeting phase: any non-eliminated player is a valid target
+					allowed = not GameManager.players_info[p_idx].is_eliminated
+				else:
+					# Regular interaction: check FSM rules (peek, swap, draw-resolve)
+					allowed = GameManager.can_human_interact_with_hand_card(p_idx, c_idx, card.data.is_face_up)
+				
 				card.set_highlight(allowed)
 				card.set_interactive(allowed)
 
