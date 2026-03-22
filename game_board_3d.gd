@@ -90,6 +90,7 @@ func _ready():
 	GameManager.player_gained_money.connect(_on_player_gained_money)
 	GameManager.ability_played.connect(_on_ability_played)
 	GameManager.polarity_shifted.connect(_on_polarity_shifted)
+	GameManager.pending_card_consumed.connect(_on_pending_card_consumed)
 	
 	_create_hud_ui()
 	_create_discard_indicator()
@@ -1057,13 +1058,17 @@ func _start_peek_phase():
 
 var peeked_cards: Array = []
 func _on_card_clicked(node, data):
-	print("[INPUT] Card clicked: ", node.name, " (", data.rank, " of ", data.suit, ") in state: ", GameManager.GameState.keys()[GameManager.current_state])
+	if not is_instance_valid(node): return
+	
 	var is_pending: bool = (node == pending_card or node.name == "PendingCard")
-	var p_idx: int = -1
+	var p_idx = -1
 	for i in range(4):
-		if player_hands[i].has(node):
+		if node in player_hands[i]:
 			p_idx = i
 			break
+	
+	# DEBUG TRACING
+	print("[CLICK DEBUG] Node: ", node.name, " | Data: ", data.rank, " of ", data.suit, " | IsPending: ", is_pending, " | PIdx: ", p_idx, " | State: ", GameManager.GameState.keys()[GameManager.current_state])
 	
 	if _is_waiting_for_target:
 		if p_idx != -1:
@@ -1436,3 +1441,9 @@ func _on_polarity_shifted(new_state: bool):
 	shake(0.5, 0.5)
 	trigger_glitch(0.3, 1.2)
 	print("UI: ", msg)
+
+func _on_pending_card_consumed():
+	if is_instance_valid(pending_card):
+		print("GameBoard3D: Clearing pending card node.")
+		pending_card.queue_free()
+	pending_card = null

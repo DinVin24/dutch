@@ -33,6 +33,7 @@ signal memory_shift_required(player_idx, removed_card_idx)
 signal jack_swap_resolved(p1: int, c1: int, p2: int, c2: int)
 signal hand_updated(player_idx: int)
 signal dutch_called(player_idx: int)
+signal pending_card_consumed # Notifies board to clear the floating drawn card node
 
 # New Economy Signals
 signal player_drank_beer(player_idx, remaining)
@@ -683,6 +684,7 @@ func player_discard_drawn_card():
 	
 	var discarded_handled = drawn_card_data
 	drawn_card_data = null
+	pending_card_consumed.emit()
 	
 	_resolve_discard_effects(discarded_handled)
 
@@ -704,6 +706,7 @@ func player_swap_drawn_card(card_idx: int):
 	hand_updated.emit(current_player_index)
 	
 	drawn_card_data = null
+	pending_card_consumed.emit()
 	
 	_resolve_discard_effects(old_card)
 
