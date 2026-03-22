@@ -15,7 +15,7 @@ func execute(player_idx: int, ability_id: String, target_idx: int = -1):
 				gm.drink_beer(target_idx)
 		"refuel":
 			if not gm.players_info[player_idx].is_eliminated:
-				gm.players_info[player_idx].beers = min(gm.players_info[player_idx].beers + 1, 5)
+				gm.players_info[player_idx].beers = min(gm.players_info[player_idx].beers + 1, 3)
 				gm.player_drank_beer.emit(player_idx, gm.players_info[player_idx].beers)
 		"trim_off":
 			_trim_off(player_idx)
@@ -40,9 +40,8 @@ func execute(player_idx: int, ability_id: String, target_idx: int = -1):
 		"jumpscare":
 			if target_idx != -1:
 				# Give card
-				var card_dict = gm.deck_manager.draw_card()
-				if not card_dict.is_empty():
-					var p_card = CardData.new(card_dict.rank, card_dict.suit)
+				var p_card = gm.deck_manager.draw_card()
+				if p_card != null:
 					gm.players_info[target_idx].hand.append(p_card)
 					gm.hand_updated.emit(target_idx)
 				# Jumpscare signal can be added later for UI
@@ -53,7 +52,13 @@ func execute(player_idx: int, ability_id: String, target_idx: int = -1):
 
 	# Return FSM to normal
 	await get_tree().create_timer(1.0).timeout
-	gm.resume_from_ability()
+	
+	# Only resume if we haven't already moved to a new state (e.g. elimination next_turn)
+	if gm.current_state == gm.GameState.STATE_PLAYING_ABILITY:
+		print("[AM DEBUG] Resuming from ability...")
+		gm.resume_from_ability()
+	else:
+		print("[AM DEBUG] Already changed state (", gm.GameState.keys()[gm.current_state], "), skipping resume.")
 
 func _trim_off(p_idx: int):
 	var hand = gm.players_info[p_idx].hand
@@ -87,10 +92,9 @@ func _boulder(t_idx: int):
 			highest_idx = i
 			
 	if highest_idx != -1:
-		var card_dict = deck.pop_at(highest_idx)
-		var p_card := CardData.new(card_dict.rank, card_dict.suit)
-		p_card.is_face_up = false
-		gm.players_info[t_idx].hand.append(p_card)
+		var card = deck.pop_at(highest_idx)
+		card.is_face_up = false
+		gm.players_info[t_idx].hand.append(card)
 		gm.hand_updated.emit(t_idx)
 
 func _modify_values(t_idx: int, modifier: float):
@@ -109,9 +113,9 @@ func _perfect_match(activator_idx: int):
 	all_cards.append_array(gm.deck_manager.discard_pile)
 	gm.deck_manager.discard_pile.clear()
 	
-	# Convert all CardData objects back to dictionaries for the deck manager
+	# Cards are already CardData objects in our new refactored system
 	for card in all_cards:
-		gm.deck_manager.deck.append({"rank": card.rank, "suit": card.suit})
+		gm.deck_manager.deck.append(card)
 		
 	# Reshuffle
 	gm.deck_manager.deck.shuffle()
@@ -127,10 +131,11 @@ func _perfect_match(activator_idx: int):
 				
 	# If any missing due to weird deck state (impossible in standard without bugs), fallback to draw
 	while extracted.size() < 4:
-		extracted.append(gm.deck_manager.draw_card())
+		var d = gm.deck_manager.draw_card()
+		if d: extracted.append(d)
 		
-	for card_dict in extracted:
-		gm.players_info[activator_idx].hand.append(CardData.new(card_dict.rank, card_dict.suit))
+	for card in extracted:
+		gm.players_info[activator_idx].hand.append(card)
 	gm.hand_updated.emit(activator_idx)
 		
 	# Give 4 random cards to everyone else as long as they aren't eliminated
@@ -138,14 +143,13 @@ func _perfect_match(activator_idx: int):
 		if i == activator_idx or gm.players_info[i].is_eliminated: continue
 		for j in range(4):
 			var cd = gm.deck_manager.draw_card()
-			if not cd.is_empty():
-				gm.players_info[i].hand.append(CardData.new(cd.rank, cd.suit))
+			if cd:
+				gm.players_info[i].hand.append(cd)
 		gm.hand_updated.emit(i)
 		
 	# Draw one card for the new discard pile to keep the game going
-	var start_card = gm.deck_manager.draw_card()
-	if not start_card.is_empty():
-		var discard_start = CardData.new(start_card.rank, start_card.suit)
+	var discard_start = gm.deck_manager.draw_card()
+	if discard_start:
 		discard_start.is_face_up = true
 		gm.deck_manager.discard_pile.append(discard_start)
 		gm.card_discarded.emit(-1, discard_start) # -1 means dealer

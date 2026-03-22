@@ -38,6 +38,7 @@ signal dutch_called(player_idx: int)
 signal player_drank_beer(player_idx, remaining)
 signal player_eliminated(player_idx)
 signal player_gained_money(player_idx, amount, total)
+signal ability_unlocked(player_idx, ability_id)
 
 var current_state: GameState = GameState.INITIALIZING
 var deck_manager: DeckManager
@@ -55,6 +56,7 @@ var drawn_card_data: CardData = null
 var jump_in_was_own_draw_phase: bool = false # true when player 0 jumps in at the start of their own turn
 var pre_jump_in_state: GameState = GameState.INITIALIZING
 var dev_console_enabled: bool = true
+var active_ability_player: int = -1
 
 func _ready():
 	deck_manager = DeckManager.new()
@@ -95,7 +97,7 @@ func initialize_game(p_count: int = 4):
 			"score": 0,
 			"hand": [], # CardData objects
 			"can_call_dutch": true,
-			"beers": 5,
+			"beers": 3,
 			"money": 0,
 			"abilities": [],
 			"is_eliminated": false,
@@ -165,13 +167,18 @@ func _calculate_scores() -> Array:
 	for i in range(num_players):
 		var info = players_info[i]
 		var hand: Array = info.hand
-		# Edge case: player with 0 cards wins outright.
-		if hand.size() == 0:
-			entries.append({"id": i, "name": info.name, "score": - 1, "card_count": 0})
-			continue
+		
 		var total := 0
-		for card in hand:
-			total += (card as CardData).recalc_point_value()
+		if info.is_eliminated:
+			# Eliminated players get a massive penalty score and cannot win
+			total = 99
+		elif hand.size() == 0:
+			# Edge case: player with 0 cards wins outright.
+			total = -1
+		else:
+			for card in hand:
+				total += (card as CardData).recalc_point_value()
+				
 		entries.append({"id": i, "name": info.name, "score": total, "card_count": hand.size()})
 	# Sort: lowest score first; tiebreak by fewer cards.
 	entries.sort_custom(func(a, b):
@@ -216,14 +223,14 @@ func gain_money_for_discard(p_idx: int, card: CardData):
 	var s = card.suit
 	
 	if r == "King":
-		if s == "Diamonds": amount = 100
-		else: amount = 0
-	elif r == "Ace": amount = 50
-	elif r == "Queen" or r == "Jack": amount = 40
-	elif r == "10" or r == "9": amount = 35
-	elif r == "8" or r == "7": amount = 25
-	elif r == "6" or r == "5": amount = 20
-	else: amount = 15
+		if s == "Diamonds": amount = 200
+		else: amount = 10
+	elif r == "Ace": amount = 100
+	elif r == "Queen" or r == "Jack": amount = 80
+	elif r == "10" or r == "9": amount = 70
+	elif r == "8" or r == "7": amount = 50
+	elif r == "6" or r == "5": amount = 40
+	else: amount = 30
 	
 	players_info[p_idx].money += amount
 	player_gained_money.emit(p_idx, amount, players_info[p_idx].money)
@@ -263,10 +270,10 @@ signal ability_played(player_idx, ability_id)
 signal ability_finished
 
 func play_ability(player_idx: int, ability_id: String, target_idx: int = -1) -> bool:
-	"""Called by the board when an ability token is dragged to the center."""
-	# Can only play abilities on your specific turn.
+	print("[GM DEBUG] play_ability from ", player_idx, " state: ", GameState.keys()[current_state])
+	
 	if current_player_index != player_idx:
-		print("FSM Blocked: Cannot play ability if it's not your turn.")
+		print("[GM DEBUG] REJECTED: Not player's turn (Turn: ", current_player_index, ", Activator: ", player_idx, ")")
 		return false
 		
 	var valid_states = [
@@ -278,12 +285,17 @@ func play_ability(player_idx: int, ability_id: String, target_idx: int = -1) -> 
 	]
 	
 	if current_state not in valid_states:
-		print("FSM Blocked: Cannot play ability in current state ", current_state)
+		print("[GM DEBUG] REJECTED: Game state ", GameState.keys()[current_state], " prevents playing abilities.")
 		return false
 
 	state_before_ability = current_state
 	change_state(GameState.STATE_PLAYING_ABILITY)
-	print("Player ", player_idx, " played ability: ", ability_id, " on P", target_idx)
+	print("[GM DEBUG] ACCEPTED. State -> PLAYING_ABILITY. Executing manager...")
+	
+	# Centralized removal from inventory
+	var idx = players_info[player_idx].abilities.find(ability_id)
+	if idx != -1:
+		players_info[player_idx].abilities.remove_at(idx)
 	
 	ability_played.emit(player_idx, ability_id)
 	ability_manager.execute(player_idx, ability_id, target_idx)
@@ -382,8 +394,9 @@ func validate_jump_in(card_idx: int) -> bool:
 			deck_manager.discard_pile.append(selected_card)
 			card_discarded.emit(jump_in_player_idx, selected_card)
 			gain_money_for_discard(jump_in_player_idx, selected_card)
+			var played_by = jump_in_player_idx
 			jump_in_player_idx = -1
-			_resolve_discard_effects(selected_card)
+			_resolve_discard_effects(selected_card, played_by)
 			bot_action.emit(msg)
 			return true
 
@@ -398,9 +411,8 @@ func validate_jump_in(card_idx: int) -> bool:
 		
 	await get_tree().create_timer(1.2, false).timeout
 
-	var penalty_card_dict: Dictionary = deck_manager.draw_card()
-	if not penalty_card_dict.is_empty():
-		var p_card := CardData.new(penalty_card_dict.rank, penalty_card_dict.suit)
+	var p_card = deck_manager.draw_card()
+	if p_card != null:
 		p_card.is_face_up = false
 		h.append(p_card)
 		hand_updated.emit(jump_in_player_idx)
@@ -443,11 +455,11 @@ func player_draw_card():
 		return
 	
 	var card_info = deck_manager.draw_card()
-	if card_info.is_empty():
+	if card_info == null:
 		print("Deck is empty!")
 		return
 		
-	drawn_card_data = CardData.new(card_info.rank, card_info.suit)
+	drawn_card_data = card_info
 	drawn_card_data.is_face_up = true
 	
 	change_state(GameState.TURN_RESOLVE_DRAWN)
@@ -502,7 +514,9 @@ func player_swap_drawn_card(card_idx: int):
 	
 	_resolve_discard_effects(old_card)
 
-func _resolve_discard_effects(card: CardData):
+func _resolve_discard_effects(card: CardData, player_idx: int = -1):
+	active_ability_player = player_idx if player_idx != -1 else current_player_index
+	
 	# Wait for the card discard visual tween to complete before changing state
 	await get_tree().create_timer(0.4, false).timeout
 	if current_state == GameState.GAME_OVER: return
@@ -545,3 +559,19 @@ func complete_swap_ability(player1_idx: int, card1_idx: int, player2_idx: int, c
 	jack_swap_resolved.emit(player1_idx, card1_idx, player2_idx, card2_idx)
 	
 	_prompt_turn_end()
+
+func buy_ability(p_idx: int) -> bool:
+	"""Centralized purchase logic for both Human UI and Bot Controller."""
+	var cost = 50
+	if players_info[p_idx].money >= cost:
+		players_info[p_idx].money -= cost
+		player_gained_money.emit(p_idx, -cost, players_info[p_idx].money)
+		
+		# Generate random ability
+		var list = ["bottoms_up", "refuel", "trim_off", "boulder", "reverse", "skip", "perfect_match", "inflation", "half_off", "jumpscare", "shuffle"]
+		var ab = list[randi() % list.size()]
+		players_info[p_idx].abilities.append(ab)
+		ability_unlocked.emit(p_idx, ab)
+		print("GM: Player ", p_idx, " bought ability: ", ab)
+		return true
+	return false

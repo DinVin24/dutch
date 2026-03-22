@@ -14,6 +14,7 @@ var data: CardData
 var is_flipping: bool = false
 var is_selected: bool = false
 var is_highlighted: bool = false
+var is_being_peeked: bool = false
 var highlight_tween: Tween = null
 var _wobble_time: float = 0.0
 var _base_visual_pos: Vector3
@@ -37,15 +38,22 @@ func setup(p_data: CardData) -> void:
 func _ready():
 	_base_visual_pos = $Visuals.position
 	
+	# Multiplier Tag (floating above card)
+	var anchor = Node3D.new()
+	anchor.name = "MultiplierAnchor"
+	anchor.top_level = true # Decouple from parent's 90-degree rotation
+	add_child(anchor)
+	
 	multiplier_label = Label3D.new()
 	multiplier_label.name = "MultiplierLabel"
-	multiplier_label.font_size = 48
-	multiplier_label.outline_size = 32
-	multiplier_label.outline_modulate = Color(0, 0, 0, 1) # Solid black outline for deep contrast
-	multiplier_label.position = Vector3(0, 0.015, 0) 
+	multiplier_label.font_size = 72
+	multiplier_label.outline_size = 24
+	multiplier_label.outline_modulate = Color(0, 0, 0, 1)
+	# Position it at origin of anchor, process will sync anchor to card + offset
+	multiplier_label.position = Vector3.ZERO
 	multiplier_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	multiplier_label.no_depth_test = true # Ensure it's always on top of the card
-	back_face.add_child(multiplier_label)
+	multiplier_label.no_depth_test = true
+	anchor.add_child(multiplier_label)
 	
 	_update_visuals()
 	if area:
@@ -58,25 +66,27 @@ func _ready():
 
 func _update_visuals() -> void:
 	if not data: return
-	_apply_atlas_textures()
 	
-	# Update multiplier label
+	# Update multiplier label - ALWAYS RUN this regardless of texture optimization
 	if multiplier_label:
 		if data.point_modifier > 1.0:
-			multiplier_label.text = "x" + str(data.point_modifier)
-			multiplier_label.modulate = Color(1.0, 0.0, 1.0) # Neon Magenta
+			multiplier_label.text = "x2"
+			multiplier_label.modulate = Color(1.0, 0.0, 0.0) # Solid Red for inflation
 			multiplier_label.show()
 		elif data.point_modifier < 1.0:
-			multiplier_label.text = "1/2"
-			multiplier_label.modulate = Color(0.0, 1.0, 1.0) # Neon Cyan
+			multiplier_label.text = "x1/2"
+			multiplier_label.modulate = Color(0.0, 1.0, 0.0) # Solid Green for half-down
 			multiplier_label.show()
 		else:
 			multiplier_label.hide()
+			
+	_apply_atlas_textures()
 	
-	# In 3D, both faces are always physically there, just on opposite sides.
-	# We rely on rotation to show the correct side.
-	front_face.show()
-	back_face.show()
+	# Face visibility is handled by local rotation of Visuals
+	var target_is_up = data.is_face_up
+	if not is_flipping:
+		$Visuals.rotation_degrees.y = 180.0 if target_is_up else 0.0
+
 	
 	# Selection visuals
 	if is_selected:
@@ -113,13 +123,9 @@ func _apply_atlas_textures():
 	front_mat.uv1_scale = Vector3(1.0/13.0, 1.0/5.0, 1.0)
 	front_mat.uv1_offset = Vector3(float(col)/13.0, float(row)/5.0, 0.0)
 	
-	# Y2K Polish: subtle metallic sheen and emission
 	front_mat.metallic = 0.3
 	front_mat.roughness = 0.2
-	if is_highlighted:
-		front_mat.emission_enabled = true
-		front_mat.emission = Color(1, 1, 1) # White glow
-		front_mat.emission_energy_multiplier = 0.2
+	# user requested removal of blue highlights, so we keep emission OFF
 	
 	front_face.set_surface_override_material(0, front_mat)
 
@@ -132,10 +138,7 @@ func _apply_atlas_textures():
 	
 	back_mat.metallic = 0.5
 	back_mat.roughness = 0.1
-	if is_highlighted:
-		back_mat.emission_enabled = true
-		back_mat.emission = Color(0, 1, 1) # Cyan glow (matching theme)
-		back_mat.emission_energy_multiplier = 0.5
+	# user requested removal of blue highlights, so we keep emission OFF
 		
 	back_face.set_surface_override_material(0, back_mat)
 
@@ -164,15 +167,19 @@ func animate_flip(is_face_up: bool, target_y: float = -1.0):
 		highlight_tween.kill()
 		highlight_tween = null
 	
-	# We want a left-to-right barrel roll, which means turning the card like a page
-	# by rotating exactly 180 degrees around its local UP vertical axis
-	var end_basis = transform.basis * Basis(Vector3.UP, PI)
-	
+	# We rotate ONLY the 'Visuals' sub-node to flip, while the root Card3D 
+	# node stays locked to the hand layout's table orientation.
+	var target_basis = Basis.from_euler(Vector3.ZERO)
+	if is_face_up:
+		target_basis = target_basis * Basis(Vector3.UP, PI)
+		
 	var tween = create_tween()
 	var base_y = target_y if target_y >= 0 else position.y
 	
 	tween.set_parallel(true)
-	tween.tween_property(self, "quaternion", end_basis.get_rotation_quaternion(), 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	# Perform the barrel roll on the visuals node (local Y rotation)
+	tween.tween_property($Visuals, "quaternion", target_basis.get_rotation_quaternion(), 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	# Root node still handles the lift/drop
 	tween.tween_property(self, "position:y", base_y + 0.8, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	
 	tween.chain().tween_property(self, "position:y", base_y, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
@@ -203,26 +210,37 @@ func set_interactive(enabled: bool):
 	$Area3D/CollisionShape3D.disabled = !enabled
 
 func _process(delta: float):
+	if is_flipping:
+		# Let the flip tween own the visuals transform
+		return
+		
+	# Base rotation for face-up/down
+	var base_rot_y = deg_to_rad(180.0 if data and data.is_face_up else 0.0)
+	var base_q = Quaternion(Vector3.UP, base_rot_y)
+	
+	# Sync the floating multiplier tag to be 0.4 meters above the card in GLOBAL space
+	var anchor = get_node_or_null("MultiplierAnchor")
+	if anchor:
+		anchor.global_position = global_position + Vector3(0, 0.4, 0)
+
 	if is_highlighted or is_selected:
 		_wobble_time += delta * 5.0
 		var wobble_offset = Vector3(0, sin(_wobble_time) * 0.02, 0)
 		var wobble_rot = Vector3(
-			sin(_wobble_time * 0.8) * 2.0,
-			cos(_wobble_time * 1.2) * 2.0,
-			sin(_wobble_time * 0.5) * 2.0
+			deg_to_rad(sin(_wobble_time * 0.8) * 2.0),
+			deg_to_rad(cos(_wobble_time * 1.2) * 2.0),
+			deg_to_rad(sin(_wobble_time * 0.5) * 2.0)
 		)
-		# Move the whole Visuals group so the Area3D DOES NOT follow? 
-		# NO! We want the Area3D to follow the visuals so clicks are accurate.
-		# Reparenting Area3D to Visuals in the scene would be best, 
-		# but for now we'll sync it or move the root rotation.
+		
 		$Visuals.position = _base_visual_pos + wobble_offset
-		$Visuals.rotation_degrees = wobble_rot
+		# Combine wobble with face-up base rotation
+		$Visuals.quaternion = base_q * Quaternion.from_euler(wobble_rot)
 		
 		# Sync Area3D transform to match Visuals
 		$Area3D.position = $Visuals.position
-		$Area3D.rotation = $Visuals.rotation
+		$Area3D.quaternion = $Visuals.quaternion
 	else:
 		$Visuals.position = _base_visual_pos
-		$Visuals.rotation_degrees = Vector3.ZERO
+		$Visuals.quaternion = base_q
 		$Area3D.position = _base_visual_pos
-		$Area3D.rotation = Vector3.ZERO
+		$Area3D.quaternion = base_q

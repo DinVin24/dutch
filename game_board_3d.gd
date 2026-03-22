@@ -31,6 +31,7 @@ var card_spacing = 1.3 # 3D meters
 var pending_card: Card3D = null
 var pending_card_tween: Tween = null
 var swap_sources: Array = [] # Stores [card_node, player_idx, card_idx]
+var _hovered_card_node: Card3D = null # Track hovered card for spreading effect
 
 # Peek Phase state
 var cards_peeked: int = 0
@@ -219,12 +220,12 @@ func _update_discard_visual():
 	
 	var pile = GameManager.deck_manager.discard_pile
 	if not pile.is_empty():
-		var top_info = pile.back()
+		var top_info: CardData = pile.back()
 		var card_node = card_scene.instantiate()
 		discard_area.add_child(card_node)
-		card_node.setup(CardData.new(top_info.rank, top_info.suit))
+		card_node.setup(top_info.duplicate())
 		card_node.data.is_face_up = true
-		card_node.rotation_degrees = Vector3(270, 0, 0)
+		card_node.rotation_degrees = Vector3(90, 0, 0)
 		card_node.position = Vector3.ZERO
 		card_node.set_interactive(false)
 		if discard_indicator: discard_indicator.hide()
@@ -251,7 +252,7 @@ func _create_discard_indicator():
 func _create_beer_placeholders():
 	for i in range(4):
 		var pos_node = player_pos_nodes[i]
-		for b in range(5):
+		for b in range(3):
 			var beer = CSGCylinder3D.new()
 			beer.radius = 0.08
 			beer.height = 0.25
@@ -269,14 +270,11 @@ func _create_beer_placeholders():
 			foam.material = foam_mat
 			beer.add_child(foam)
 			
-			# GRID LAYOUT: 2 rows (3 front, 2 back)
-			var row = b / 3
-			var col = b % 3
-			var grid_x = (col - 1.0) * 0.25
-			var grid_z = row * 0.25
+			# Simple Row of 3
+			var grid_x = (b - 1.0) * 0.25
 			
 			# Stationed on the RIGHT of the cards
-			beer.position = Vector3(grid_x + 1.8, 0.11, -1.8 + grid_z) 
+			beer.position = Vector3(grid_x + 1.8, 0.11, -1.8) 
 			pos_node.add_child(beer)
 			player_beers_nodes[i].append(beer)
 
@@ -322,6 +320,10 @@ func _create_chicken_placeholder():
 	chicken.add_child(area)
 	
 	area.input_event.connect(_on_chicken_clicked)
+	GameManager.ability_unlocked.connect(_on_ability_unlocked)
+
+func _on_ability_unlocked(p_idx: int, ab: String):
+	_drop_egg_for(p_idx, ab)
 
 func _on_chicken_clicked(_camera, event, _position, _normal, _shape_idx):
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -329,18 +331,14 @@ func _on_chicken_clicked(_camera, event, _position, _normal, _shape_idx):
 			_try_buy_ability(0)
 
 func _try_buy_ability(p_idx: int):
-	var cost = 50
-	if GameManager.players_info[p_idx].money >= cost:
-		GameManager.players_info[p_idx].money -= cost
-		GameManager.player_gained_money.emit(p_idx, -cost, GameManager.players_info[p_idx].money)
-		_drop_egg_for(p_idx)
-	else:
+	if not GameManager.buy_ability(p_idx):
 		_show_message("Chicken wants $50 for an egg!")
 
-func _drop_egg_for(p_idx: int):
-	var abilities = ["bottoms_up", "refuel", "trim_off", "boulder", "reverse", "skip", "perfect_match", "inflation", "half_off", "jumpscare", "shuffle"]
-	var ab = abilities[randi() % abilities.size()]
-	_show_message("You got: " + ab.capitalize() + "!")
+func _drop_egg_for(p_idx: int, ab: String):
+	if p_idx == 0:
+		_show_message("You got: " + ab.capitalize() + "!")
+	else:
+		_show_message(GameManager.players_info[p_idx].name + " got an egg!")
 	
 	if is_instance_valid(_chicken_node):
 		var tween = create_tween()
@@ -367,8 +365,9 @@ func _drop_egg_for(p_idx: int):
 				_base_camera_pos = old_base
 				_chicken_zoom_active = false
 			)
-	GameManager.players_info[p_idx].abilities.append(ab)
-	print("Player ", p_idx, " bought ability: ", ab)
+	# authoritative inventory is now managed in GameManager.buy_ability
+	print("BOARD: sync ability visuals for P", p_idx)
+	_update_ability_visuals(p_idx)
 	
 	# Spawn ability token visually
 	var token = load("res://ability_token_3d.gd").new()
@@ -392,7 +391,8 @@ func _update_ability_visuals(p_idx: int):
 		var rows = i / 4
 		
 		# Clean, perfect 4x4 matrix centered right next to the hand
-		var target_pos = Vector3(2.8 + (cols * 0.7), 0.1, (rows * 0.8) - 0.6)
+		# Stationed further to the RIGHT (3.5) to avoid clashing with wide hand spreads
+		var target_pos = Vector3(3.5 + (cols * 0.7), 0.1, (rows * 0.8) - 0.6)
 		
 		# Snappy, satisfying placement animation
 		var tween = create_tween()
@@ -422,12 +422,8 @@ func _on_ability_token_clicked(token):
 		else:
 			# Non-targeting or self-targeting
 			var target = p_idx # Default to self for things like refuel/trim_off
-			if GameManager.play_ability(p_idx, token.ability_id, target):
-				token.queue_free()
-				var ab_idx = GameManager.players_info[p_idx].abilities.find(token.ability_id)
-				if ab_idx != -1:
-					GameManager.players_info[p_idx].abilities.remove_at(ab_idx)
-				_update_ability_visuals(p_idx)
+			GameManager.play_ability(p_idx, token.ability_id, target)
+			# Visual cleanup now handled by _on_ability_played signal for all players
 	else:
 		_show_message("Not your turn to play abilities!")
 
@@ -465,12 +461,18 @@ func _on_player_area_input(_camera, event, _position, _normal, _shape_idx, playe
 	
 	# Handle both Area3D events AND direct card clicks (where event is null)
 	if event == null or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
-		print("DEBUG: Clicked TargetArea for player ", player_idx)
+		print("[DEBUG] TARGET CLICKED for player ", player_idx, " (Area: ", _is_waiting_for_target, ")")
+		
+		# Validation: ensure we aren't targeting an already eliminated player
+		if GameManager.players_info[player_idx].is_eliminated:
+			_show_message("Target is already out!")
+			return
+
 		var ab_id = _pending_ability.id
 		var activator = _pending_ability.activator
 		var token = _pending_ability.token
 		
-		print("DEBUG: Executing ability '", ab_id, "' from ", activator, " on ", player_idx)
+		print("[DEBUG] Requesting play_ability: ", ab_id, " by P", activator, " on P", player_idx)
 		
 		if GameManager.play_ability(activator, ab_id, player_idx):
 			_is_waiting_for_target = false
@@ -478,13 +480,13 @@ func _on_player_area_input(_camera, event, _position, _normal, _shape_idx, playe
 			_clear_all_highlights()
 			_update_turn_lights(activator) # Reset lights to activator's turn
 			_hide_message()
-			if is_instance_valid(token):
-				token.queue_free()
-			var ab_idx = GameManager.players_info[activator].abilities.find(ab_id)
-			if ab_idx != -1:
-				GameManager.players_info[activator].abilities.remove_at(ab_idx)
+			
+			# Visual cleanup: token itself is already removed by play_ability signal callback
+			# but we clear the pending data here
 			_pending_ability.clear()
 			_update_ability_visuals(activator)
+		else:
+			print("[DEBUG] play_ability REJECTED by GameManager")
 
 func _on_player_drank_beer(player_idx, remaining):
 	if player_idx < 0 or player_idx >= 4: return
@@ -506,6 +508,18 @@ func _on_player_gained_money(player_idx, _amount, total):
 func _on_ability_played(player_idx, ability_id):
 	var p_name = GameManager.players_info[player_idx].name
 	_show_message(p_name + " used " + ability_id.capitalize() + "!")
+	
+	# CENTRALIZED VISUAL CLEANUP: Find and remove the 3D token
+	var pos_node = player_pos_nodes[player_idx]
+	for child in pos_node.get_children():
+		# Check for custom property injected during setup
+		if "ability_id" in child and child.ability_id == ability_id:
+			child.queue_free()
+			break
+	
+	# Re-layout remaining tokens for this player
+	await get_tree().process_frame
+	_update_ability_visuals(player_idx)
 
 func _on_turn_started(player_idx):
 	var p_info = GameManager.players_info[player_idx]
@@ -592,6 +606,7 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	pending_card.card_clicked.connect(_on_card_clicked)
 	# Move slightly higher and CLOSER TO CAMERA (Z offset) to ensure it's not blocked by DeckArea
 	pending_card.position = deck_area.position + Vector3(0, 0.6, 0.5)
+	pending_card.rotation_degrees = Vector3(90, 0, 0) # Start face down on the table
 	pending_card.set_interactive(true)
 	
 	# Reveal animations
@@ -641,7 +656,8 @@ func _on_card_discarded(player_idx, card_data):
 					
 					var tween_old = create_tween().set_parallel(true)
 					tween_old.tween_property(old_card_node, "global_position", discard_global_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-					tween_old.tween_property(old_card_node, "rotation_degrees:x", 270.0, 0.3)
+					tween_old.tween_property(old_card_node, "rotation_degrees:x", 90.0, 0.3)
+					old_card_node.animate_flip(true)
 					
 					# 3. Finalize
 					tween_new.chain().tween_callback(func():
@@ -702,7 +718,8 @@ func _on_card_discarded(player_idx, card_data):
 		
 		var tween = create_tween().set_parallel(true)
 		tween.tween_property(card_to_discard, "global_position", target_global_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		tween.tween_property(card_to_discard, "rotation_degrees", Vector3(270, 0, 0), 0.4) # Face UP on table
+		tween.tween_property(card_to_discard, "rotation_degrees:x", 90.0, 0.4) # Keep horizontal, let animate_flip roll it
+		card_to_discard.animate_flip(true)
 		
 		tween.chain().tween_callback(func():
 			_update_discard_visual()
@@ -815,12 +832,12 @@ func _on_game_state_changed(new_state):
 				confirm_dutch_btn.show()
 				forfeit_dutch_btn.show()
 		GameManager.GameState.TURN_PEEK_ABILITY:
-			if GameManager.current_player_index == 0:
+			if GameManager.active_ability_player == 0:
 				_show_message("Select ANY card to peek at.")
 				_highlight_selectable_cards(true)
 			_update_turn_lights(-1, true) # All lights on for Queen
 		GameManager.GameState.TURN_SWAP_ABILITY:
-			if GameManager.current_player_index == 0:
+			if GameManager.active_ability_player == 0:
 				_show_message("Select TWO cards to swap.")
 				# User specifically disabled highlighting for this phase, so just enable clicks
 				_set_player_hand_interactive(0, true)
@@ -892,20 +909,30 @@ func _on_hand_updated(player_idx):
 
 func _on_card_hover_enter(card_node: Node3D):
 	if not is_instance_valid(card_node): return
-	if card_node.is_highlighted: return # Don't override highlight state
+	_hovered_card_node = card_node as Card3D
+	
+	# Lift effect
 	var tween = create_tween().set_parallel(true)
-	tween.tween_property(card_node, "scale", Vector3(1.15, 1.15, 1.15), 0.15).set_trans(Tween.TRANS_QUAD)
-	tween.tween_property(card_node, "position:y", card_node.position.y + 0.25, 0.15).set_trans(Tween.TRANS_QUAD)
-	card_node.set_meta("hover_lift_y", card_node.position.y + 0.25)
+	tween.tween_property(card_node, "scale", Vector3(1.15, 1.15, 1.15), 0.1).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(card_node, "position:y", card_node.position.y + 0.3, 0.1).set_trans(Tween.TRANS_QUAD)
+	
+	# Trigger layout refresh for neighbor spreading
+	for i in range(4):
+		if card_node in player_hands[i]:
+			_update_hand_visuals(i)
+			break
 
 func _on_card_hover_exit(card_node: Node3D):
 	if not is_instance_valid(card_node): return
-	if card_node.is_highlighted: return
+	_hovered_card_node = null
+	
 	var tween = create_tween().set_parallel(true)
-	tween.tween_property(card_node, "scale", Vector3(1.0, 1.0, 1.0), 0.15).set_trans(Tween.TRANS_QUAD)
-	# Return to the base y position that _update_hand_visuals gave it
-	var base_y = card_node.get_meta("hover_lift_y", card_node.position.y) - 0.25
-	tween.tween_property(card_node, "position:y", base_y, 0.15).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(card_node, "scale", Vector3(1.0, 1.0, 1.0), 0.1).set_trans(Tween.TRANS_QUAD)
+	
+	for i in range(4):
+		if card_node in player_hands[i]:
+			_update_hand_visuals(i)
+			break
 
 func _update_hand_visuals(player_idx: int):
 	if player_idx < 0 or player_idx >= 4: return
@@ -924,21 +951,27 @@ func _update_hand_visuals(player_idx: int):
 		if is_instance_valid(card):
 			card.queue_free()
 	
-	# HYBRID LAYOUT: flat up to 6 cards, overlapping spread beyond 6
+	# REFINED HAND LAYOUT: Aggressive bundling and conditional spreading
 	var total_cards = nodes.size()
-	const MAX_FLAT = 6
-	const FLAT_SPACING = 1.3
-	const MIN_SPACING = 0.55 # Compressed overlap spacing
+	const BASE_SPACING = 1.05 # Near-touching spacing
+	const MAX_HAND_WIDTH = 4.2 # (5-1) * 1.05 = center-to-center distance for 5 cards
 	
-	var spacing = FLAT_SPACING if total_cards <= MAX_FLAT else MIN_SPACING
-	var total_width = (total_cards - 1) * spacing
+	# If > 5 cards, compress spacing so they fit in the same 5-card width
+	var spacing = BASE_SPACING
+	if total_cards > 5:
+		spacing = MAX_HAND_WIDTH / (total_cards - 1)
+	
+	var hovered_idx = nodes.find(_hovered_card_node)
+	var spread_amount = 0.0
+	# Only spread if bundled (>5) and actually hovered
+	if total_cards > 5 and hovered_idx != -1:
+		# Shift neighbors just enough to touch but not overlap the hovered card
+		spread_amount = (BASE_SPACING - spacing) 
 	
 	for i in range(total_cards):
 		var card_node = nodes[i]
 		if is_instance_valid(card_node):
-			if not card_node.card_clicked.is_connected(_on_card_clicked):
-				card_node.card_clicked.connect(_on_card_clicked)
-			# Connect hover signals for the lift effect if not already done
+			# Ensure connections
 			if not card_node.get_meta("hover_connected", false):
 				var area = card_node.get_node_or_null("Area3D")
 				if area:
@@ -947,37 +980,42 @@ func _update_hand_visuals(player_idx: int):
 					card_node.set_meta("hover_connected", true)
 			
 			card_node.setup(hand_data[i])
-			card_node.name = "Card_%d_%d" % [player_idx, i]
 			
-			var target_pos = Vector3((i - (nodes.size() - 1) / 2.0) * spacing, 0.05 + i * 0.002, 0)
+			# CALCULATE POSITION with spread logic
+			var offset_x = (i - (total_cards - 1) / 2.0) * spacing
+			if spread_amount > 0:
+				if i < hovered_idx:
+					offset_x -= spread_amount
+				elif i > hovered_idx:
+					offset_x += spread_amount
+					
+			# Vertical stacking (Y) based on index to ensure correct visual layering
+			# Slightly higher Y step (0.01) to prevent Z-fighting in tight spots
+			var target_pos = Vector3(offset_x, 0.05 + i * 0.01, 0)
 			
-			if card_node.position.distance_to(target_pos) < 0.01: continue
+			# Skip if mid-flip or already there (performance)
+			if card_node.is_being_peeked or card_node.is_flipping: continue
+			
+			# Special handling for hovered card Y (keeping the lift while spreading)
+			if card_node == _hovered_card_node:
+				target_pos.y += 0.3 
 			
 			var tween = create_tween().set_parallel(true)
-			tween.tween_property(card_node, "position", target_pos, 0.3).set_trans(Tween.TRANS_QUAD)
+			tween.tween_property(card_node, "position", target_pos, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 			
 			var target_rot_y = 180.0 if (player_idx == 0 or player_idx == 2) else 0.0
-			var flat_basis = Basis.from_euler(Vector3(deg_to_rad(90), deg_to_rad(target_rot_y), 0))
-			
-			if hand_data[i].is_face_up:
-				flat_basis = flat_basis * Basis(Vector3.UP, PI) # Barrel roll 180 degrees instead of pitching
-				
-			tween.tween_property(card_node, "quaternion", flat_basis.get_rotation_quaternion(), 0.3)
-			
-			var lift_tween = create_tween()
-			lift_tween.tween_property(card_node, "scale", Vector3(1.05, 1.05, 1.05), 0.1)
-			lift_tween.tween_property(card_node, "scale", Vector3(1.0, 1.0, 1.0), 0.2)
+			var target_basis = Basis.from_euler(Vector3(deg_to_rad(90), deg_to_rad(target_rot_y), 0))
+			tween.tween_property(card_node, "quaternion", target_basis.get_rotation_quaternion(), 0.25)
 
 func _handle_initial_deal():
 	print("GameBoard3D: _handle_initial_deal started")
 	_show_message("Dealing cards...")
 	for i in range(4): # 4 cards each
 		for p_idx in range(GameManager.num_players):
-			var card_data_dict = GameManager.deck_manager.draw_card()
-			if card_data_dict.is_empty():
+			var card_data = GameManager.deck_manager.draw_card()
+			if card_data == null:
 				break
 			
-			var card_data = CardData.new(card_data_dict.rank, card_data_dict.suit)
 			card_data.is_face_up = false
 			GameManager.players_info[p_idx].hand.append(card_data)
 			
@@ -1026,16 +1064,17 @@ func _on_card_clicked(node, data):
 			if node.get_parent() == player_pos_nodes[0] and not data.is_face_up:
 				if peeked_cards.size() >= 2: return # Strict limit
 				if node in peeked_cards: return
+				node.is_being_peeked = true
 				node.animate_flip(true)
 				peeked_cards.append(node)
 				if peeked_cards.size() >= 2:
-					await get_tree().create_timer(1.5, false).timeout
-					_clear_all_highlights() # Clear highlights BEFORE flipping back
+					await get_tree().create_timer(2.0, false).timeout
+					_clear_all_highlights()
 					for c in peeked_cards:
+						c.is_being_peeked = false
 						c.animate_flip(false)
 						c.set_interactive(false)
 					peeked_cards.clear()
-					_clear_all_highlights()
 					GameManager.complete_initial_peek()
 		
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
@@ -1058,13 +1097,14 @@ func _on_card_clicked(node, data):
 		GameManager.GameState.TURN_PEEK_ABILITY:
 			if node.data.is_face_up: return
 			_set_all_cards_interactive(false)
+			node.is_being_peeked = true
 			node.animate_flip(true)
-			await get_tree().create_timer(3.0, false).timeout
-			_clear_all_highlights() # Clear highlights BEFORE flipping back
+			await get_tree().create_timer(3.5, false).timeout
+			_clear_all_highlights()
+			node.is_being_peeked = false
 			node.animate_flip(false)
 			_set_all_cards_interactive(true)
 			GameManager.complete_peek_ability()
-			_clear_all_highlights()
 			
 		GameManager.GameState.TURN_SWAP_ABILITY:
 			if swap_sources.any(func(s): return s.node == node): return
@@ -1219,24 +1259,18 @@ func _on_jump_in_failed(player_idx, card_idx, _card_data):
 			
 	if card_node is Card3D:
 		print("GameBoard3D: Atomic reveal for card index ", card_idx)
-		# Use a dedicated tween sequence on the mesh directly to bypass guards
-		var reveal_tween = create_tween()
 		
-		# Flip UP
-		reveal_tween.tween_property(card_node, "rotation_degrees:x", 270.0, 0.3).set_trans(Tween.TRANS_QUAD)
-		reveal_tween.parallel().tween_property(card_node, "position:y", 0.8, 0.2).set_trans(Tween.TRANS_QUAD) # Extra lift
+		# Flip UP with barrel roll
+		card_node.animate_flip(true)
 		
-		reveal_tween.tween_interval(1.5)
+		# Wait for reveal duration
+		await get_tree().create_timer(1.5, false).timeout
 		
-		# Flip DOWN
-		reveal_tween.tween_property(card_node, "rotation_degrees:x", 90.0, 0.3).set_trans(Tween.TRANS_QUAD)
-		reveal_tween.parallel().tween_property(card_node, "position:y", 0.05, 0.2).set_trans(Tween.TRANS_QUAD)
+		# Flip BACK with barrel roll
+		card_node.animate_flip(false)
 		
-		reveal_tween.tween_callback(func():
-			trigger_glitch(0.3, 0.4)
-			shake(0.2, 0.3)
-			card_node.data.is_face_up = false
-		)
+		trigger_glitch(0.3, 0.4)
+		shake(0.2, 0.3)
 
 func _on_bot_action(message):
 	_show_message(message)
