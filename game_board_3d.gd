@@ -617,109 +617,46 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 func _on_card_discarded(player_idx, card_data):
 	if jump_in_btn:
 		jump_in_btn.visible = GameManager.should_human_show_jump_in_button(0)
-
+	
+	print("GameBoard3D: Card Discarded. Player: ", player_idx, " Data: ", card_data.rank, " of ", card_data.suit)
+	
 	var card_to_discard: Node3D = null
 
-	if pending_card and pending_card.data == card_data:
+	# 1. CHECK PENDING CARD (from deck draw)
+	if is_instance_valid(pending_card) and (pending_card.data == card_data or (pending_card.data.rank == card_data.rank and pending_card.data.suit == card_data.suit)):
 		card_to_discard = pending_card
 		pending_card = null
+	
+	# 2. CHECK PLAYER HANDS
 	elif player_idx != -1:
 		var hand_nodes = player_hands[player_idx]
-		print("[BOARD DEBUG] _on_card_discarded: searching P", player_idx, " hand (", hand_nodes.size(), " nodes) for ", card_data.rank, " of ", card_data.suit)
 		for i in range(hand_nodes.size()):
-			var hand_card = hand_nodes[i]
-			var match_by_ref = hand_card.data == card_data
-			var match_by_val = (hand_card.data.rank == card_data.rank and hand_card.data.suit == card_data.suit)
-			
-			if match_by_ref or match_by_val:
-				print("[BOARD DEBUG] Match found! Ref: ", match_by_ref, " Val: ", match_by_val, " at node index ", i)
-				card_to_discard = hand_card
-
-				if pending_card:
-					# --- SWAP PHASE ---
-					var old_card_node = hand_nodes[i]
-					var new_card_node = pending_card
-					pending_card = null
-
-					# Update persistent array: replace old node with new node at same index
-					hand_nodes[i] = new_card_node
-
-					var hand_global_pos = old_card_node.global_position
-					var discard_global_pos = discard_area.global_position + Vector3(0, 0.05, 0)
-
-					# 1. Animate Drawn Card to Hand
-					new_card_node.reparent(player_pos_nodes[player_idx])
-					var tween_new = create_tween().set_parallel(true)
-					tween_new.tween_property(new_card_node, "global_position", hand_global_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-					tween_new.tween_property(new_card_node, "rotation_degrees:x", 90.0, 0.3)
-
-					# 2. Animate replaced card to Discard
-					var start_global_pos = old_card_node.global_position
-					old_card_node.reparent(get_tree().root) # Isolate from hand reorganization
-					old_card_node.global_position = start_global_pos
-					card_to_discard = old_card_node # Point directly to the node being moved
-
-					var tween_old = create_tween().set_parallel(true)
-					tween_old.tween_property(old_card_node, "global_position", discard_global_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-					tween_old.tween_property(old_card_node, "rotation_degrees:x", 90.0, 0.3)
-					old_card_node.animate_flip(true)
-					# 3. Finalize
-					tween_new.chain().tween_callback(func():
-						hand_nodes[i] = new_card_node
-						new_card_node.data.is_face_up = false
-						new_card_node._update_visuals()
-						_update_hand_visuals(player_idx)
-					)
-					tween_old.chain().tween_callback(func():
-						_update_discard_visual()
-						old_card_node.queue_free()
-						shake(0.05, 0.2)
-					)
-					card_to_discard = null # Already handled above
-				else:
-					# --- JUMP-IN / PURE REMOVAL PHASE ---
-					var gm_hand = GameManager.players_info[player_idx].hand
-					if gm_hand.size() == hand_nodes.size():
-						# Bot swap / special case: data refresh
-						hand_nodes[i].setup(gm_hand[i])
-						# We instantiate a temp for the discard animation
-						var temp_discard = card_scene.instantiate()
-						add_child(temp_discard)
-						temp_discard.setup(card_data)
-						temp_discard.global_position = hand_nodes[i].global_position
-						card_to_discard = temp_discard
-					else:
-						# Pure removal (Jump-In or discard choice)
-						var node_to_move = hand_nodes[i]
-						hand_nodes.remove_at(i)
-
-						# Isolate node for animation
-						var start_pos = node_to_move.global_position
-						node_to_move.reparent(get_tree().root)
-						node_to_move.global_position = start_pos
-						card_to_discard = node_to_move
-
-					_update_hand_visuals(player_idx)
+			var node = hand_nodes[i]
+			if is_instance_valid(node) and (node.data == card_data or (node.data.rank == card_data.rank and node.data.suit == card_data.suit)):
+				card_to_discard = node
+				# We do NOT remove from 'hand_nodes' array here.
+				# _update_hand_visuals() will reconcile the nodes with the new board state.
 				break
 
+	# 3. FALLBACK (If node not found, create a temp for animation)
 	if card_to_discard == null and player_idx >= 0:
-		# Fallback: if we can't find the node, create a temporary one for the animation
-		if pending_card:
-			card_to_discard = pending_card
-			pending_card = null
-		else:
-			card_to_discard = card_scene.instantiate()
-			add_child(card_to_discard)
-			card_to_discard.setup(card_data)
-			# Default to player's position instead of the deck if we can't find the exact card
-			card_to_discard.global_position = player_pos_nodes[player_idx].global_position
+		card_to_discard = card_scene.instantiate()
+		add_child(card_to_discard)
+		card_to_discard.setup(card_data)
+		card_to_discard.global_position = player_pos_nodes[player_idx].global_position
 
+	# 4. ANIMATE DISCARD
 	if card_to_discard:
 		card_to_discard.set_highlight(false)
-
-		# For discards from hand/deck, we want a smooth global motion
+		card_to_discard.set_interactive(false)
+		
+		# Move to root scene for clean global animation
+		var start_global_pos = card_to_discard.global_position
+		if card_to_discard.get_parent() != get_tree().root:
+			card_to_discard.reparent(get_tree().root)
+		card_to_discard.global_position = start_global_pos
+		
 		var target_global_pos = discard_area.global_position + Vector3(0, 0.05, 0)
-
 		var tween = create_tween().set_parallel(true)
 		tween.tween_property(card_to_discard, "global_position", target_global_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tween.tween_property(card_to_discard, "rotation_degrees:x", 90.0, 0.4) # Keep horizontal, let animate_flip roll it
@@ -728,10 +665,11 @@ func _on_card_discarded(player_idx, card_data):
 			_update_discard_visual()
 			_update_deck_visual()
 			shake(0.05, 0.2)
-			if is_instance_valid(card_to_discard) and card_to_discard.get_parent() != discard_area:
+			if is_instance_valid(card_to_discard):
 				card_to_discard.queue_free()
 		)
 
+	# 5. REFRESH HAND (Always refresh, even if node wasn't found, to sync parity)
 	if player_idx != -1:
 		_update_hand_visuals(player_idx)
 
@@ -948,19 +886,36 @@ func _on_card_hover_exit(card_node: Node3D):
 func _update_hand_visuals(player_idx: int):
 	if player_idx < 0 or player_idx >= 4: return
 	var hand_data = GameManager.players_info[player_idx].hand
-	var nodes = player_hands[player_idx]
+	var current_nodes = player_hands[player_idx]
 
-	# Sync node count with data count
-	while nodes.size() < hand_data.size():
-		var card_node = card_scene.instantiate()
-		player_pos_nodes[player_idx].add_child(card_node)
-		card_node.card_clicked.connect(_on_card_clicked)
-		nodes.append(card_node)
-
-	while nodes.size() > hand_data.size():
-		var card = nodes.pop_back()
-		if is_instance_valid(card):
-			card.queue_free()
+	# STRICT SYNC: Reconstruct player_hands[player_idx] to match hand_data exactly by index.
+	# We match existing nodes to data objects by reference to preserve their visual state.
+	var new_node_list = []
+	var pool = current_nodes.duplicate()
+	
+	for data in hand_data:
+		var found_node = null
+		for node in pool:
+			if is_instance_valid(node) and node.data == data:
+				found_node = node
+				pool.erase(node)
+				break
+		
+		if found_node:
+			new_node_list.append(found_node)
+		else:
+			var card_node = card_scene.instantiate()
+			player_pos_nodes[player_idx].add_child(card_node)
+			card_node.card_clicked.connect(_on_card_clicked)
+			new_node_list.append(card_node)
+			
+	# Cleanup orphans
+	for node in pool:
+		if is_instance_valid(node):
+			node.queue_free()
+			
+	player_hands[player_idx] = new_node_list
+	var nodes = new_node_list
 	# REFINED HAND LAYOUT: Aggressive bundling and conditional spreading
 	var total_cards = nodes.size()
 	const BASE_SPACING = 1.05 # Near-touching spacing
