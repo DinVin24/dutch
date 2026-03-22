@@ -144,9 +144,12 @@ func next_turn():
 				continue
 			break
 			
-	# Bug 1 fix: always go to TURN_START_DRAW; the Dutch-caller check now lives
-	# in _prompt_turn_end() so the caller still draws before confirming.
-	change_state(GameState.TURN_START_DRAW)
+	# Correct Dutch Flow: if the turn returns to the caller, they must confirm/forfeit 
+	# BEFORE anything else happens (including drawing cards).
+	if current_player_index == dutch_caller_index:
+		change_state(GameState.TURN_CONFIRM_DUTCH)
+	else:
+		change_state(GameState.TURN_START_DRAW)
 
 func _handle_deal_cards():
 	# The board will handle the visual instantiation in its signal handler
@@ -257,10 +260,6 @@ func _prompt_turn_end():
 	if jump_in_was_own_draw_phase:
 		jump_in_was_own_draw_phase = false
 		change_state(GameState.TURN_START_DRAW)
-		return
-	# Bug 1 fix: Dutch-caller check moved here so the caller always draws first.
-	if current_player_index == dutch_caller_index:
-		change_state(GameState.TURN_CONFIRM_DUTCH)
 		return
 	change_state(GameState.TURN_END_CHOICE)
 

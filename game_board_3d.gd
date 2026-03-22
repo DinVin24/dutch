@@ -388,7 +388,7 @@ func _update_ability_visuals(p_idx: int):
 	for i in range(tokens.size()):
 		var t = tokens[i]
 		var cols = i % 4
-		var rows = i / 4
+		var rows = floori(i / 4.0)
 		
 		# Clean, perfect 4x4 matrix centered right next to the hand
 		# Stationed further to the RIGHT (3.5) to avoid clashing with wide hand spreads
@@ -470,8 +470,7 @@ func _on_player_area_input(_camera, event, _position, _normal, _shape_idx, playe
 
 		var ab_id = _pending_ability.id
 		var activator = _pending_ability.activator
-		var token = _pending_ability.token
-		
+
 		print("[DEBUG] Requesting play_ability: ", ab_id, " by P", activator, " on P", player_idx)
 		
 		if GameManager.play_ability(activator, ab_id, player_idx):
@@ -540,7 +539,6 @@ func _update_turn_lights(current_player: int, all_on: bool = false):
 	for i in range(4):
 		var light = player_lights[i]
 		var is_active = (i == current_player or all_on)
-		var hand_size = GameManager.players_info[i].hand.size()
 		
 		var target_energy = 8.0 if is_active else 0.0
 		var target_angle = 85.0

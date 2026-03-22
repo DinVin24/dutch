@@ -1,12 +1,14 @@
 extends Node3D
 class_name AbilityToken3D
 
+signal token_clicked(token: AbilityToken3D)
+
 var ability_id: String
 var target_player_idx: int = -1
 var is_active: bool = true
 
-@onready var mesh = $CSGBox3D
-@onready var area = $Area3D
+var mesh: CSGBox3D
+var area: Area3D
 
 func setup(id: String):
 	ability_id = id
@@ -33,11 +35,4 @@ func setup(id: String):
 func _on_input_event(_camera, event, _position, _normal, _shape_idx):
 	if not is_active: return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		# Very naive "play me immediately" for now, targeting local logic limits
-		var gm = get_node("/root/GameManager") # Assuming autoload or accessible parent, better wait for board
-		var board = get_parent().get_parent() # Assuming token -> pos_node -> player_positions -> board
-		
-		# Let's emit a signal instead of hardcoding
 		token_clicked.emit(self)
-
-signal token_clicked(token: AbilityToken3D)
