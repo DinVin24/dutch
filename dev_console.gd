@@ -83,7 +83,7 @@ func _on_input_text_submitted(new_text):
 	input.clear()
 	
 	if cmd == "help":
-		output.append_text("\n[color=yellow]Available commands: help, clear, exit, noclip, cards, give, remove, kill[/color]")
+		output.append_text("\n[color=yellow]Available commands: help, clear, exit, noclip, cards, give, remove[/color]")
 	elif cmd == "clear":
 		output.clear()
 	elif cmd == "exit":
@@ -100,8 +100,6 @@ func _on_input_text_submitted(new_text):
 		_cmd_give(args)
 	elif cmd == "remove":
 		_cmd_remove(args)
-	elif cmd == "kill":
-		_cmd_kill(args)
 	else:
 		output.append_text("\n[color=red]command not recognized, use 'help' for all the commands[/color]")
 	
@@ -146,78 +144,23 @@ func _print_player_cards(player: Dictionary):
 
 func _cmd_give(args: Array):
 	if args.size() < 2:
-		output.append_text("\n[color=red]Usage: give <PlayerName> '<Card/Ability Name>' or '$Amount'[/color]")
+		output.append_text("\n[color=red]Usage: give <PlayerName> '<Card Name>'[/color]")
 		return
 	
 	var p_name = args[0].to_lower()
-	var target_name = args[1].to_lower()
+	var c_name = args[1].to_lower()
 	
 	var player = _find_player(p_name)
 	if not player: return
 	
-	if target_name.begins_with("$"):
-		var amount_str = target_name.substr(1)
-		if amount_str.is_valid_int():
-			var amount = amount_str.to_int()
-			player.money += amount
-			GameManager.player_gained_money.emit(player.id, amount, player.money)
-			output.append_text("\n[color=yellow]Gave $" + str(amount) + " to " + player.name + "![/color]")
-			return
-		else:
-			output.append_text("\n[color=red]Invalid money amount: " + target_name + "[/color]")
-			return
-	
-	# Mapping for human-friendly ability names to internal IDs
-	var ability_map = {
-		"bottoms up": "bottoms_up",
-		"refuel": "refuel",
-		"trim off": "trim_off",
-		"boulder": "boulder",
-		"reverse": "reverse",
-		"skip": "skip",
-		"perfect match": "perfect_match",
-		"inflation": "inflation",
-		"half off": "half_off",
-		"jumpscare": "jumpscare",
-		"shuffle": "shuffle",
-		"polarity shift": "polarity_shift"
-	}
-	
-	if ability_map.has(target_name):
-		var ab_id = ability_map[target_name]
-		player.abilities.append(ab_id)
-		output.append_text("\n[color=cyan]Gave Ability '" + target_name.capitalize() + "' to " + player.name + "[/color]")
-		
-		# Visually spawn the token if we are in the 3D board scene
-		var scene = get_tree().current_scene
-		if scene.has_method("_on_hand_updated"): # Check if it's the board
-			# We can't easily call private board methods, but we can mimic the logic
-			# or just wait for the next turn. Let's try to find if there's a signal.
-			# Actually, the board listens to nothing for abilities additions.
-			# Let's just suggest the user restarts or wait for my next improvement.
-			# BETTER: Manually spawn if we find the node.
-			var pos_node = scene.player_pos_nodes[player.id]
-			var token_scene = load("res://ability_token_3d.gd")
-			if pos_node and token_scene:
-				var token = token_scene.new()
-				pos_node.add_child(token)
-				token.setup(ab_id)
-				token.token_clicked.connect(scene._on_ability_token_clicked)
-				
-				# Drop beautifully from above to notify the player they received it
-				token.position = Vector3(2.8, 0.5, 0.0)
-				
-				if scene.has_method("_update_ability_visuals"):
-					scene._update_ability_visuals(player.id)
+	# Try to find card
+	var card = _find_and_remove_card_globally(c_name)
+	if card:
+		player.hand.append(card)
+		GameManager.hand_updated.emit(player.id)
+		output.append_text("\n[color=cyan]Gave " + card.display_name() + " to " + player.name + "[/color]")
 	else:
-		# Try to find card
-		var card = _find_and_remove_card_globally(target_name)
-		if card:
-			player.hand.append(card)
-			GameManager.hand_updated.emit(player.id)
-			output.append_text("\n[color=cyan]Gave " + card.display_name() + " to " + player.name + "[/color]")
-		else:
-			output.append_text("\n[color=red]'" + target_name + "' is not a recognized ability or card.[/color]")
+		output.append_text("\n[color=red]Card '" + c_name + "' not found in deck or discard pile.[/color]")
 
 func _cmd_remove(args: Array):
 	if args.size() < 2:
@@ -258,21 +201,6 @@ func _cmd_remove(args: Array):
 			GameManager.change_state(GameManager.GameState.GAME_OVER)
 	else:
 		output.append_text("\n[color=red]Card or index '" + target + "' not found in " + player.name + "'s hand.[/color]")
-
-func _cmd_kill(args: Array):
-	if args.size() < 1:
-		output.append_text("\n[color=red]Usage: kill <PlayerName>[/color]")
-		return
-	
-	var p_name = args[0].to_lower()
-	var player = _find_player(p_name)
-	if not player: return
-	
-	output.append_text("\n[color=cyan]Killing " + player.name + "...[/color]")
-	
-	# Force beers to 1 and drink to properly trigger natural elimination
-	GameManager.players_info[player.id].beers = 1
-	GameManager.drink_beer(player.id)
 
 func _find_player(p_name: String):
 	for p in GameManager.players_info:

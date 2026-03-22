@@ -134,47 +134,56 @@
     * **Then** it features glassmorphic background blur and neon text.
 
 - [ ] **Story**: As a player, I want every card move, swap, and draw to have "juice" (screen shake, card wobble, subtle particle trails), so that the gameplay feels physically satisfying.
+  * **Acceptance Criteria**:
+    * **Given** a card is manipulated
+    * **When** it travels across the board
+    * **Then** particles, screen shake, and smooth tweens enhance the impact.
+
 ## Epic 8: The Tavern Expansion (Beers, Money, and Abilities)
-- [x] **Story**: As a player, I want 5 physical 3D beers spawned at my side, representing lives, which I must drink from if I fail a Jump-In or instantly discard a drawn card, passing out when depleted.
+- [ ] **Story**: As a player, I want 5 physical 3D beers spawned at my side, representing lives, which I must drink from if I fail a Jump-In or instantly discard a drawn card, passing out when depleted.
   * **Acceptance Criteria**:
     * **Given** a player is active
     * **When** they fail a Jump-In or instantly discard
     * **Then** a 3D beer is consumed, and if 0 remain, the player passes out and is eliminated.
 
-- [x] **Story**: As a player, I want to earn money scaled to the rank of discarded cards (with Kings giving 0, King of Diamonds giving max, Aces giving high) to create an economic layer.
+- [ ] **Story**: As a player, I want to earn money scaled to the rank of discarded cards (with Kings giving 0, King of Diamonds giving max, Aces giving high) to create an economic layer.
   * **Acceptance Criteria**:
     * **Given** a player successfully discards a card
     * **When** the discard resolves
     * **Then** the player is awarded currency scaled appropriately to the discard's value.
 
-- [x] **Story**: As a player, I want to click a hovering chicken to spend money and spawn an egg that cracks into a face-down Ability Card, which I can use anytime during my turn.
+- [ ] **Story**: As a player, I want to click a hovering chicken to spend money and spawn an egg that cracks into a face-down Ability Card, which I can use anytime during my turn.
   * **Acceptance Criteria**:
     * **Given** a player has enough currency on their turn
     * **When** they click the chicken
     * **Then** money is deducted, an egg spawns and cracks, and a separate Ability component is added face-down to their play area.
 
-- [x] **Story**: As a player, I want to be able to use a variety of disruption and utility abilities (Shuffle, Reverse, Skip, Boulder, etc.) to manipulate the game state.
+- [ ] **Story**: As a player, I want to deploy the "Uno Reverse" Ability Card during my turn to instantly reverse the turn order direction, so that I can strategically deflect gameplay flow back to the previous player.
   * **Acceptance Criteria**:
-    * **Given** a player has an ability token
-    * **When** they activate it on their turn
-    * **Then** the specific ability effect triggers (e.g., turn reversal, shuffling hands, skipping players).
+    * **Given** the turn order is proceeding clockwise
+    * **When** a player flips the Uno Reverse ability card
+    * **Then** the FSM turn_direction integer inverts and the previous player immediately takes their turn.
 
-## Epic 9: Professional Polish & Robustness
-- [x] **Story**: As a player, I want the card layout to be professional and uncluttered, with cards bundling together when my hand is large, so that the board remains readable.
+- [ ] **Story**: As a player, I want to use the "Double Score" Ability Card to select a targeted opponent and visually double the point penalty of their hand, so that I can manipulate end-game standings.
   * **Acceptance Criteria**:
-    * **Given** a player has more than 5 cards
-    * **When** the hand visualizes
-    * **Then** cards overlap/bundle into a fixed width, but spread slightly on hover for selection.
+    * **Given** an opponent has an active hand of cards
+    * **When** the Double Score card is activated against them
+    * **Then** a 2x multiplier debuff is applied to their seat for the final End Game calculation phase.
 
-- [x] **Story**: As a player, I want turn transitions and Dutch calls to be robust and error-free, even if I choose to forfeit a call late in the round.
+- [ ] **Story**: As a player, I want to deploy the "Embezzle Funds" Ability Card to steal exactly $50 randomly from another player, accelerating my economy while crippling theirs.
   * **Acceptance Criteria**:
-    * **Given** a player is in the Dutch confirmation phase
-    * **When** they choose to forfeit
-    * **Then** the turn ends correctly without forcing an extra draw.
+    * **Given** another player holds currency
+    * **When** the Embezzle Funds ability is activated
+    * **Then** the EconomyManager deducts $50 from their total and deposits it strictly into the casting player's balance.
 
-## Epic 10: Polarity Shift
-- [x] **Story**: As a player, I want to be able to use a 'Polarity Shift' ability to invert the game's win condition between Lowest Wins and Highest Wins, allowing me to win even with a high-point hand.
+- [ ] **Story**: As a player, I want to use the "Reset Hand" Ability Card to force an opponent to discard their entire hand and draw a fresh 4 cards, destroying their carefully memorized board.
   * **Acceptance Criteria**:
-    * **Given** a Polarity Shift ability is played
-    * **When** the effect triggers
-    * **Then** the win condition flips, and the final scoring reflects the new goal (Lowest or Highest score).
+    * **Given** the player targets an opponent with Reset Hand
+    * **When** the ability is confirmed
+    * **Then** all of the targeted opponent's cards are swept to the discard pile and 4 new face-down cards are dealt to them.
+
+- [ ] **Story**: As a player, I want to deploy the "X-Ray Vision" Ability Card to click and peek at any two cards on the board, so that I can dramatically increase my situational awareness without ending my turn.
+  * **Acceptance Criteria**:
+    * **Given** the player is actively in the waiting-for-input state
+    * **When** the X-Ray Vision ability is utilized
+    * **Then** they are prompted to click two valid card nodes, briefly viewing their face textures before they return to face-down.
