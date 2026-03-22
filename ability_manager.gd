@@ -60,7 +60,8 @@ func execute(player_idx: int, ability_id: String, target_idx: int = -1):
 		print("[AM DEBUG] Resuming from ability...")
 		gm.resume_from_ability()
 	else:
-		print("[AM DEBUG] Already changed state (", gm.GameState.keys()[gm.current_state], "), skipping resume.")
+		print("[AM DEBUG] Already changed state (", gm.GameState.keys()[gm.current_state], "), skipping resume but finishing ability signal.")
+		gm.ability_finished.emit()
 
 func _trim_off(p_idx: int):
 	var hand = gm.players_info[p_idx].hand

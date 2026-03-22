@@ -315,8 +315,9 @@ func _execute_end_choice(bot_idx: int) -> void:
 		if should_use:
 			var target = _get_best_target_for(bot_idx, ab)
 			print("Bot ", bot_idx, " using ability: ", ab, " on target ", target)
-			gm.play_ability(bot_idx, ab, target)
-			await gm.ability_finished # Wait for it to complete
+			if gm.play_ability(bot_idx, ab, target):
+				await gm.ability_finished # Wait for it to complete
+			
 			await _wait(0.5)
 			if gm.current_state != GameManager.GameState.TURN_END_CHOICE: return
 		else:
