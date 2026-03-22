@@ -126,15 +126,15 @@ func _ready():
 	trigger_glitch(0.4, 0.8) # Intro glitch
 
 func _create_hud_ui():
-	# Action Buttons Container
-	var action_container = HBoxContainer.new()
-	action_container.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	action_container.offset_left = -400
-	action_container.offset_right = 400
-	action_container.offset_top = -220
-	action_container.offset_bottom = -170
-	action_container.alignment = BoxContainer.ALIGNMENT_CENTER
-	action_container.add_theme_constant_override("separation", 20)
+	# Action Buttons Container: Moved to bottom-right to avoid overlapping hand cards
+	var action_container = VBoxContainer.new()
+	action_container.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	action_container.offset_left = -200
+	action_container.offset_right = -30
+	action_container.offset_top = -400
+	action_container.offset_bottom = -30
+	action_container.alignment = BoxContainer.ALIGNMENT_END
+	action_container.add_theme_constant_override("separation", 15)
 	$GameUI/MainHUD.add_child(action_container)
 	action_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -190,8 +190,12 @@ func _create_button(parent: Node, text: String, color: Color) -> Button:
 	btn.add_theme_stylebox_override("hover", hover_style)
 	btn.add_theme_stylebox_override("pressed", hover_style)
 	parent.add_child(btn)
-	# Removed manual anchors so HBoxContainer takes full control of layout
-	btn.custom_minimum_size = Vector2(140, 40)
+	
+	# Explicitly set mouse filter to STOP for the button so it can still be clicked,
+	# but its PARENT (action_container) is IGNORE so clicks pass through the spacing.
+	btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	
+	btn.custom_minimum_size = Vector2(160, 45)
 	btn.hide()
 	return btn
 
