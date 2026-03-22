@@ -461,7 +461,7 @@ signal ability_played(player_idx, ability_id)
 signal ability_finished
 
 func play_ability(player_idx: int, ability_id: String, target_idx: int = -1) -> bool:
-	print("[GM DEBUG] play_ability from ", player_idx, " state: ", GameState.keys()[current_state])
+	print("[GM DEBUG] play_ability request: P", player_idx, " using ", ability_id, " on T", target_idx, " | State: ", GameState.keys()[current_state])
 	
 	if current_player_index != player_idx:
 		print("[GM DEBUG] REJECTED: Not player's turn (Turn: ", current_player_index, ", Activator: ", player_idx, ")")
@@ -477,6 +477,12 @@ func play_ability(player_idx: int, ability_id: String, target_idx: int = -1) -> 
 	
 	if current_state not in valid_states:
 		print("[GM DEBUG] REJECTED: Game state ", GameState.keys()[current_state], " prevents playing abilities.")
+		return false
+
+	# For targetable abilities, ensure target_idx is provided and valid
+	var targeting_abilities = ["bottoms_up", "boulder", "skip", "inflation", "half_off", "shuffle", "jumpscare"]
+	if ability_id in targeting_abilities and target_idx == -1:
+		print("[GM DEBUG] REJECTED: Ability ", ability_id, " requires a valid target.")
 		return false
 
 	state_before_ability = current_state

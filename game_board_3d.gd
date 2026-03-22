@@ -401,9 +401,10 @@ func _on_ability_token_clicked(token):
 			p_idx = i; break
 	
 	if p_idx == GameManager.current_player_index:
-		var targeting_abilities = ["bottoms_up", "boulder", "skip", "inflation", "half_off", "shuffle"]
+		var targeting_abilities = ["bottoms_up", "boulder", "skip", "inflation", "half_off", "shuffle", "jumpscare"]
 		
 		if token.ability_id in targeting_abilities:
+			print("BOARD: Ability ", token.ability_id, " requires target selection.")
 			_is_waiting_for_target = true
 			_set_targeting_areas_enabled(true)
 			_highlight_selectable_cards(true)
@@ -457,7 +458,7 @@ func _on_player_area_input(_camera, event, _position, _normal, _shape_idx, playe
 	
 	# Handle both Area3D events AND direct card clicks (where event is null)
 	if event == null or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
-		print("[DEBUG] TARGET CLICKED for player ", player_idx, " (Area: ", _is_waiting_for_target, ")")
+		print("[BOARD DEBUG] TARGET RESOLVED: Player ", player_idx, " was chosen as target for ", _pending_ability.get("id", "UNKNOWN"))
 		
 		# Validation: ensure we aren't targeting an already eliminated player
 		if GameManager.players_info[player_idx].is_eliminated:
@@ -1042,8 +1043,11 @@ func _on_card_clicked(node, data):
 	
 	if _is_waiting_for_target:
 		if p_idx != -1:
+			print("[BOARD DEBUG] Card-based targeting: delegating P", p_idx, " click to area input handler.")
 			_on_player_area_input(null, null, Vector3.ZERO, Vector3.ZERO, 0, p_idx)
 			return
+		else:
+			print("[BOARD DEBUG] Clicked something while waiting for target, but couldn't resolve player index.")
 			
 	match GameManager.current_state:
 		GameManager.GameState.INITIAL_PEEK:
