@@ -58,6 +58,7 @@ var jump_in_resume_state: GameState = GameState.INITIALIZING
 var dev_console_enabled: bool = true
 var active_ability_player: int = -1
 var win_condition_lowest_wins: bool = true
+var jump_in_was_own_draw_phase: bool = false
 
 func _ready():
 	deck_manager = DeckManager.new()
