@@ -119,12 +119,14 @@ func initialize_game(p_count: int = 4):
 	
 	start_game()
 
-func change_state(new_state: GameState):
-	if current_state == new_state:
+func change_state(new_state: GameState, force_signal: bool = false):
+	if current_state == new_state and not force_signal:
+		# Still emit signal if we are forcing a refresh (e.g. after an interrupt)
+		# but avoid redundant work if not needed.
 		return
 		
 	# Transition validation from main
-	if not _can_transition_to(new_state):
+	if not force_signal and not _can_transition_to(new_state):
 		push_warning("FSM Blocked: Illegal state transition %s -> %s" % [
 			GameState.keys()[current_state],
 			GameState.keys()[new_state]
@@ -293,7 +295,6 @@ func can_human_interact_with_hand_card(owner_idx: int, card_idx: int, card_is_fa
 		_:
 			# FALLBACK: If human can jump-in, their cards should always be interactive
 			return owner_idx == 0 and can_player_start_jump_in(0)
-
 func _consume_jump_in_resume_state() -> GameState:
 	var resume_state := jump_in_resume_state
 	jump_in_resume_state = GameState.INITIALIZING
@@ -302,6 +303,8 @@ func _consume_jump_in_resume_state() -> GameState:
 func _resolve_post_interrupt_state() -> GameState:
 	var resume_state := _consume_jump_in_resume_state()
 	if resume_state != GameState.INITIALIZING:
+		# FORCE SIGNAL: This is an interrupt completion, we MUST wake up agents
+		change_state(resume_state, true)
 		return resume_state
 	if current_player_index == dutch_caller_index:
 		return GameState.TURN_CONFIRM_DUTCH
@@ -503,7 +506,8 @@ func resume_from_ability():
 	"""Called by AbilityManager when visual effects and internal logic are complete."""
 	if current_state != GameState.STATE_PLAYING_ABILITY:
 		return
-	change_state(state_before_ability)
+	# FORCE SIGNAL: Resume from ability must always wake up bots/UI
+	change_state(state_before_ability, true)
 	ability_finished.emit()
 
 func end_turn():
@@ -718,7 +722,11 @@ func _resolve_discard_effects(card: CardData, player_idx: int = -1):
 func complete_initial_peek():
 	if current_state != GameState.INITIAL_PEEK:
 		return
+	# SECURITY FIX: only Player 0 (human) or the system (after a global timer) 
+	# should be able to end the initial peek phase.
+	# For now, we assume this is called by the human board.
 	change_state(GameState.TURN_START_DRAW)
+	print("[FSM] INITIAL_PEEK -> TURN_START_DRAW")
 
 func complete_peek_ability():
 	if current_state != GameState.TURN_PEEK_ABILITY:

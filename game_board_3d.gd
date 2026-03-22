@@ -1044,6 +1044,7 @@ func _handle_initial_deal():
 
 func _start_peek_phase():
 	print("GameBoard3D: _start_peek_phase started")
+	peeked_cards.clear()
 	_show_message("Select TWO cards to peek at.")
 	# In 3D, we can highlight them by raising them slightly
 	for c3d in player_pos_nodes[0].get_children():

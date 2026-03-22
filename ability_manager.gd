@@ -106,7 +106,11 @@ func _modify_values(t_idx: int, modifier: float):
 	gm.hand_updated.emit(t_idx)
 
 func _perfect_match(activator_idx: int):
-	# Collect all board cards
+	print("[AM DEBUG] Perfect Match triggered by P", activator_idx, ". Resetting round...")
+	# 0. Clear any pending drawn card in manager
+	gm.drawn_card_data = null
+	
+	# 1. Collect all board cards
 	var all_cards = []
 	for i in range(gm.num_players):
 		all_cards.append_array(gm.players_info[i].hand)
@@ -118,12 +122,16 @@ func _perfect_match(activator_idx: int):
 	
 	# Cards are already CardData objects in our new refactored system
 	for card in all_cards:
-		gm.deck_manager.deck.append(card)
+		if is_instance_valid(card):
+			# Reset any temporary state on the cards
+			card.point_modifier = 1.0
+			card.is_face_up = false
+			gm.deck_manager.deck.append(card)
 		
 	# Reshuffle
 	gm.deck_manager.deck.shuffle()
 	
-	# Extract A, 2, 3, 4 for activator
+	# 2. Extract [Ace, 2, 3, 4] for activator
 	var needed_ranks = ["Ace", "2", "3", "4"]
 	var extracted = []
 	for n_rank in needed_ranks:
@@ -132,16 +140,17 @@ func _perfect_match(activator_idx: int):
 				extracted.append(gm.deck_manager.deck.pop_at(i))
 				break
 				
-	# If any missing due to weird deck state (impossible in standard without bugs), fallback to draw
+	# If any missing due to weird deck state, fallback to draw
 	while extracted.size() < 4:
 		var d = gm.deck_manager.draw_card()
 		if d: extracted.append(d)
 		
+	# Assign the 'Perfect Match' to activator
 	for card in extracted:
 		gm.players_info[activator_idx].hand.append(card)
 	gm.hand_updated.emit(activator_idx)
 		
-	# Give 4 random cards to everyone else as long as they aren't eliminated
+	# 3. Give 4 random cards to everyone else
 	for i in range(gm.num_players):
 		if i == activator_idx or gm.players_info[i].is_eliminated: continue
 		for j in range(4):
@@ -150,12 +159,13 @@ func _perfect_match(activator_idx: int):
 				gm.players_info[i].hand.append(cd)
 		gm.hand_updated.emit(i)
 		
-	# Draw one card for the new discard pile to keep the game going
+	# 4. Draw one card for the new discard pile
 	var discard_start = gm.deck_manager.draw_card()
 	if discard_start:
 		discard_start.is_face_up = true
 		gm.deck_manager.discard_pile.append(discard_start)
 		gm.card_discarded.emit(-1, discard_start) # -1 means dealer
 	
-	# Reinstate peeking phase for the new cards
-	gm.change_state(gm.GameState.INITIAL_PEEK)
+	# 5. Reinstate peeking phase for the new cards
+	# We use change_state(..., true) to ensure everyone wakes up!
+	gm.change_state(gm.GameState.INITIAL_PEEK, true)
