@@ -397,7 +397,6 @@ func _update_ability_visuals(p_idx: int):
 		# Snappy, satisfying placement animation
 		var tween = create_tween()
 		tween.tween_property(t, "position", target_pos, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
->>>>>>> c472367 (feat(ui): implement Buckshot table aesthetics, 4x4 matrix, and barrel-roll animations)
 	
 func _on_ability_token_clicked(token):
 	var p_idx = -1
@@ -950,23 +949,13 @@ func _update_hand_visuals(player_idx: int):
 			card_node.setup(hand_data[i])
 			card_node.name = "Card_%d_%d" % [player_idx, i]
 			
-<<<<<<< HEAD
-			var target_pos = Vector3(i * spacing - total_width / 2.0, 0.05 + i * 0.002, 0)
-			var target_rot_x = (270 if hand_data[i].is_face_up else 90)
-=======
-			var target_pos = Vector3((i - (nodes.size() - 1) / 2.0) * card_spacing, 0.05, 0)
->>>>>>> c472367 (feat(ui): implement Buckshot table aesthetics, 4x4 matrix, and barrel-roll animations)
+			var target_pos = Vector3((i - (nodes.size() - 1) / 2.0) * spacing, 0.05 + i * 0.002, 0)
 			
 			if card_node.position.distance_to(target_pos) < 0.01: continue
 			
 			var tween = create_tween().set_parallel(true)
-<<<<<<< HEAD
 			tween.tween_property(card_node, "position", target_pos, 0.3).set_trans(Tween.TRANS_QUAD)
-			tween.tween_property(card_node, "rotation_degrees:x", target_rot_x, 0.3)
-			tween.tween_property(card_node, "rotation_degrees:y", 0.0, 0.3) # Reset fan rotation
-=======
-			tween.tween_property(card_node, "position:x", target_pos.x, 0.3).set_trans(Tween.TRANS_QUAD)
-			tween.tween_property(card_node, "position:z", target_pos.z, 0.3).set_trans(Tween.TRANS_QUAD)
+			
 			var target_rot_y = 180.0 if (player_idx == 0 or player_idx == 2) else 0.0
 			var flat_basis = Basis.from_euler(Vector3(deg_to_rad(90), deg_to_rad(target_rot_y), 0))
 			
@@ -974,7 +963,6 @@ func _update_hand_visuals(player_idx: int):
 				flat_basis = flat_basis * Basis(Vector3.UP, PI) # Barrel roll 180 degrees instead of pitching
 				
 			tween.tween_property(card_node, "quaternion", flat_basis.get_rotation_quaternion(), 0.3)
->>>>>>> c472367 (feat(ui): implement Buckshot table aesthetics, 4x4 matrix, and barrel-roll animations)
 			
 			var lift_tween = create_tween()
 			lift_tween.tween_property(card_node, "scale", Vector3(1.05, 1.05, 1.05), 0.1)
