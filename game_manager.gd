@@ -256,13 +256,16 @@ func can_player_select_jump_in_card(player_idx: int, owner_idx: int, card_idx: i
 	return _hand_has_index(owner_idx, card_idx)
 
 func can_player_complete_peek_ability(player_idx: int) -> bool:
-	return _is_valid_player_index(player_idx) and player_idx == current_player_index and current_state == GameState.TURN_PEEK_ABILITY
+	# RECENT FIX: Use active_ability_player instead of current_player_index!
+	# This allows jump-ins to correctly authorize the player who discarded the Queen.
+	return _is_valid_player_index(player_idx) and player_idx == active_ability_player and current_state == GameState.TURN_PEEK_ABILITY
 
 func can_player_use_peek_ability(player_idx: int, _owner_idx: int, card_is_face_up: bool) -> bool:
 	return can_player_complete_peek_ability(player_idx) and not card_is_face_up
 
 func can_player_complete_swap_ability(player_idx: int) -> bool:
-	return _is_valid_player_index(player_idx) and player_idx == current_player_index and current_state == GameState.TURN_SWAP_ABILITY
+	# RECENT FIX: Use active_ability_player instead of current_player_index!
+	return _is_valid_player_index(player_idx) and player_idx == active_ability_player and current_state == GameState.TURN_SWAP_ABILITY
 
 func can_player_select_swap_card(player_idx: int, owner_idx: int, card_idx: int) -> bool:
 	return can_player_complete_swap_ability(player_idx) and _hand_has_index(owner_idx, card_idx)
@@ -468,6 +471,7 @@ func _clear_interrupt_state():
 	jump_in_resume_state = GameState.INITIALIZING
 	jump_in_was_own_draw_phase = false
 	jump_in_player_idx = -1
+	active_ability_player = -1
 
 ## Abilities API
 var state_before_ability: GameState = GameState.INITIALIZING
