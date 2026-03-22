@@ -1092,11 +1092,17 @@ func _on_card_clicked(node, data):
 		GameManager.GameState.TURN_JUMP_IN_SELECTION:
 			var c_idx = -2 if is_pending else player_hands[0].find(node)
 			if c_idx != -1 or is_pending:
+				# VISUAL FEEDBACK: keep ONLY the clicked card highlighted while validating
 				_clear_all_highlights()
+				node.set_highlight(true)
+				node.set_interactive(false) # Prevent clicking again during 'await'
+				
 				if await GameManager.validate_jump_in(c_idx):
 					print("[JUMP-IN] SUCCESS")
+					# card_discarded signal will take over from here
 				else:
 					print("[JUMP-IN] FAILED")
+					# highlights will be reset by game_state_changed or manual reset
 
 		GameManager.GameState.TURN_PEEK_ABILITY:
 			if is_pending or not GameManager.can_human_interact_with_hand_card(p_idx, -2 if is_pending else player_hands[p_idx].find(node), data.is_face_up):

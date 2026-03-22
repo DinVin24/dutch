@@ -571,7 +571,8 @@ func validate_jump_in(card_idx: int) -> bool:
 			drawn_card_data = null
 		else:
 			hand.remove_at(card_idx)
-			hand_updated.emit(jump_in_player_idx)
+			# NOTE: we DON'T emit hand_updated here because card_discarded 
+			# will handle the surgical node removal and subsequent layout refresh.
 			memory_shift_required.emit(jump_in_player_idx, card_idx)
 		
 		# Check for win condition (out of cards)
