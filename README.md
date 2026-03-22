@@ -1,43 +1,45 @@
 # Dutch
 
-## Setup
-- Each player is dealt 4 cards face down.
-- Players may look at any 2 of their cards at the start of the game.
-- Cards remain face down for the rest of the game.
+Dutch is a rules-heavy card game of memory, strategy, and high-stakes social interaction. The goal is to finish with the lowest score, but with abilities, money, and "beers" at play, the path to victory is rarely straight.
 
-## Turns
-- Draw a card from the deck and look at it.
-- Decide if you either:
-  - Discard it onto the pile.
-  - Swap it with one of your face-down cards.
+## 🎴 The Basics
+- **Setup**: Each player is dealt 4 cards face down. You may peek at any 2 at the start.
+- **Turns**: Draw a card, decide to either **Discard** it or **Swap** it with one of your face-down cards.
+- **Winning**: The player with the lowest score when the game ends wins. If you discard all your cards, you win immediately.
 
-## Special Moves
-- Jump-in:
-  If a player knows they have a card that matches the last one that was discarded, they can discard it, even if it isn't their turn.
-  - If the card is a match, you get to discard it.
-  - If the card isn't a match, you keep it and also draw a new card without looking at it.
-- Special cards:
-  - Queen -> Look at any face-down card on the table (yours or an opponent's)
-  - Jack -> Swap any two cards on the table
+## 🍻 Penalty System (Beers)
+Each player starts with **5 Beers**. Certain mistakes force you to "drink":
+- **Failed Jump-In**: Trying to jump in with a card that doesn't match.
+- **Instant Discard**: Drawing a card and immediately discarding it without swapping or using its ability (if applicable).
+- **Passing Out**: Once you drink all 5 beers, you are eliminated from the round.
 
-## Scoring
-- The goal of the game is to have the lowest score.
-- Points per card:
-  - Ace = 1, Two = 2, ..., Jack = 11, Queen = 12, King = 13
-  - King of Diamonds = 0.
+## 💰 Economy & Abilities
+- **Money**: Discarding cards earns you money based on the card's value. 
+    - **Aces & King of Diamonds**: High value.
+    - **Other Kings**: Zero value.
+- **The Chicken**: A 3D chicken hovers over the table. Click its legs to spend money and receive an **Ability Card**.
+- **Ability Cards**: These are kept face-down and can be used on your turn. They do not count toward your hand score.
 
-## Calling Dutch
-- On your turn, you may call "Dutch" if you believe you have the lowest score on the table.
-- When you call Dutch, everybody gets notified, and the game progresses one more full turn for everyone.
-- When it is your turn again, you have two choices:
-  - **Confirm**: End the game immediately. All cards are flipped face-up and the player with the lowest score wins.
-  - **Cancel**: Continue the game. However, if you cancel, you cannot call Dutch again for the remainder of the game.
+### Standard Card Abilities (Discarded)
+- **Queen**: Look at any face-down card on the table.
+- **Jack**: Swap any two cards on the table.
+- **King of Diamonds**: 0 points (lowest possible).
 
-## Winning
-- When the game ends, all player reveal their cards.
-- The player with the lowest score wins.
-- In case of a tie, the player with fewer cards wins.
-- If you discard all of your cards before the game ends, you win.
+### Special Ability Tokens
+- **Force Drink**: Make another player drink a beer.
+- **Extra Beer**: Recover one of your beer slots.
+- **Purge**: Remove the highest card from your hand.
+- **Sabotage**: Give an opponent the highest card from the deck.
+- **Uno Reverse**: Reverse the turn order.
+- **Block**: Skip an opponent's turn.
+- **Doubler/Halver**: Manipulate the scoring value of a player's hand.
 
-## Developer Setup
-- Run `git config core.hooksPath .githooks` after cloning to enable the project git hooks.
+## ⚡ Special Moves
+- **Jump-In**: If you have a card matching the last one discarded, you can play it even if it's not your turn. 
+    - **Success**: Your hand size decreases.
+    - **Failure**: You draw a penalty card and drink a beer.
+- **Calling Dutch**: If you think you have the lowest score, call "Dutch". Everyone gets one last turn. You then **Confirm** to end or **Cancel** (forfeiting your right to call again).
+
+## 🛠️ Developer Setup
+- Run `git config core.hooksPath .githooks` after cloning.
+- See `DESIGN.md` for technical architecture and FSM details.
