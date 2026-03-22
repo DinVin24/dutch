@@ -291,7 +291,8 @@ func can_human_interact_with_hand_card(owner_idx: int, card_idx: int, card_is_fa
 		GameState.TURN_SWAP_ABILITY:
 			return can_player_select_swap_card(0, owner_idx, card_idx)
 		_:
-			return false
+			# FALLBACK: If human can jump-in, their cards should always be interactive
+			return owner_idx == 0 and can_player_start_jump_in(0)
 
 func _consume_jump_in_resume_state() -> GameState:
 	var resume_state := jump_in_resume_state

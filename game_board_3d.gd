@@ -1068,6 +1068,12 @@ func _on_card_clicked(node, data):
 		else:
 			print("[BOARD DEBUG] Clicked something while waiting for target, but couldn't resolve player index.")
 			
+	# JUMP-IN SHORTCUT: If user clicks their card and can jump in, start it implicitly
+	if p_idx == 0 and GameManager.can_player_start_jump_in(0) and GameManager.current_state != GameManager.GameState.TURN_JUMP_IN_SELECTION:
+		print("[BOARD DEBUG] Implicit Jump-In started by card click.")
+		GameManager.start_jump_in(0)
+		# Flow now falls through to the TURN_JUMP_IN_SELECTION case below because start_jump_in updated the state.
+
 	match GameManager.current_state:
 		GameManager.GameState.INITIAL_PEEK:
 			if node.get_parent() == player_pos_nodes[0] and not data.is_face_up:
