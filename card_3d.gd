@@ -3,6 +3,7 @@ class_name Card3D
 
 signal card_clicked(card_node, card_data)
 signal card_flipped(card_node, card_data)
+signal hover_state_changed(card_node, is_hovering: bool)
 
 @onready var front_face: MeshInstance3D = $Visuals/FrontFace
 @onready var back_face: MeshInstance3D = $Visuals/BackFace
@@ -49,6 +50,8 @@ func _ready():
 	_update_visuals()
 	if area:
 		area.input_event.connect(_on_input_event)
+		area.mouse_entered.connect(_on_mouse_entered)
+		area.mouse_exited.connect(_on_mouse_exited)
 		area.input_ray_pickable = true
 	else:
 		print("Card3D Error: Area3D not found!")
@@ -140,6 +143,12 @@ func _on_input_event(_camera, event, _position, _normal, _shape_idx):
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		card_clicked.emit(self, data)
 
+func _on_mouse_entered():
+	hover_state_changed.emit(self, true)
+
+func _on_mouse_exited():
+	hover_state_changed.emit(self, false)
+
 func set_selected(p_selected: bool):
 	is_selected = p_selected
 	_update_visuals()
@@ -155,16 +164,16 @@ func animate_flip(is_face_up: bool, target_y: float = -1.0):
 		highlight_tween.kill()
 		highlight_tween = null
 	
-	# To flip a flat card (X=90) to its other side (X=-90 or 270)
-	var target_rot_x = 90.0 if not is_face_up else 270.0
+	# We want a left-to-right barrel roll, which means turning the card like a page
+	# by rotating exactly 180 degrees around its local UP vertical axis
+	var end_basis = transform.basis * Basis(Vector3.UP, PI)
 	
 	var tween = create_tween()
-	# Use current Y as baseline if target_y not specified
 	var base_y = target_y if target_y >= 0 else position.y
 	
 	tween.set_parallel(true)
-	tween.tween_property(self, "rotation_degrees:x", target_rot_x, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
-	tween.tween_property(self, "position:y", base_y + 0.4, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(self, "quaternion", end_basis.get_rotation_quaternion(), 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(self, "position:y", base_y + 0.8, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	
 	tween.chain().tween_property(self, "position:y", base_y, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	

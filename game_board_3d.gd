@@ -58,6 +58,7 @@ var _current_ability_message: String = ""
 var _shake_intensity: float = 0.0
 var _shake_timer: float = 0.0
 var _base_camera_pos: Vector3
+var _base_camera_rotation: Vector3
 
 # Targeting state
 var _is_waiting_for_target: bool = false
@@ -107,6 +108,7 @@ func _ready():
 	await get_tree().process_frame
 	_update_deck_visual()
 	_base_camera_pos = $Camera3D.position
+	_base_camera_rotation = $Camera3D.rotation
 	_setup_table_noise()
 	_update_turn_lights(-1, false) # Ensure all off
 	_create_player_targeting_areas()
@@ -282,7 +284,7 @@ func _create_chicken_placeholder():
 	var chicken = CSGSphere3D.new()
 	chicken.radius = 0.4
 	# Move lower and slightly closer to center of the table so camera sees it
-	chicken.position = Vector3(0, 1.5, -3.5) 
+	chicken.position = Vector3(0, 1.5, -3.5)
 	
 	var mat = StandardMaterial3D.new()
 	mat.albedo_color = Color(0.9, 0.9, 0.8) # Pale chicken
@@ -374,10 +376,28 @@ func _drop_egg_for(p_idx: int):
 	token.setup(ab)
 	token.token_clicked.connect(_on_ability_token_clicked)
 	
-	# Layout the tokens on the LEFT side station
-	var count = GameManager.players_info[p_idx].abilities.size()
-	# Spread them in a grid too if they get too many? For now just a compact line at -1.8
-	token.position = Vector3(-1.8 - (count * 0.4), 0.1, -1.8)
+	# Spawn hovering above the table, then beautifully tween into the grid
+	token.position = Vector3(2.8, 0.5, -1.2) 
+	_update_ability_visuals(p_idx)
+	
+func _update_ability_visuals(p_idx: int):
+	var tokens = []
+	for c in player_pos_nodes[p_idx].get_children():
+		if "ability_id" in c and not c.is_queued_for_deletion():
+			tokens.append(c)
+			
+	for i in range(tokens.size()):
+		var t = tokens[i]
+		var cols = i % 4
+		var rows = i / 4
+		
+		# Clean, perfect 4x4 matrix centered right next to the hand
+		var target_pos = Vector3(2.8 + (cols * 0.7), 0.1, (rows * 0.8) - 0.6)
+		
+		# Snappy, satisfying placement animation
+		var tween = create_tween()
+		tween.tween_property(t, "position", target_pos, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+>>>>>>> c472367 (feat(ui): implement Buckshot table aesthetics, 4x4 matrix, and barrel-roll animations)
 	
 func _on_ability_token_clicked(token):
 	var p_idx = -1
@@ -408,6 +428,7 @@ func _on_ability_token_clicked(token):
 				var ab_idx = GameManager.players_info[p_idx].abilities.find(token.ability_id)
 				if ab_idx != -1:
 					GameManager.players_info[p_idx].abilities.remove_at(ab_idx)
+				_update_ability_visuals(p_idx)
 	else:
 		_show_message("Not your turn to play abilities!")
 
@@ -464,6 +485,7 @@ func _on_player_area_input(_camera, event, _position, _normal, _shape_idx, playe
 			if ab_idx != -1:
 				GameManager.players_info[activator].abilities.remove_at(ab_idx)
 			_pending_ability.clear()
+			_update_ability_visuals(activator)
 
 func _on_player_drank_beer(player_idx, remaining):
 	if player_idx < 0 or player_idx >= 4: return
@@ -507,14 +529,15 @@ func _update_turn_lights(current_player: int, all_on: bool = false):
 		var is_active = (i == current_player or all_on)
 		var hand_size = GameManager.players_info[i].hand.size()
 		
-		var target_energy = 15.0 if is_active else 0.0 # Increased for visibility
-		var target_angle = 60.0 + max(0, (hand_size - 4) * 8.0) # Wider base and steeper growth
-		target_angle = min(target_angle, 85.0)
+		var target_energy = 8.0 if is_active else 0.0
+		var target_angle = 85.0
 		
 		var tween = create_tween().set_parallel(true)
 		tween.tween_property(light, "light_energy", target_energy, 0.5).set_trans(Tween.TRANS_CUBIC)
 		tween.tween_property(light, "spot_angle", target_angle, 0.5).set_trans(Tween.TRANS_CUBIC)
-		tween.tween_property(light, "spot_range", 12.0, 0.5) # Extended throw for wide hands
+		tween.tween_property(light, "spot_range", 18.0, 0.5)
+		tween.tween_property(light, "position:y", 6.5, 0.5)
+		tween.tween_property(light, "scale", Vector3(1.0, 1.0, 1.0), 0.5)
 
 func _setup_table_noise():
 	var table_mesh = $Table as MeshInstance3D
@@ -927,15 +950,31 @@ func _update_hand_visuals(player_idx: int):
 			card_node.setup(hand_data[i])
 			card_node.name = "Card_%d_%d" % [player_idx, i]
 			
+<<<<<<< HEAD
 			var target_pos = Vector3(i * spacing - total_width / 2.0, 0.05 + i * 0.002, 0)
 			var target_rot_x = (270 if hand_data[i].is_face_up else 90)
+=======
+			var target_pos = Vector3((i - (nodes.size() - 1) / 2.0) * card_spacing, 0.05, 0)
+>>>>>>> c472367 (feat(ui): implement Buckshot table aesthetics, 4x4 matrix, and barrel-roll animations)
 			
 			if card_node.position.distance_to(target_pos) < 0.01: continue
 			
 			var tween = create_tween().set_parallel(true)
+<<<<<<< HEAD
 			tween.tween_property(card_node, "position", target_pos, 0.3).set_trans(Tween.TRANS_QUAD)
 			tween.tween_property(card_node, "rotation_degrees:x", target_rot_x, 0.3)
 			tween.tween_property(card_node, "rotation_degrees:y", 0.0, 0.3) # Reset fan rotation
+=======
+			tween.tween_property(card_node, "position:x", target_pos.x, 0.3).set_trans(Tween.TRANS_QUAD)
+			tween.tween_property(card_node, "position:z", target_pos.z, 0.3).set_trans(Tween.TRANS_QUAD)
+			var target_rot_y = 180.0 if (player_idx == 0 or player_idx == 2) else 0.0
+			var flat_basis = Basis.from_euler(Vector3(deg_to_rad(90), deg_to_rad(target_rot_y), 0))
+			
+			if hand_data[i].is_face_up:
+				flat_basis = flat_basis * Basis(Vector3.UP, PI) # Barrel roll 180 degrees instead of pitching
+				
+			tween.tween_property(card_node, "quaternion", flat_basis.get_rotation_quaternion(), 0.3)
+>>>>>>> c472367 (feat(ui): implement Buckshot table aesthetics, 4x4 matrix, and barrel-roll animations)
 			
 			var lift_tween = create_tween()
 			lift_tween.tween_property(card_node, "scale", Vector3(1.05, 1.05, 1.05), 0.1)
@@ -947,7 +986,7 @@ func _handle_initial_deal():
 	for i in range(4): # 4 cards each
 		for p_idx in range(GameManager.num_players):
 			var card_data_dict = GameManager.deck_manager.draw_card()
-			if card_data_dict.is_empty(): 
+			if card_data_dict.is_empty():
 				break
 			
 			var card_data = CardData.new(card_data_dict.rank, card_data_dict.suit)
@@ -1176,7 +1215,7 @@ func _toggle_debug_reveal():
 		_hide_message()
 
 # Signal Handlers
-func _on_jump_in_penalty(player_idx, _card): 
+func _on_jump_in_penalty(player_idx, _card):
 	_update_hand_visuals(player_idx)
 
 func _on_jump_in_failed(player_idx, card_idx, _card_data):
@@ -1205,7 +1244,7 @@ func _on_jump_in_failed(player_idx, card_idx, _card_data):
 		reveal_tween.tween_property(card_node, "rotation_degrees:x", 90.0, 0.3).set_trans(Tween.TRANS_QUAD)
 		reveal_tween.parallel().tween_property(card_node, "position:y", 0.05, 0.2).set_trans(Tween.TRANS_QUAD)
 		
-		reveal_tween.tween_callback(func(): 
+		reveal_tween.tween_callback(func():
 			trigger_glitch(0.3, 0.4)
 			shake(0.2, 0.3)
 			card_node.data.is_face_up = false
@@ -1228,6 +1267,18 @@ func _process(delta: float) -> void:
 
 	if noclip_enabled and not DevConsole.window.visible:
 		_handle_noclip_movement(delta)
+	elif not noclip_enabled:
+		var mouse_pos = get_viewport().get_mouse_position()
+		var vp_size = get_viewport().get_visible_rect().size
+		var nx = mouse_pos.x / float(vp_size.x)
+		var target_yaw = 0.0
+		
+		if nx < 0.2:
+			target_yaw = deg_to_rad(12.0) * (0.2 - nx) / 0.2
+		elif nx > 0.8:
+			target_yaw = -deg_to_rad(12.0) * (nx - 0.8) / 0.2
+			
+		camera.rotation.y = lerp_angle(camera.rotation.y, _base_camera_rotation.y + target_yaw, delta * 4.0)
 
 func shake(intensity: float, duration: float):
 	_shake_intensity = intensity
@@ -1266,7 +1317,7 @@ func _input(event: InputEvent) -> void:
 	if noclip_enabled and not DevConsole.window.visible and event is InputEventMouseMotion:
 		camera_rot_y -= event.relative.x * 0.005
 		camera_rot_x -= event.relative.y * 0.005
-		camera_rot_x = clamp(camera_rot_x, -PI/2, PI/2)
+		camera_rot_x = clamp(camera_rot_x, -PI / 2, PI / 2)
 		
 		camera.basis = Basis() # Reset
 		camera.rotate_y(camera_rot_y)

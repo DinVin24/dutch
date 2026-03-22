@@ -202,8 +202,12 @@ func _cmd_give(args: Array):
 				pos_node.add_child(token)
 				token.setup(ab_id)
 				token.token_clicked.connect(scene._on_ability_token_clicked)
-				var count = player.abilities.size()
-				token.position = Vector3(2.5 + (count * 0.6), 0.1, 0.0)
+				
+				# Drop beautifully from above to notify the player they received it
+				token.position = Vector3(2.8, 0.5, 0.0)
+				
+				if scene.has_method("_update_ability_visuals"):
+					scene._update_ability_visuals(player.id)
 	else:
 		# Try to find card
 		var card = _find_and_remove_card_globally(target_name)
