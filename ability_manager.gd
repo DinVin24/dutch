@@ -49,6 +49,8 @@ func execute(player_idx: int, ability_id: String, target_idx: int = -1):
 			if target_idx != -1:
 				gm.players_info[target_idx].hand.shuffle()
 				gm.hand_updated.emit(target_idx)
+		"polarity_shift":
+			gm.shift_polarity()
 
 	# Return FSM to normal
 	await get_tree().create_timer(1.0).timeout

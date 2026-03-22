@@ -39,6 +39,7 @@ signal player_drank_beer(player_idx, remaining)
 signal player_eliminated(player_idx)
 signal player_gained_money(player_idx, amount, total)
 signal ability_unlocked(player_idx, ability_id)
+signal polarity_shifted(new_state: bool)
 
 var current_state: GameState = GameState.INITIALIZING
 var deck_manager: DeckManager
@@ -57,6 +58,7 @@ var jump_in_was_own_draw_phase: bool = false # true when player 0 jumps in at th
 var pre_jump_in_state: GameState = GameState.INITIALIZING
 var dev_console_enabled: bool = true
 var active_ability_player: int = -1
+var win_condition_lowest_wins: bool = true
 
 func _ready():
 	deck_manager = DeckManager.new()
@@ -90,6 +92,7 @@ func initialize_game(p_count: int = 4):
 	turn_direction = 1
 	dutch_caller_index = -1
 	jump_in_player_idx = -1
+	win_condition_lowest_wins = true
 	for i in range(num_players):
 		players_info.append({
 			"id": i,
@@ -180,13 +183,27 @@ func _calculate_scores() -> Array:
 			total = -1
 		else:
 			for card in hand:
-				total += (card as CardData).recalc_point_value()
+						total += (card as CardData).recalc_point_value()
 				
-		entries.append({"id": i, "name": info.name, "score": total, "card_count": hand.size()})
-	# Sort: lowest score first; tiebreak by fewer cards.
+		entries.append({"id": i, "name": info.name, "score": total, "card_count": hand.size(), "is_eliminated": info.is_eliminated})
+	# Sort entries based on score and win condition
 	entries.sort_custom(func(a, b):
+		# 0-card winners (-1) always come first
+		if a.score == -1: return true
+		if b.score == -1: return false
+		
+		# Eliminated players (99) always come last
+		if a.score == 99: return false
+		if b.score == 99: return true
+		
+		# For everyone else, sort based on current win condition polarity
 		if a.score != b.score:
-			return a.score < b.score
+			if win_condition_lowest_wins:
+				return a.score < b.score
+			else:
+				return a.score > b.score
+				
+		# Tiebreak by card count (fewer is always better)
 		return a.card_count < b.card_count
 	)
 	return entries
@@ -253,6 +270,11 @@ func call_dutch(player_id: int):
 		dutch_called.emit(player_id)
 		# Game continues until it returns to this player
 		next_turn()
+
+func shift_polarity():
+	win_condition_lowest_wins = !win_condition_lowest_wins
+	polarity_shifted.emit(win_condition_lowest_wins)
+	print("Game Polarity SHIFTED! Lowest wins: ", win_condition_lowest_wins)
 
 func _prompt_turn_end():
 	# If player 0 jumped in at the very start of their own draw turn, give them
@@ -567,7 +589,7 @@ func buy_ability(p_idx: int) -> bool:
 		player_gained_money.emit(p_idx, -cost, players_info[p_idx].money)
 		
 		# Generate random ability
-		var list = ["bottoms_up", "refuel", "trim_off", "boulder", "reverse", "skip", "perfect_match", "inflation", "half_off", "jumpscare", "shuffle"]
+		var list = ["bottoms_up", "refuel", "trim_off", "boulder", "reverse", "skip", "perfect_match", "inflation", "half_off", "jumpscare", "shuffle", "polarity_shift"]
 		var ab = list[randi() % list.size()]
 		players_info[p_idx].abilities.append(ab)
 		ability_unlocked.emit(p_idx, ab)

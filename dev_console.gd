@@ -179,7 +179,8 @@ func _cmd_give(args: Array):
 		"inflation": "inflation",
 		"half off": "half_off",
 		"jumpscare": "jumpscare",
-		"shuffle": "shuffle"
+		"shuffle": "shuffle",
+		"polarity shift": "polarity_shift"
 	}
 	
 	if ability_map.has(target_name):

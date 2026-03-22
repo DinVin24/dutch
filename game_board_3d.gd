@@ -90,6 +90,7 @@ func _ready():
 	GameManager.player_eliminated.connect(_on_player_eliminated)
 	GameManager.player_gained_money.connect(_on_player_gained_money)
 	GameManager.ability_played.connect(_on_ability_played)
+	GameManager.polarity_shifted.connect(_on_polarity_shifted)
 	
 	_create_hud_ui()
 	_create_discard_indicator()
@@ -1165,10 +1166,25 @@ func _on_scores_ready(results):
 	title.add_theme_font_size_override("font_size", 64)
 	vbox.add_child(title)
 	
+	var win_mode = Label.new()
+	var mode_text = "Lowest Score Wins" if GameManager.win_condition_lowest_wins else "Highest Score Wins"
+	win_mode.text = "(" + mode_text + ")"
+	win_mode.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	win_mode.add_theme_font_size_override("font_size", 32)
+	win_mode.modulate = Color(1.0, 0.8, 0.0) # Golden yellow
+	vbox.add_child(win_mode)
+	
 	for i in range(results.size()):
 		var entry = results[i]
 		var l = Label.new()
-		l.text = "%d. %s: %d pts" % [i + 1, entry.name, entry.score]
+		
+		var score_text = str(entry.score) + " pts"
+		if entry.is_eliminated:
+			score_text = "Passed Out"
+		elif entry.score == -1:
+			score_text = "0 cards (WINNER)"
+			
+		l.text = "%d. %s: %s" % [i + 1, entry.name, score_text]
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.add_theme_font_size_override("font_size", 32)
 		if i == 0: l.add_theme_color_override("font_color", Color.YELLOW)
@@ -1394,3 +1410,10 @@ func toggle_noclip() -> bool:
 
 func is_noclip_active() -> bool:
 	return noclip_enabled
+
+func _on_polarity_shifted(new_state: bool):
+	var msg = "POLARITY SHIFTED: LOWEST WINS!" if new_state else "POLARITY SHIFTED: HIGHEST WINS!"
+	_show_message(msg)
+	shake(0.5, 0.5)
+	trigger_glitch(0.3, 1.2)
+	print("UI: ", msg)

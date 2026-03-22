@@ -306,12 +306,20 @@ func _execute_end_choice(bot_idx: int) -> void:
 	var pool: Array = gm.players_info[bot_idx].abilities
 	if not pool.is_empty():
 		var ab = pool[0] # Just use the first one for now
-		var target = _get_best_target_for(bot_idx, ab)
-		print("Bot ", bot_idx, " using ability: ", ab, " on target ", target)
-		gm.play_ability(bot_idx, ab, target)
-		await gm.ability_finished # Wait for it to complete
-		await _wait(0.5)
-		if gm.current_state != GameManager.GameState.TURN_END_CHOICE: return
+		
+		var should_use = true
+		if ab == "polarity_shift":
+			should_use = _should_flip_polarity(bot_idx)
+			
+		if should_use:
+			var target = _get_best_target_for(bot_idx, ab)
+			print("Bot ", bot_idx, " using ability: ", ab, " on target ", target)
+			gm.play_ability(bot_idx, ab, target)
+			await gm.ability_finished # Wait for it to complete
+			await _wait(0.5)
+			if gm.current_state != GameManager.GameState.TURN_END_CHOICE: return
+		else:
+			print("Bot ", bot_idx, " holding polarity_shift for later.")
 		
 	# 2. Dutch Logic
 	var hand_size: int = gm.players_info[bot_idx].hand.size()
@@ -340,7 +348,40 @@ func _get_best_target_for(bot_idx: int, ab: String) -> int:
 		"skip":
 			# Target next player
 			return (bot_idx + gm.turn_direction + gm.num_players) % gm.num_players
+		"polarity_shift":
+			return bot_idx # Target self or doesn't matter (global)
 	return -1
+
+func _should_flip_polarity(bot_idx: int) -> bool:
+	# Calculate average score of all alive players (using our memory)
+	var total_estimated_score = 0
+	var count = 0
+	var bot_score = 0
+	
+	for i in range(gm.num_players):
+		if gm.players_info[i].is_eliminated: continue
+		
+		var est = 0
+		var memories = gm.players_info[bot_idx].bot_memory.get(i, {})
+		for c_idx in range(gm.players_info[i].hand.size()):
+			if memories.has(c_idx):
+				est += memories[c_idx].point_value
+			else:
+				est += 7
+		
+		total_estimated_score += est
+		count += 1
+		if i == bot_idx: bot_score = est
+		
+	if count <= 1: return false
+	var avg = total_estimated_score / float(count)
+	
+	# If Lowest Wins is active, flip if I'm ABOVE average (bad)
+	if gm.win_condition_lowest_wins:
+		return bot_score > avg
+	else:
+		# If Highest Wins is active, flip if I'm BELOW average (bad)
+		return bot_score < avg
 
 func _get_leading_opponent_idx(bot_idx: int) -> int:
 	var best_p = -1
