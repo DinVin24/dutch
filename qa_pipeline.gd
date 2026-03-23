@@ -4,6 +4,7 @@ extends SceneTree
 # Verifies every phase and every player position systematically without fragile visuals.
 
 const STOP_FILE = "/tmp/STOP_DUTCH_QA"
+const CardDataScript = preload("res://card_data.gd")
 
 var gm: Node = null
 
@@ -267,8 +268,8 @@ func phase_jump_in_all_players():
 	else:
 		print("[QA FAIL] Bot start-turn jump-in request changed FSM")
 
-func _make_card(rank: String, suit: String) -> CardData:
-	return load("res://card_data.gd").new(rank, suit)
+func _make_card(rank: String, suit: String):
+	return CardDataScript.new(rank, suit)
 
 func _set_discard_top(rank: String, suit: String) -> void:
 	gm.deck_manager.discard_pile.clear()
@@ -276,7 +277,7 @@ func _set_discard_top(rank: String, suit: String) -> void:
 
 func _setup_turn_start(player_idx: int) -> void:
 	gm.initialize_game(4)
-	gm.change_state(gm.GameState.INITIAL_PEEK)
+	gm.begin_initial_peek()
 	gm.current_player_index = player_idx
 	gm.complete_initial_peek()
 	assert_player(player_idx)
@@ -288,7 +289,7 @@ func _await_resolution() -> void:
 # --- UTILITIES ---
 
 func assert_state(expected: int):
-	var states = ["INIT", "DEAL", "PEEK", "START", "RESOLVE", "QUEEN", "JACK", "END_CHOICE", "JUMP_IN", "CHECK", "CONFIRM", "OVER"]
+	var states = gm.GameState.keys()
 	if gm.current_state != expected:
 		var got = states[gm.current_state] if gm.current_state < states.size() else "ERR"
 		var exp = states[expected] if expected < states.size() else "ERR"
@@ -305,4 +306,4 @@ func assert_player(expected: int):
 func _setup_manual_hand(p_idx, c_idx, rank, suit):
 	while gm.players_info[p_idx].hand.size() <= c_idx:
 		gm.players_info[p_idx].hand.append(null)
-	gm.players_info[p_idx].hand[c_idx] = load("res://card_data.gd").new(rank, suit)
+	gm.players_info[p_idx].hand[c_idx] = CardDataScript.new(rank, suit)

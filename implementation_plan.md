@@ -1,13 +1,23 @@
-# Implementation Plan: Strict FSM Hardening
+# Implementation Plan: 3D Board FSM Authority Pass
 
 ## Scope
 Harden the gameplay state machine across:
 - `game_manager.gd`
-- `bot_controller.gd`
-- `game_board.gd`
 - `game_board_3d.gd`
 
-Primary goal: make `GameManager` the sole authority for legal state transitions and player/bot action permissions, with boards and bots acting as thin consumers of that authority.
+Primary goal: make `GameManager` the sole authority for legal state transitions and human action permissions in the 3D board, with `game_board_3d.gd` acting as a thin consumer of that authority.
+
+## Current Branch State
+Completed in the first pass:
+- `GameManager` now exposes manager-owned helpers for initial-peek completion and human pending-card interactivity.
+- `game_board_3d.gd` now routes initial-peek completion through `GameManager.begin_initial_peek()` instead of calling `change_state()` directly.
+- `game_board_3d.gd` now uses manager-backed legality checks for pending-card interactivity and the initial peek click path.
+- Failed Jump-In elimination now attempts to restore the interrupted state instead of dropping the FSM on the floor.
+
+Still open for validation:
+- Verify the new helper-backed paths behave correctly in actual gameplay.
+- Verify the failed Jump-In elimination branch resumes the interrupted state cleanly in every case.
+- Verify the board no longer exposes illegal interaction windows during initial peek, Jump-In, and Dutch flows.
 
 ## Rule Anchors
 - Cards stay face down except during legal draw, swap, peek, jump-in reveal, and end-game reveal flows.
@@ -18,16 +28,16 @@ Primary goal: make `GameManager` the sole authority for legal state transitions 
 - Scoring stays Ace=1 through King=13, with King of Diamonds = 0.
 
 ## Current Risks
-- `GameManager.change_state()` now has transition enforcement, but the transition graph must be validated against all legal gameplay paths, especially interrupt resume paths.
-- Jump-In resume logic has moved toward a single `jump_in_resume_state`, but it still needs full downstream consumption across UI and bot flows.
-- `game_board.gd` and `game_board_3d.gd` still derive button visibility, card interactivity, and action legality from raw state fields instead of only asking `GameManager`.
-- `game_board_3d.gd` is the furthest from strict FSM: it shows Jump-In from discard-pile heuristics, enables cards through local `block_cards` logic, and dispatches direct actions without manager-owned permission checks.
-- `bot_controller.gd` has partially moved to guard helpers, but all action entry points and post-swap memory updates must align with confirmed manager outcomes.
+- `GameManager.change_state()` has transition enforcement, but the transition graph still needs validation against all legal gameplay paths, especially interrupt resume paths.
+- `game_board_3d.gd` still mixes board presentation with legality checks in several places, so the next slice should remove any remaining local assumptions.
+- The initial deal still populates hands from the board side, so that flow should stay under review until validation proves it is safe.
+- Failed Jump-In recovery on an eliminated jumper is now guarded, but it needs direct validation because it changes the interrupt-resume path.
+- Human interaction affordances need to stay in sync with manager guards so the board never enables an illegal action window.
 
 ## Execution Plan
 
 ### 1. Finish `GameManager` as the FSM authority
-- Validate and tighten the legal transition table for all normal and interrupt paths.
+- Validate and tighten the legal transition table for all normal and interrupt paths that the 3D board can reach.
 - Keep one interrupt resume source of truth for Jump-In recovery.
 - Ensure all public action methods are fully guard-backed:
   - `can_player_draw`
@@ -46,23 +56,12 @@ Primary goal: make `GameManager` the sole authority for legal state transitions 
 - Confirm that successful Jump-In always routes through one post-discard resolution path.
 - Confirm that invalid Jump-In always resumes the interrupted state cleanly.
 
-### 2. Align `bot_controller.gd` to manager-owned permissions
-- Remove direct FSM policy duplication where possible.
-- Use manager guards before draw, resolve, Jump-In, Dutch, peek, swap, and confirm actions.
-- Update Jack-memory bookkeeping only after a manager-confirmed swap result.
-- Preserve bot decision policy while removing bot-owned legality assumptions.
-
-### 3. Align `game_board.gd` to manager-owned permissions
-- Replace UI-side turn/state checks in deck click, discard click, card click, Jump-In, Dutch, and end-turn handlers with manager guards.
-- Replace button-visibility heuristics with guard-backed visibility.
-- Replace card interactivity/highlighting logic with manager-driven per-card legality.
-- Keep animation and presentation in the board; keep legality in the manager.
-
-### 4. Align `game_board_3d.gd` to manager-owned permissions
-- Remove local `block_cards` and discard-pile heuristics as the source of truth.
+### 2. Align `game_board_3d.gd` to manager-owned permissions
+- Replace any remaining direct state transitions with `GameManager` entry points.
 - Gate deck/discard input, button visibility, card highlights, and card click dispatch through manager guards.
-- Ensure Jump-In cancel vs end-turn semantics match the 2D board and README rules.
-- Ensure 3D board behavior matches 2D board behavior for all shared gameplay states.
+- Replace board-side legality composition with manager-backed helpers for pending cards and hand cards.
+- Ensure Jump-In cancel vs end-turn semantics match the README rules and the current turn state.
+- Keep animation and presentation in the board; keep legality in the manager.
 
 ## State-Transition Concerns To Verify
 - `INITIALIZING -> DEAL_CARDS -> INITIAL_PEEK -> TURN_START_DRAW`
@@ -84,7 +83,8 @@ Primary goal: make `GameManager` the sole authority for legal state transitions 
 - Jump-In should resume the interrupted owner’s state, not invent a new end-of-turn state.
 - A successful Jump-In during another player’s `TURN_START_DRAW` should return to that player’s draw opportunity unless README testing disproves it.
 - Queen and Jack resolution after Jump-In should still be driven by the discarded card’s effect before resuming the interrupted state.
-- Human and bot interaction legality must be identical; only decision policy differs.
+- Human interaction legality in the 3D board must match the manager exactly; presentation can still differ.
+- Eliminated-player Jump-In failures should resume the interrupted state instead of leaving the match stranded.
 
 ## Verification Checklist
 - Draw is only possible for the active player in `TURN_START_DRAW`.
@@ -97,12 +97,14 @@ Primary goal: make `GameManager` the sole authority for legal state transitions 
 - Failed Jump-In reproduces exact README behavior: attempted card stays, unseen penalty card added, interrupted turn resumes correctly.
 - Successful Jump-In on a normal card resumes the interrupted state cleanly.
 - Successful Jump-In on Queen/Jack resolves the effect and then resumes correctly.
+- Failed Jump-In after beer elimination still resumes the interrupted state safely.
 - Dutch can only be called by the active player during end choice.
 - After Dutch is called, one full round completes before confirm/cancel appears.
 - Confirm Dutch ends the game and reveals/scoring still follow README.
 - Cancel Dutch returns play, disables that caller’s future Dutch calls, and does not break turn flow.
-- 2D and 3D boards expose the same legal actions in the same states.
+- 3D board input affordances only appear when `GameManager` allows them.
 
 ## Validator Handoff Notes
-- Manual test focus: Jump-In over end-turn, Jump-In before a draw, Queen/Jack after Jump-In, Dutch full-rotation flow, empty-hand win path.
+- Manual test focus: initial peek completion, Jump-In over end-turn, Jump-In before a draw, failed Jump-In elimination, Dutch full-rotation flow, empty-hand win path.
 - Automated QA focus if Lead opts in: state legality, interrupt recovery, turn-owner continuity, draw/discard/swap exclusivity, Dutch progression, score calculation.
+- If headless Godot still fails in this sandbox, rerun with the workspace-local `XDG_DATA_HOME` override before treating it as a gameplay failure.

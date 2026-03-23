@@ -601,8 +601,9 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	pending_card.name = "PendingCard"
 	add_child(pending_card)
 
-	card_data.is_face_up = false
-	pending_card.setup(card_data)
+	var pending_visual_data = card_data.duplicate()
+	pending_visual_data.is_face_up = false
+	pending_card.setup(pending_visual_data)
 	pending_card.card_clicked.connect(_on_card_clicked)
 	# Move slightly higher and CLOSER TO CAMERA (Z offset) to ensure it's not blocked by DeckArea
 	pending_card.position = deck_area.position + Vector3(0, 0.6, 0.5)
@@ -783,9 +784,7 @@ func _set_all_cards_interactive(enabled: bool):
 func _refresh_human_interactivity() -> void:
 	_set_all_cards_interactive(false)
 	if is_instance_valid(pending_card):
-		pending_card.set_interactive(
-			GameManager.can_player_discard_drawn_card(0) or GameManager.can_player_select_jump_in_card(0, 0, -2)
-		)
+		pending_card.set_interactive(GameManager.can_human_interact_with_pending_card())
 	for p_idx in range(player_hands.size()):
 		for c_idx in range(player_hands[p_idx].size()):
 			var card = player_hands[p_idx][c_idx]
@@ -802,9 +801,7 @@ func _highlight_selectable_cards(is_target_phase: bool = false):
 	_clear_all_highlights()
 	
 	# Handle pending card highlighting
-	if is_instance_valid(pending_card) and (
-		GameManager.can_player_discard_drawn_card(0) or GameManager.can_player_select_jump_in_card(0, 0, -2)
-	):
+	if is_instance_valid(pending_card) and GameManager.can_human_interact_with_pending_card():
 		pending_card.set_highlight(true)
 		pending_card.set_interactive(true)
 
@@ -979,11 +976,9 @@ func _handle_initial_deal():
 	_show_message("Dealing cards...")
 	for i in range(4): # 4 cards each
 		for p_idx in range(GameManager.num_players):
-			var card_data = GameManager.deck_manager.draw_card()
+			var card_data = GameManager.deal_initial_card_to_player(p_idx)
 			if card_data == null:
 				break
-			card_data.is_face_up = false
-			GameManager.players_info[p_idx].hand.append(card_data)
 
 			# Create the node and animate it from deck to hand
 			var card_node = card_scene.instantiate()
@@ -1002,7 +997,7 @@ func _handle_initial_deal():
 			_update_hand_visuals(p_idx)
 			await get_tree().create_timer(0.08, false).timeout
 
-	GameManager.change_state(GameManager.GameState.INITIAL_PEEK)
+	GameManager.begin_initial_peek()
 
 func _start_peek_phase():
 	print("GameBoard3D: _start_peek_phase started")
@@ -1043,7 +1038,8 @@ func _on_card_clicked(node, data):
 
 	match GameManager.current_state:
 		GameManager.GameState.INITIAL_PEEK:
-			if node.get_parent() == player_pos_nodes[0] and not data.is_face_up:
+			var peek_card_idx := player_hands[0].find(node)
+			if GameManager.can_human_interact_with_hand_card(p_idx, peek_card_idx, data.is_face_up):
 				if peeked_cards.size() >= 2: return # Strict limit
 				if node in peeked_cards: return
 				node.is_being_peeked = true
@@ -1058,7 +1054,8 @@ func _on_card_clicked(node, data):
 							c.animate_flip(false)
 							c.set_interactive(false)
 					peeked_cards.clear()
-					GameManager.complete_initial_peek()
+					if GameManager.can_player_complete_initial_peek(0):
+						GameManager.complete_initial_peek()
 		
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
 			if p_idx == 0:

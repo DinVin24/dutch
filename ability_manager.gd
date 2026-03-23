@@ -109,6 +109,12 @@ func _perfect_match(activator_idx: int):
 	print("[AM DEBUG] Perfect Match triggered by P", activator_idx, ". Resetting round...")
 	# 0. Clear any pending drawn card in manager
 	gm.drawn_card_data = null
+	gm._clear_interrupt_state()
+	gm.dutch_caller_index = -1
+	gm.turn_direction = 1
+	for i in range(gm.num_players):
+		gm.players_info[i].can_call_dutch = true
+		gm.players_info[i].is_skipped = false
 	
 	# 1. Collect all board cards
 	var all_cards = []

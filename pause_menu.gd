@@ -14,7 +14,7 @@ func _ready() -> void:
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		# Let the developer console handle Esc if it's visible
-		if DevConsole.window.is_visible():
+		if is_instance_valid(DevConsole) and is_instance_valid(DevConsole.window) and DevConsole.window.visible:
 			return
 			
 		if settings_instance != null:

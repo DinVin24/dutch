@@ -27,7 +27,8 @@ func _input(event):
 		window.hide()
 		input.release_focus()
 		# Restore captured mouse if noclip is active
-		if get_tree().current_scene.has_method("is_noclip_active") and get_tree().current_scene.is_noclip_active():
+		var scene = get_tree().current_scene
+		if scene and scene.has_method("is_noclip_active") and scene.is_noclip_active():
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		get_viewport().set_input_as_handled()
 
@@ -36,7 +37,8 @@ func _toggle_console():
 		window.hide()
 		input.release_focus()
 		# Restore captured mouse if noclip is active
-		if get_tree().current_scene.has_method("is_noclip_active") and get_tree().current_scene.is_noclip_active():
+		var scene = get_tree().current_scene
+		if scene and scene.has_method("is_noclip_active") and scene.is_noclip_active():
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	else:
 		window.show()
@@ -47,7 +49,8 @@ func _toggle_console():
 func _on_close_button_pressed():
 	window.hide()
 	input.release_focus()
-	if get_tree().current_scene.has_method("is_noclip_active") and get_tree().current_scene.is_noclip_active():
+	var scene = get_tree().current_scene
+	if scene and scene.has_method("is_noclip_active") and scene.is_noclip_active():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 func _parse_args(text: String) -> Array:
@@ -89,8 +92,9 @@ func _on_input_text_submitted(new_text):
 	elif cmd == "exit":
 		window.hide()
 	elif cmd == "noclip":
-		if get_tree().current_scene.has_method("toggle_noclip"):
-			var result = get_tree().current_scene.toggle_noclip()
+		var scene = get_tree().current_scene
+		if scene and scene.has_method("toggle_noclip"):
+			var result = scene.toggle_noclip()
 			output.append_text("\n[color=cyan]Noclip: " + str(result) + "[/color]")
 		else:
 			output.append_text("\n[color=red]Noclip not supported in this scene.[/color]")
@@ -187,28 +191,7 @@ func _cmd_give(args: Array):
 		var ab_id = ability_map[target_name]
 		player.abilities.append(ab_id)
 		output.append_text("\n[color=cyan]Gave Ability '" + target_name.capitalize() + "' to " + player.name + "[/color]")
-		
-		# Visually spawn the token if we are in the 3D board scene
-		var scene = get_tree().current_scene
-		if scene.has_method("_on_hand_updated"): # Check if it's the board
-			# We can't easily call private board methods, but we can mimic the logic
-			# or just wait for the next turn. Let's try to find if there's a signal.
-			# Actually, the board listens to nothing for abilities additions.
-			# Let's just suggest the user restarts or wait for my next improvement.
-			# BETTER: Manually spawn if we find the node.
-			var pos_node = scene.player_pos_nodes[player.id]
-			var token_scene = load("res://ability_token_3d.gd")
-			if pos_node and token_scene:
-				var token = token_scene.new()
-				pos_node.add_child(token)
-				token.setup(ab_id)
-				token.token_clicked.connect(scene._on_ability_token_clicked)
-				
-				# Drop beautifully from above to notify the player they received it
-				token.position = Vector3(2.8, 0.5, 0.0)
-				
-				if scene.has_method("_update_ability_visuals"):
-					scene._update_ability_visuals(player.id)
+		GameManager.ability_unlocked.emit(player.id, ab_id)
 	else:
 		# Try to find card
 		var card = _find_and_remove_card_globally(target_name)
@@ -288,17 +271,19 @@ func _find_and_remove_card_globally(c_name: String) -> CardData:
 		var info = dm.deck[i]
 		var dname = (str(info.rank) + " of " + str(info.suit)).to_lower()
 		if dname == c_name:
-			var card_info = dm.deck.pop_at(i)
-			return CardData.new(card_info.rank, card_info.suit)
+			var card_info: CardData = dm.deck.pop_at(i)
+			card_info.is_face_up = false
+			return card_info
 			
 	# Check Discard
 	for i in range(dm.discard_pile.size()):
 		var info = dm.discard_pile[i]
 		var dname = (str(info.rank) + " of " + str(info.suit)).to_lower()
 		if dname == c_name:
-			var card_info = dm.discard_pile.pop_at(i)
+			var card_info: CardData = dm.discard_pile.pop_at(i)
 			dm.discard_pile_updated.emit()
-			return CardData.new(card_info.rank, card_info.suit)
+			card_info.is_face_up = false
+			return card_info
 			
 	return null
 

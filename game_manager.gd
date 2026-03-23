@@ -60,6 +60,7 @@ var dev_console_enabled: bool = true
 var active_ability_player: int = -1
 var win_condition_lowest_wins: bool = true
 var jump_in_was_own_draw_phase: bool = false
+const BG_MUSIC_PATH := "res://assets/music/bg_music.ogg"
 
 func _ready():
 	deck_manager = DeckManager.new()
@@ -70,7 +71,8 @@ func _ready():
 	
 	# Background Music Setup
 	bg_music_player = AudioStreamPlayer.new()
-	bg_music_player.stream = preload("res://assets/music/bg_music.ogg")
+	if DisplayServer.get_name() != "headless":
+		bg_music_player.stream = load(BG_MUSIC_PATH)
 	if bg_music_player.stream is AudioStreamOggVorbis:
 		bg_music_player.stream.loop = true
 	bg_music_player.volume_db = -10.0
@@ -215,6 +217,9 @@ func _hand_has_index(player_idx: int, card_idx: int) -> bool:
 func can_player_draw(player_idx: int) -> bool:
 	return _is_valid_player_index(player_idx) 		and player_idx == current_player_index 		and current_state == GameState.TURN_START_DRAW 		and drawn_card_data == null
 
+func can_player_complete_initial_peek(player_idx: int) -> bool:
+	return _is_valid_player_index(player_idx) 		and player_idx == 0 		and current_state == GameState.INITIAL_PEEK
+
 func can_player_discard_drawn_card(player_idx: int) -> bool:
 	return _is_valid_player_index(player_idx) 		and player_idx == current_player_index 		and current_state == GameState.TURN_RESOLVE_DRAWN 		and drawn_card_data != null
 
@@ -285,12 +290,15 @@ func can_player_cancel_dutch(player_idx: int) -> bool:
 func should_human_show_jump_in_button(player_idx: int = 0) -> bool:
 	return can_player_start_jump_in(player_idx)
 
+func can_human_interact_with_pending_card() -> bool:
+	return can_player_discard_drawn_card(0) or can_player_select_jump_in_card(0, 0, -2)
+
 func can_human_interact_with_hand_card(owner_idx: int, card_idx: int, card_is_face_up: bool = false) -> bool:
 	if not _is_valid_player_index(owner_idx):
 		return false
 	match current_state:
 		GameState.INITIAL_PEEK:
-			return owner_idx == 0 and _hand_has_index(0, card_idx)
+			return can_player_complete_initial_peek(0) and owner_idx == 0 and _hand_has_index(0, card_idx) and not card_is_face_up
 		GameState.TURN_RESOLVE_DRAWN:
 			return can_player_swap_drawn_card(0, owner_idx, card_idx)
 		GameState.TURN_JUMP_IN_SELECTION:
@@ -310,8 +318,6 @@ func _consume_jump_in_resume_state() -> GameState:
 func _resolve_post_interrupt_state() -> GameState:
 	var resume_state := _consume_jump_in_resume_state()
 	if resume_state != GameState.INITIALIZING:
-		# FORCE SIGNAL: This is an interrupt completion, we MUST wake up agents
-		change_state(resume_state, true)
 		return resume_state
 	if current_player_index == dutch_caller_index:
 		return GameState.TURN_CONFIRM_DUTCH
@@ -439,6 +445,25 @@ func gain_money_for_discard(p_idx: int, card: CardData):
 func start_game():
 	change_state(GameState.DEAL_CARDS)
 
+func begin_initial_peek() -> void:
+	if current_state != GameState.DEAL_CARDS:
+		push_warning("FSM Blocked: Cannot begin initial peek outside of DEAL_CARDS state")
+		return
+	change_state(GameState.INITIAL_PEEK)
+
+func deal_initial_card_to_player(player_idx: int) -> CardData:
+	if current_state != GameState.DEAL_CARDS:
+		push_warning("FSM Blocked: Cannot deal initial card outside of DEAL_CARDS state")
+		return null
+	if not _is_valid_player_index(player_idx):
+		return null
+	var card_data := deck_manager.draw_card()
+	if card_data == null:
+		return null
+	card_data.is_face_up = false
+	players_info[player_idx].hand.append(card_data)
+	return card_data
+
 func call_dutch(player_id: int):
 	if not can_player_call_dutch(player_id):
 		print("FSM Blocked: Cannot call Dutch outside of TURN_END_CHOICE state")
@@ -552,10 +577,13 @@ func start_jump_in(player_idx: int = -1) -> void:
 		var blocked_states := [
 			GameState.INITIALIZING, GameState.DEAL_CARDS, GameState.INITIAL_PEEK,
 			GameState.TURN_JUMP_IN_SELECTION, GameState.GAME_OVER,
-			GameState.TURN_PEEK_ABILITY, GameState.TURN_SWAP_ABILITY
+			GameState.TURN_PEEK_ABILITY, GameState.TURN_SWAP_ABILITY,
+			GameState.TURN_CONFIRM_DUTCH
 		]
 		# Block if currently in a forbidden state.
 		if (current_state in blocked_states):
+			return
+		if current_state == GameState.TURN_RESOLVE_DRAWN and current_player_index == resolved_idx:
 			return
 		# Require a non-empty discard pile to jump into.
 		if deck_manager.discard_pile.is_empty():
@@ -632,6 +660,7 @@ func validate_jump_in(card_idx: int) -> bool:
 	
 	if players_info[jump_in_player_idx].is_eliminated:
 		jump_in_player_idx = -1
+		change_state(_resolve_post_interrupt_state())
 		return false
 		
 	await get_tree().create_timer(1.2, false).timeout
@@ -702,6 +731,7 @@ func player_discard_drawn_card():
 	drink_beer(p_idx)
 	
 	if players_info[p_idx].is_eliminated:
+		pending_card_consumed.emit()
 		drawn_card_data = null
 		return
 	
