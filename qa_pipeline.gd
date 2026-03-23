@@ -40,6 +40,9 @@ func start_pipeline():
 	
 	# PHASE 6: DUTCH CYCLE (Each Caller Position)
 	await phase_dutch_calls_all_players()
+
+	# PHASE 6B: BOT DUTCH DECISION
+	await phase_bot_calls_dutch()
 	
 	# PHASE 7: JUMP IN
 	await phase_jump_in_all_players()
@@ -160,6 +163,31 @@ func phase_dutch_calls_all_players():
 		assert_state(gm.GameState.TURN_CONFIRM_DUTCH)
 		gm.confirm_dutch()
 		assert_state(gm.GameState.GAME_OVER)
+
+func phase_bot_calls_dutch():
+	print("\n>>> PHASE 6B: Bot Dutch Decision <<<")
+	_setup_turn_start(1)
+	gm.player_draw_card()
+	gm.drawn_card_data = _make_card("King", "Spades")
+	gm.player_discard_drawn_card()
+	await _await_resolution()
+	assert_state(gm.GameState.TURN_END_CHOICE)
+	_setup_manual_hand(1, 0, "Ace", "Clubs")
+	_setup_manual_hand(1, 1, "2", "Hearts")
+	_setup_manual_hand(1, 2, "2", "Spades")
+	_setup_manual_hand(1, 3, "2", "Diamonds")
+
+	var bot = load("res://bot_controller.gd").new()
+	bot.gm = gm
+	await bot._execute_end_choice(1)
+
+	if gm.dutch_caller_index == 1:
+		print("[QA PASS] Bot called Dutch at score <= 7")
+	else:
+		print("[QA FAIL] Bot did not call Dutch at score <= 7")
+
+	assert_player(2)
+	assert_state(gm.GameState.TURN_START_DRAW)
 
 func phase_jump_in_all_players():
 	print("\n>>> PHASE 7: Jump In Mechanics <<<")

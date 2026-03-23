@@ -19,6 +19,10 @@ extends Node3D
 }
 
 var bot_controller: BotController = null
+var action_container: VBoxContainer
+var top_action_slot: Control
+var middle_action_slot: Control
+var bottom_action_slot: Control
 var end_turn_btn: Button
 var jump_in_btn: Button
 var call_dutch_btn: Button
@@ -128,7 +132,7 @@ func _ready():
 
 func _create_hud_ui():
 	# Action Buttons Container: Moved to bottom-right to avoid overlapping hand cards
-	var action_container = VBoxContainer.new()
+	action_container = VBoxContainer.new()
 	action_container.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	action_container.offset_left = -200
 	action_container.offset_right = -30
@@ -139,12 +143,16 @@ func _create_hud_ui():
 	$GameUI/MainHUD.add_child(action_container)
 	action_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
+	top_action_slot = _create_action_slot(action_container)
+	middle_action_slot = _create_action_slot(action_container)
+	bottom_action_slot = _create_action_slot(action_container)
+
 	# Standard HUD buttons
-	end_turn_btn = _create_button(action_container, "END TURN", Color(0.2, 0.6, 0.2))
-	jump_in_btn = _create_button(action_container, "JUMP IN", Color(0.2, 0.4, 0.8))
-	call_dutch_btn = _create_button(action_container, "CALL DUTCH!", Color(0.8, 0.2, 0.2))
-	confirm_dutch_btn = _create_button(action_container, "CONFIRM DUTCH", Color(0.2, 0.6, 0.2))
-	forfeit_dutch_btn = _create_button(action_container, "FORFEIT DUTCH", Color(0.8, 0.2, 0.2))
+	end_turn_btn = _create_button(top_action_slot, "END TURN", Color(0.2, 0.6, 0.2))
+	jump_in_btn = _create_button(middle_action_slot, "JUMP IN", Color(0.2, 0.4, 0.8))
+	call_dutch_btn = _create_button(bottom_action_slot, "CALL DUTCH!", Color(0.8, 0.2, 0.2))
+	confirm_dutch_btn = _create_button(top_action_slot, "CONFIRM DUTCH", Color(0.2, 0.6, 0.2))
+	forfeit_dutch_btn = _create_button(bottom_action_slot, "FORFEIT DUTCH", Color(0.8, 0.2, 0.2))
 	end_turn_btn.pressed.connect(_on_end_turn_pressed)
 	jump_in_btn.pressed.connect(_on_jump_in_pressed)
 	call_dutch_btn.pressed.connect(_on_call_dutch_pressed)
@@ -164,6 +172,13 @@ func _create_hud_ui():
 	l.offset_top = -100
 	l.offset_bottom = -60
 	money_labels.append(l)
+
+func _create_action_slot(parent: Node) -> Control:
+	var slot = Control.new()
+	slot.custom_minimum_size = Vector2(160, 45)
+	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(slot)
+	return slot
 
 func _create_button(parent: Node, text: String, color: Color) -> Button:
 	var btn = Button.new()
@@ -195,7 +210,11 @@ func _create_button(parent: Node, text: String, color: Color) -> Button:
 	# Explicitly set mouse filter to STOP for the button so it can still be clicked,
 	# but its PARENT (action_container) is IGNORE so clicks pass through the spacing.
 	btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	
+	btn.set_anchors_preset(Control.PRESET_FULL_RECT)
+	btn.offset_left = 0
+	btn.offset_top = 0
+	btn.offset_right = 0
+	btn.offset_bottom = 0
 	btn.custom_minimum_size = Vector2(160, 45)
 	btn.hide()
 	return btn
@@ -602,16 +621,16 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	add_child(pending_card)
 
 	var pending_visual_data = card_data.duplicate()
-	pending_visual_data.is_face_up = false
+	pending_visual_data.is_face_up = true
 	pending_card.setup(pending_visual_data)
 	pending_card.card_clicked.connect(_on_card_clicked)
-	# Move slightly higher and CLOSER TO CAMERA (Z offset) to ensure it's not blocked by DeckArea
-	pending_card.position = deck_area.position + Vector3(0, 0.6, 0.5)
-	pending_card.rotation_degrees = Vector3(90, 0, 0) # Start face down on the table
+	# Keep the pending draw visually aligned over the deck, just slightly lifted so it reads as the top card.
+	pending_card.position = deck_area.position + Vector3(0, 0.12, 0)
+	pending_card.rotation_degrees = Vector3(90, 0, 0)
 	pending_card.set_interactive(true)
 
 	# Reveal animations
-	await get_tree().create_timer(0.1, false).timeout
+	await get_tree().create_timer(0.05, false).timeout
 	pending_card.animate_flip(true)
 	_update_deck_visual() # Refresh deck after drawing
 
@@ -622,6 +641,7 @@ func _on_card_discarded(player_idx, card_data):
 	print("GameBoard3D: Card Discarded. Player: ", player_idx, " Data: ", card_data.rank, " of ", card_data.suit)
 	
 	var card_to_discard: Node3D = null
+	var is_discarding_pending_draw := player_idx == GameManager.current_player_index and GameManager.drawn_card_data == card_data
 
 	# 1. CHECK PENDING CARD (from deck draw)
 	if is_instance_valid(pending_card) and (pending_card.data == card_data or (pending_card.data.rank == card_data.rank and pending_card.data.suit == card_data.suit)):
@@ -629,7 +649,7 @@ func _on_card_discarded(player_idx, card_data):
 		pending_card = null
 	
 	# 2. CHECK PLAYER HANDS
-	elif player_idx != -1:
+	elif player_idx != -1 and not is_discarding_pending_draw:
 		var hand_nodes = player_hands[player_idx]
 		for i in range(hand_nodes.size()):
 			var node = hand_nodes[i]
@@ -638,11 +658,14 @@ func _on_card_discarded(player_idx, card_data):
 				break
 
 	# 3. FALLBACK
-	if card_to_discard == null and player_idx >= 0:
+	if card_to_discard == null and player_idx >= 0 and not (player_idx != 0 and is_discarding_pending_draw):
 		card_to_discard = card_scene.instantiate()
 		add_child(card_to_discard)
 		card_to_discard.setup(card_data)
-		card_to_discard.global_position = player_pos_nodes[player_idx].global_position
+		if is_discarding_pending_draw:
+			card_to_discard.global_position = deck_area.global_position + Vector3(0, 0.12, 0)
+		else:
+			card_to_discard.global_position = player_pos_nodes[player_idx].global_position
 
 	# 4. ANIMATE DISCARD
 	if card_to_discard:
@@ -1143,7 +1166,8 @@ func _on_scores_ready(results):
 	center.add_child(vbox)
 
 	var title = Label.new()
-	title.text = "GAME OVER"
+	var winner_name = results[0].name if results.size() > 0 else "Nobody"
+	title.text = winner_name + " won!"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 64)
 	vbox.add_child(title)
@@ -1175,12 +1199,12 @@ func _on_scores_ready(results):
 	vbox.add_child(btn_h)
 
 	var play_again = Button.new()
-	play_again.text = "Play Again"
+	play_again.text = "New Game"
 	play_again.pressed.connect(func(): get_tree().reload_current_scene())
 	btn_h.add_child(play_again)
 
 	var main_menu = Button.new()
-	main_menu.text = "Main Menu"
+	main_menu.text = "Back to Main Menu"
 	main_menu.pressed.connect(_on_pause_main_menu)
 	btn_h.add_child(main_menu)
 
@@ -1202,6 +1226,8 @@ func _unhandled_input(event):
 
 func _pause_game():
 	if pause_menu_instance == null:
+		if action_container:
+			action_container.hide()
 		pause_menu_instance = pause_menu_scene.instantiate()
 		add_child(pause_menu_instance)
 		pause_menu_instance.resumed.connect(_on_pause_resumed)
@@ -1213,6 +1239,9 @@ func _on_pause_resumed():
 		pause_menu_instance.queue_free()
 		pause_menu_instance = null
 	get_tree().paused = false
+	if action_container:
+		action_container.show()
+	_on_game_state_changed(GameManager.current_state)
 
 func _on_pause_main_menu():
 	get_tree().paused = false

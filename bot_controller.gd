@@ -324,17 +324,12 @@ func _execute_end_choice(bot_idx: int) -> void:
 			print("Bot ", bot_idx, " holding polarity_shift for later.")
 		
 	# 2. Dutch Logic
-	var hand_size: int = gm.players_info[bot_idx].hand.size()
-	var all_known := true
-	for i in range(hand_size):
-		if _effective_value(bot_idx, i) == UNKNOWN_VALUE:
-			all_known = false
-			break
-
-	if all_known and hand_size > 0:
+	var hand: Array = gm.players_info[bot_idx].hand
+	if not hand.is_empty():
 		var score := 0
-		for c in _mem(bot_idx).values(): score += c.point_value
-		if score < 7 and gm.can_player_call_dutch(bot_idx):
+		for card in hand:
+			score += (card as CardData).recalc_point_value()
+		if score <= 7 and gm.can_player_call_dutch(bot_idx):
 			gm.bot_action.emit("Player %d calls DUTCH! (score: %d)" % [bot_idx, score])
 			gm.call_dutch(bot_idx)
 			return
