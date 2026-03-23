@@ -1038,7 +1038,7 @@ func _on_card_clicked(node, data):
 
 	match GameManager.current_state:
 		GameManager.GameState.INITIAL_PEEK:
-			var peek_card_idx := player_hands[0].find(node)
+			var peek_card_idx: int = player_hands[0].find(node)
 			if GameManager.can_human_interact_with_hand_card(p_idx, peek_card_idx, data.is_face_up):
 				if peeked_cards.size() >= 2: return # Strict limit
 				if node in peeked_cards: return
