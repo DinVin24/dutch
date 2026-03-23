@@ -641,7 +641,7 @@ func _on_card_discarded(player_idx, card_data):
 	print("GameBoard3D: Card Discarded. Player: ", player_idx, " Data: ", card_data.rank, " of ", card_data.suit)
 	
 	var card_to_discard: Node3D = null
-	var is_discarding_pending_draw := player_idx == GameManager.current_player_index and GameManager.drawn_card_data == card_data
+	var is_discarding_pending_draw: bool = player_idx == GameManager.current_player_index and GameManager.drawn_card_data == card_data
 
 	# 1. CHECK PENDING CARD (from deck draw)
 	if is_instance_valid(pending_card) and (pending_card.data == card_data or (pending_card.data.rank == card_data.rank and pending_card.data.suit == card_data.suit)):
