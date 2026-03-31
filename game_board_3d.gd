@@ -855,6 +855,21 @@ func _hide_message():
 
 func _on_hand_updated(player_idx):
 	_update_hand_visuals(player_idx)
+	# Easy mode: handle card visibility persistence
+	if GameManager.easy_mode:
+		if player_idx == 0:
+			# Keep all of player 0's cards face-up
+			for card in player_hands[0]:
+				if is_instance_valid(card) and not card.data.is_face_up:
+					card.data.is_face_up = true
+					card.animate_flip(true)
+		else:
+			# Defensive: Force enemy cards face-down if they leaked (e.g. swapped from P0)
+			# EXCEPT if they are currently being peeked by an ability.
+			for card in player_hands[player_idx]:
+				if is_instance_valid(card) and card.data.is_face_up and not card.is_being_peeked:
+					card.data.is_face_up = false
+					card.animate_flip(false)
 
 func _on_card_hover_enter(card_node: Node3D):
 	if not is_instance_valid(card_node): return
@@ -1003,7 +1018,18 @@ func _handle_initial_deal():
 			_update_hand_visuals(p_idx)
 			await get_tree().create_timer(0.08, false).timeout
 
-	GameManager.change_state(GameManager.GameState.INITIAL_PEEK)
+	if GameManager.easy_mode:
+		# Transition through INITIAL_PEEK (required by FSM), then skip it immediately.
+		# Flip all player 0 cards face-up before the state completes.
+		for card in player_hands[0]:
+			if is_instance_valid(card):
+				card.data.is_face_up = true
+				card.animate_flip(true)
+		GameManager.change_state(GameManager.GameState.INITIAL_PEEK)
+		# Skip the peek immediately — bypasses the click-to-peek flow
+		GameManager.complete_initial_peek()
+	else:
+		GameManager.change_state(GameManager.GameState.INITIAL_PEEK)
 
 func _start_peek_phase():
 	print("GameBoard3D: _start_peek_phase started")
@@ -1352,11 +1378,13 @@ func _on_jump_in_failed(player_idx, card_idx, _card_data):
 		# Wait for reveal duration
 		await get_tree().create_timer(1.5, false).timeout
 		
-		# Flip BACK with barrel roll
-		card_node.animate_flip(false)
+		# Flip BACK — but not in Easy Mode for the human player (cards stay visible)
+		if not (GameManager.easy_mode and player_idx == 0):
+			card_node.animate_flip(false)
 		
 		trigger_glitch(0.3, 0.4)
 		shake(0.2, 0.3)
+
 
 func _on_bot_action(message):
 	_show_message(message)
