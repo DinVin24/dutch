@@ -60,6 +60,7 @@ var dev_console_enabled: bool = true
 var active_ability_player: int = -1
 var win_condition_lowest_wins: bool = true
 var jump_in_was_own_draw_phase: bool = false
+var easy_mode: bool = false # Easy Mode: Player 0's cards are always visible
 
 func _ready():
 	deck_manager = DeckManager.new()
@@ -97,6 +98,8 @@ func initialize_game(p_count: int = 4):
 	win_condition_lowest_wins = true
 	jump_in_resume_state = GameState.INITIALIZING
 	drawn_card_data = null
+	# Note: easy_mode is intentionally NOT reset here — it is set before
+	# initialize_game() is called from the difficulty prompt in main_menu.gd.
 	for i in range(num_players):
 		players_info.append({
 			"id": i,

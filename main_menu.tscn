@@ -96,6 +96,103 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
+[node name="DifficultyPrompt" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+visible = false
+
+[node name="DimOverlay" type="ColorRect" parent="DifficultyPrompt"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.02, 0.0, 0.06, 0.88)
+mouse_filter = 2
+
+[node name="Panel" type="VBoxContainer" parent="DifficultyPrompt"]
+layout_mode = 1
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -220.0
+offset_top = -150.0
+offset_right = 220.0
+offset_bottom = 150.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 0
+
+[node name="TitleBar" type="HBoxContainer" parent="DifficultyPrompt/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="AccentBar" type="ColorRect" parent="DifficultyPrompt/Panel/TitleBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(4, 0)
+size_flags_vertical = 3
+color = Color(1.0, 0.1, 0.6, 1.0)
+
+[node name="TitleLabel" type="Label" parent="DifficultyPrompt/Panel/TitleBar"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.9, 0.9, 1.0)
+theme_override_colors/font_outline_color = Color(1.0, 0.1, 0.6, 1.0)
+theme_override_constants/outline_size = 2
+theme_override_font_sizes/font_size = 30
+text = "// SELECT_DIFFICULTY"
+
+[node name="TopRule" type="ColorRect" parent="DifficultyPrompt/Panel"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 2)
+color = Color(1.0, 0.1, 0.6, 0.8)
+
+[node name="Spacer1" type="Control" parent="DifficultyPrompt/Panel"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 16)
+
+[node name="NormalButton" type="Button" parent="DifficultyPrompt/Panel"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 48)
+theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
+theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1.0)
+theme_override_font_sizes/font_size = 26
+flat = true
+text = "> NORMAL"
+alignment = 0
+
+[node name="EasyButton" type="Button" parent="DifficultyPrompt/Panel"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 48)
+theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
+theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1.0)
+theme_override_font_sizes/font_size = 26
+flat = true
+text = "> EASY  ( your cards stay visible )"
+alignment = 0
+
+[node name="BottomRule" type="ColorRect" parent="DifficultyPrompt/Panel"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 2)
+color = Color(1.0, 0.1, 0.6, 0.4)
+
+[node name="Spacer2" type="Control" parent="DifficultyPrompt/Panel"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 10)
+
+[node name="CancelButton" type="Button" parent="DifficultyPrompt/Panel"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 36)
+theme_override_colors/font_color = Color(0.55, 0.55, 0.6, 1.0)
+theme_override_colors/font_hover_color = Color(1.0, 0.1, 0.6, 1.0)
+theme_override_font_sizes/font_size = 18
+flat = true
+text = "[ BACK ]"
+alignment = 2
+
 [node name="GlitchSound" type="AudioStreamPlayer" parent="."]
 bus = &"SFX"
 script = ExtResource("4_sfx")
@@ -106,3 +203,7 @@ script = ExtResource("4_sfx")
 [connection signal="pressed" from="LeftMargin/VBox/Buttons/SettingsButton" to="." method="_on_settings_button_pressed"]
 [connection signal="mouse_entered" from="LeftMargin/VBox/Buttons/ExitButton" to="." method="_on_button_mouse_entered" binds= ["Exit"]]
 [connection signal="pressed" from="LeftMargin/VBox/Buttons/ExitButton" to="." method="_on_exit_button_pressed"]
+[connection signal="pressed" from="DifficultyPrompt/Panel/NormalButton" to="." method="_on_normal_pressed"]
+[connection signal="pressed" from="DifficultyPrompt/Panel/EasyButton" to="." method="_on_easy_pressed"]
+[connection signal="pressed" from="DifficultyPrompt/Panel/CancelButton" to="." method="_on_difficulty_cancel_pressed"]
+

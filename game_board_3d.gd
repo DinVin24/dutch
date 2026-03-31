@@ -855,6 +855,12 @@ func _hide_message():
 
 func _on_hand_updated(player_idx):
 	_update_hand_visuals(player_idx)
+	# Easy mode: keep all of player 0's cards face-up, including newly received ones
+	if GameManager.easy_mode and player_idx == 0:
+		for card in player_hands[0]:
+			if is_instance_valid(card) and not card.data.is_face_up:
+				card.data.is_face_up = true
+				card.animate_flip(true)
 
 func _on_card_hover_enter(card_node: Node3D):
 	if not is_instance_valid(card_node): return
@@ -1003,7 +1009,18 @@ func _handle_initial_deal():
 			_update_hand_visuals(p_idx)
 			await get_tree().create_timer(0.08, false).timeout
 
-	GameManager.change_state(GameManager.GameState.INITIAL_PEEK)
+	if GameManager.easy_mode:
+		# Transition through INITIAL_PEEK (required by FSM), then skip it immediately.
+		# Flip all player 0 cards face-up before the state completes.
+		for card in player_hands[0]:
+			if is_instance_valid(card):
+				card.data.is_face_up = true
+				card.animate_flip(true)
+		GameManager.change_state(GameManager.GameState.INITIAL_PEEK)
+		# Skip the peek immediately — bypasses the click-to-peek flow
+		GameManager.complete_initial_peek()
+	else:
+		GameManager.change_state(GameManager.GameState.INITIAL_PEEK)
 
 func _start_peek_phase():
 	print("GameBoard3D: _start_peek_phase started")

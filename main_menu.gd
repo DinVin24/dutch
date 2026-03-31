@@ -4,6 +4,7 @@ extends Control
 @onready var settings_button = $LeftMargin/VBox/Buttons/SettingsButton
 @onready var exit_button = $LeftMargin/VBox/Buttons/ExitButton
 @onready var glitch_player = $GlitchSound
+@onready var difficulty_prompt = $DifficultyPrompt
 
 var original_texts = {
 	"Start": "START_FILE",
@@ -13,7 +14,8 @@ var original_texts = {
 
 func _ready() -> void:
 	GameManager.play_menu_music()
-	
+	difficulty_prompt.visible = false
+
 	# Connect mouse_exited for all buttons
 	start_button.mouse_exited.connect(_on_button_mouse_exited.bind(start_button, "Start"))
 	settings_button.mouse_exited.connect(_on_button_mouse_exited.bind(settings_button, "Settings"))
@@ -23,8 +25,7 @@ func _on_button_mouse_entered(type: String) -> void:
 	glitch_player.play_glitch_hover()
 	var btn = get_node("LeftMargin/VBox/Buttons/" + type + "Button")
 	btn.text = "> " + original_texts[type]
-	
-	# Subtle hover scale tween
+
 	var tween = create_tween()
 	tween.tween_property(btn, "scale", Vector2(1.1, 1.1), 0.1).set_trans(Tween.TRANS_QUAD)
 
@@ -35,9 +36,24 @@ func _on_button_mouse_exited(btn: Button, type: String) -> void:
 
 func _on_start_button_pressed() -> void:
 	glitch_player.play_glitch_click()
-	# Brief delay for click sound to be heard
-	await get_tree().create_timer(0.2).timeout
+	# Show difficulty selection instead of immediately loading the game
+	difficulty_prompt.visible = true
+
+func _on_normal_pressed() -> void:
+	glitch_player.play_glitch_click()
+	GameManager.easy_mode = false
+	await get_tree().create_timer(0.15).timeout
 	get_tree().change_scene_to_file("res://game_board_3d.tscn")
+
+func _on_easy_pressed() -> void:
+	glitch_player.play_glitch_click()
+	GameManager.easy_mode = true
+	await get_tree().create_timer(0.15).timeout
+	get_tree().change_scene_to_file("res://game_board_3d.tscn")
+
+func _on_difficulty_cancel_pressed() -> void:
+	glitch_player.play_glitch_click()
+	difficulty_prompt.visible = false
 
 func _on_settings_button_pressed() -> void:
 	glitch_player.play_glitch_click()
