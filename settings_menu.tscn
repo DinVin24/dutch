@@ -27,10 +27,10 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -250.0
-offset_top = -300.0
-offset_right = 250.0
-offset_bottom = 300.0
+offset_left = -280.0
+offset_top = -380.0
+offset_right = 280.0
+offset_bottom = 380.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 15
@@ -101,6 +101,93 @@ button_pressed = true
 [node name="HSeparator2" type="HSeparator" parent="BackgroundTint/VBoxContainer"]
 layout_mode = 2
 
+[node name="KeybindsLabel" type="Label" parent="BackgroundTint/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "Keybinds"
+horizontal_alignment = 1
+
+[node name="KeybindsGrid" type="GridContainer" parent="BackgroundTint/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/h_separation = 20
+theme_override_constants/v_separation = 8
+columns = 2
+
+[node name="EndTurnLabel" type="Label" parent="BackgroundTint/VBoxContainer/KeybindsGrid"]
+layout_mode = 2
+text = "End Turn"
+
+[node name="EndTurnBind" type="Button" parent="BackgroundTint/VBoxContainer/KeybindsGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Q"
+
+[node name="JumpInLabel" type="Label" parent="BackgroundTint/VBoxContainer/KeybindsGrid"]
+layout_mode = 2
+text = "Jump In"
+
+[node name="JumpInBind" type="Button" parent="BackgroundTint/VBoxContainer/KeybindsGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Space"
+
+[node name="CallDutchLabel" type="Label" parent="BackgroundTint/VBoxContainer/KeybindsGrid"]
+layout_mode = 2
+text = "Call Dutch"
+
+[node name="CallDutchBind" type="Button" parent="BackgroundTint/VBoxContainer/KeybindsGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "E"
+
+[node name="DrawCardLabel" type="Label" parent="BackgroundTint/VBoxContainer/KeybindsGrid"]
+layout_mode = 2
+text = "Draw Card"
+
+[node name="DrawCardBind" type="Button" parent="BackgroundTint/VBoxContainer/KeybindsGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "R"
+
+[node name="SelectLeftLabel" type="Label" parent="BackgroundTint/VBoxContainer/KeybindsGrid"]
+layout_mode = 2
+text = "Select Card Left"
+
+[node name="SelectLeftBind" type="Button" parent="BackgroundTint/VBoxContainer/KeybindsGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "A"
+
+[node name="SelectRightLabel" type="Label" parent="BackgroundTint/VBoxContainer/KeybindsGrid"]
+layout_mode = 2
+text = "Select Card Right"
+
+[node name="SelectRightBind" type="Button" parent="BackgroundTint/VBoxContainer/KeybindsGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "D"
+
+[node name="ConfirmCardLabel" type="Label" parent="BackgroundTint/VBoxContainer/KeybindsGrid"]
+layout_mode = 2
+text = "Confirm Card"
+
+[node name="ConfirmCardBind" type="Button" parent="BackgroundTint/VBoxContainer/KeybindsGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Enter"
+
+[node name="DiscardDrawnLabel" type="Label" parent="BackgroundTint/VBoxContainer/KeybindsGrid"]
+layout_mode = 2
+text = "Discard Drawn Card"
+
+[node name="DiscardDrawnBind" type="Button" parent="BackgroundTint/VBoxContainer/KeybindsGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "F"
+
+[node name="HSeparator3" type="HSeparator" parent="BackgroundTint/VBoxContainer"]
+layout_mode = 2
+
 [node name="BackButton" type="Button" parent="BackgroundTint/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
@@ -111,4 +198,13 @@ text = "Back"
 [connection signal="value_changed" from="BackgroundTint/VBoxContainer/GridContainer/MusicSlider" to="." method="_on_music_value_changed"]
 [connection signal="value_changed" from="BackgroundTint/VBoxContainer/GridContainer/SFXSlider" to="." method="_on_sfx_value_changed"]
 [connection signal="toggled" from="BackgroundTint/VBoxContainer/GridContainer/DevConsoleCheck" to="." method="_on_dev_console_toggled"]
+[connection signal="pressed" from="BackgroundTint/VBoxContainer/KeybindsGrid/EndTurnBind" to="." method="_on_keybind_button_pressed" binds= ["game_end_turn", "BackgroundTint/VBoxContainer/KeybindsGrid/EndTurnBind"]]
+[connection signal="pressed" from="BackgroundTint/VBoxContainer/KeybindsGrid/JumpInBind" to="." method="_on_keybind_button_pressed" binds= ["game_jump_in", "BackgroundTint/VBoxContainer/KeybindsGrid/JumpInBind"]]
+[connection signal="pressed" from="BackgroundTint/VBoxContainer/KeybindsGrid/CallDutchBind" to="." method="_on_keybind_button_pressed" binds= ["game_call_dutch", "BackgroundTint/VBoxContainer/KeybindsGrid/CallDutchBind"]]
+[connection signal="pressed" from="BackgroundTint/VBoxContainer/KeybindsGrid/DrawCardBind" to="." method="_on_keybind_button_pressed" binds= ["game_draw_card", "BackgroundTint/VBoxContainer/KeybindsGrid/DrawCardBind"]]
+[connection signal="pressed" from="BackgroundTint/VBoxContainer/KeybindsGrid/SelectLeftBind" to="." method="_on_keybind_button_pressed" binds= ["game_select_left", "BackgroundTint/VBoxContainer/KeybindsGrid/SelectLeftBind"]]
+[connection signal="pressed" from="BackgroundTint/VBoxContainer/KeybindsGrid/SelectRightBind" to="." method="_on_keybind_button_pressed" binds= ["game_select_right", "BackgroundTint/VBoxContainer/KeybindsGrid/SelectRightBind"]]
+[connection signal="pressed" from="BackgroundTint/VBoxContainer/KeybindsGrid/ConfirmCardBind" to="." method="_on_keybind_button_pressed" binds= ["game_confirm_card", "BackgroundTint/VBoxContainer/KeybindsGrid/ConfirmCardBind"]]
+[connection signal="pressed" from="BackgroundTint/VBoxContainer/KeybindsGrid/DiscardDrawnBind" to="." method="_on_keybind_button_pressed" binds= ["game_discard_drawn", "BackgroundTint/VBoxContainer/KeybindsGrid/DiscardDrawnBind"]]
 [connection signal="pressed" from="BackgroundTint/VBoxContainer/BackButton" to="." method="_on_back_button_pressed"]
+

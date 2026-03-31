@@ -50,13 +50,7 @@ func _ready() -> void:
 		sfx_slider.value = db_to_linear(AudioServer.get_bus_volume_db(sfx_bus))
 	
 	dev_console_check.button_pressed = GameManager.dev_console_enabled
-
-func _input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel"):
-		if DevConsole and DevConsole.window.is_visible():
-			return
-		_on_back_button_pressed()
-		get_viewport().set_input_as_handled()
+	_populate_keybind_buttons()
 
 func _on_resolution_selected(index: int) -> void:
 	DisplayServer.window_set_size(resolutions[index])
@@ -86,3 +80,74 @@ func _on_back_button_pressed() -> void:
 
 func _on_dev_console_toggled(toggled_on: bool) -> void:
 	GameManager.dev_console_enabled = toggled_on
+
+# ── KEYBINDS ──────────────────────────────────────────────────────────────────
+
+# Maps action name -> NodePath string (relative to this node) of its bind Button
+const KEYBIND_ACTIONS: Dictionary = {
+	"game_end_turn":     "BackgroundTint/VBoxContainer/KeybindsGrid/EndTurnBind",
+	"game_jump_in":      "BackgroundTint/VBoxContainer/KeybindsGrid/JumpInBind",
+	"game_call_dutch":   "BackgroundTint/VBoxContainer/KeybindsGrid/CallDutchBind",
+	"game_draw_card":    "BackgroundTint/VBoxContainer/KeybindsGrid/DrawCardBind",
+	"game_select_left":  "BackgroundTint/VBoxContainer/KeybindsGrid/SelectLeftBind",
+	"game_select_right": "BackgroundTint/VBoxContainer/KeybindsGrid/SelectRightBind",
+	"game_confirm_card": "BackgroundTint/VBoxContainer/KeybindsGrid/ConfirmCardBind",
+	"game_discard_drawn":"BackgroundTint/VBoxContainer/KeybindsGrid/DiscardDrawnBind",
+}
+
+var _listening_action: String = ""
+var _listening_button: Button = null
+
+func _populate_keybind_buttons() -> void:
+	for action in KEYBIND_ACTIONS:
+		var btn: Button = get_node(KEYBIND_ACTIONS[action])
+		btn.text = _get_key_label(action)
+
+func _get_key_label(action: String) -> String:
+	var events = InputMap.action_get_events(action)
+	for e in events:
+		if e is InputEventKey:
+			return OS.get_keycode_string(e.physical_keycode)
+	return "—"
+
+func _on_keybind_button_pressed(action: String, node_path: String) -> void:
+	# If already listening for another key, reset that button first
+	if _listening_button != null:
+		_listening_button.text = _get_key_label(_listening_action)
+
+	_listening_action = action
+	_listening_button = get_node(node_path)
+	_listening_button.text = "[ press a key... ]"
+
+func _input(event: InputEvent) -> void:
+	# Settings menu: Escape closes settings
+	if event.is_action_pressed("ui_cancel"):
+		if DevConsole and DevConsole.window.is_visible():
+			return
+		_on_back_button_pressed()
+		get_viewport().set_input_as_handled()
+		return
+
+	# Rebind listening
+	if _listening_action == "": return
+	if not (event is InputEventKey and event.pressed and not event.echo): return
+
+	# Escape cancels rebinding
+	if event.keycode == KEY_ESCAPE or event.physical_keycode == KEY_ESCAPE:
+		_listening_button.text = _get_key_label(_listening_action)
+		_listening_action = ""
+		_listening_button = null
+		get_viewport().set_input_as_handled()
+		return
+
+	# Apply the new binding
+	var new_event = InputEventKey.new()
+	new_event.physical_keycode = event.physical_keycode
+	InputMap.action_erase_events(_listening_action)
+	InputMap.action_add_event(_listening_action, new_event)
+
+	_listening_button.text = _get_key_label(_listening_action)
+	_listening_action = ""
+	_listening_button = null
+	get_viewport().set_input_as_handled()
+

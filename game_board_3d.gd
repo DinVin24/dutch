@@ -31,6 +31,7 @@ var card_spacing = 1.3 # 3D meters
 var pending_card: Card3D = null
 var pending_card_tween: Tween = null
 var swap_sources: Array = [] # Stores [card_node, player_idx, card_idx]
+var _keyboard_selected_card_idx: int = -1 # Index into player_hands[0] for keyboard navigation
 var _hovered_card_node: Card3D = null # Track hovered card for spreading effect
 
 # Peek Phase state
@@ -1202,6 +1203,95 @@ func _unhandled_input(event):
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_L:
 			_toggle_debug_reveal()
+
+	# --- GAME KEYBOARD CONTROLS ---
+	# Priority Guard 1: Noclip is active — keys belong to the camera, not the game.
+	if noclip_enabled:
+		return
+	# Priority Guard 2: Dev console is open — keys belong to the text input, not the game.
+	if DevConsole and DevConsole.window.is_visible():
+		return
+
+	if not (event is InputEventKey and event.pressed and not event.echo):
+		return
+
+	_handle_game_keyboard_input(event)
+
+func _handle_game_keyboard_input(event: InputEvent) -> void:
+	# ACTION BUTTONS
+	# Q — end turn OR confirm dutch (states are mutually exclusive)
+	if event.is_action("game_end_turn") and end_turn_btn.visible:
+		_on_end_turn_pressed()
+		get_viewport().set_input_as_handled()
+
+	elif event.is_action("game_confirm_dutch") and confirm_dutch_btn.visible:
+		_on_confirm_dutch_pressed()
+		get_viewport().set_input_as_handled()
+
+	# E — call dutch OR forfeit dutch (states are mutually exclusive)
+	elif event.is_action("game_forfeit_dutch") and forfeit_dutch_btn.visible:
+		_on_cancel_dutch_pressed()
+		get_viewport().set_input_as_handled()
+
+	elif event.is_action("game_call_dutch") and call_dutch_btn.visible:
+		_on_call_dutch_pressed()
+		get_viewport().set_input_as_handled()
+
+	elif event.is_action("game_jump_in") and jump_in_btn.visible:
+		_on_jump_in_pressed()
+		get_viewport().set_input_as_handled()
+
+	# DECK / DISCARD
+	elif event.is_action("game_draw_card"):
+		_on_deck_clicked()
+		get_viewport().set_input_as_handled()
+
+	elif event.is_action("game_discard_drawn"):
+		_on_discard_clicked()
+		get_viewport().set_input_as_handled()
+
+	# CARD SELECTION (A / D)
+	elif event.is_action("game_select_left"):
+		_keyboard_navigate_hand(-1)
+		get_viewport().set_input_as_handled()
+
+	elif event.is_action("game_select_right"):
+		_keyboard_navigate_hand(1)
+		get_viewport().set_input_as_handled()
+
+	# CONFIRM SELECTED CARD (Enter)
+	elif event.is_action("game_confirm_card"):
+		_keyboard_confirm_card()
+		get_viewport().set_input_as_handled()
+
+func _keyboard_navigate_hand(direction: int) -> void:
+	var hand = player_hands[0]
+	if hand.is_empty(): return
+
+	# Deselect previous card (fire hover_exit to restore visual state)
+	if _keyboard_selected_card_idx >= 0 and _keyboard_selected_card_idx < hand.size():
+		var prev = hand[_keyboard_selected_card_idx]
+		if is_instance_valid(prev):
+			_on_card_hover_exit(prev)
+
+	_keyboard_selected_card_idx = wrapi(
+		_keyboard_selected_card_idx + direction,
+		0, hand.size()
+	)
+
+	var card = hand[_keyboard_selected_card_idx]
+	if is_instance_valid(card):
+		_on_card_hover_enter(card)
+
+func _keyboard_confirm_card() -> void:
+	if _keyboard_selected_card_idx < 0: return
+	var hand = player_hands[0]
+	if _keyboard_selected_card_idx >= hand.size(): return
+	var card = hand[_keyboard_selected_card_idx]
+	if is_instance_valid(card) and card.data != null:
+		_on_card_clicked(card, card.data)
+		# Deselect after confirm
+		_keyboard_selected_card_idx = -1
 
 func _pause_game():
 	if pause_menu_instance == null:
