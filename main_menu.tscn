@@ -1,7 +1,16 @@
-[gd_scene load_steps=3 format=3 uid="uid://cx6y8v2xw5y0q"]
+[gd_scene format=3 uid="uid://cx6y8v2xw5y0q"]
 
-[ext_resource type="Script" path="res://main_menu.gd" id="1_abcde"]
-[ext_resource type="Texture2D" path="res://assets/images/bg_rave.png" id="2_bg"]
+[ext_resource type="Script" uid="uid://lyim3tetjqkm" path="res://main_menu.gd" id="1_abcde"]
+[ext_resource type="Texture2D" path="res://assets/images/main_menu_background.jpg" id="2_bg"]
+[ext_resource type="Shader" uid="uid://dyqrwlcqm46x3" path="res://vhs_effect.gdshader" id="3_vhs"]
+[ext_resource type="Script" uid="uid://dxi8we5qx2ilr" path="res://glitch_sound_gen.gd" id="4_sfx"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_vhs"]
+shader = ExtResource("3_vhs")
+shader_parameter/scanline_count = 400.0
+shader_parameter/distortion_intensity = 0.003
+shader_parameter/noise_intensity = 0.15
+shader_parameter/roll_speed = 2.0
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -20,42 +29,80 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 texture = ExtResource("2_bg")
-expand_mode = 1
-stretch_mode = 6
+expand_mode = 2
+stretch_mode = 0
 
-[node name="CenterContainer" type="CenterContainer" parent="."]
+[node name="LeftMargin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 400.0
+grow_vertical = 2
+theme_override_constants/margin_left = 50
+
+[node name="VBox" type="VBoxContainer" parent="LeftMargin"]
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_constants/separation = 40
+
+[node name="Title" type="Label" parent="LeftMargin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(1, 0, 1, 1)
+theme_override_constants/outline_size = 12
+theme_override_font_sizes/font_size = 86
+text = "DUTCH"
+horizontal_alignment = 0
+
+[node name="Buttons" type="VBoxContainer" parent="LeftMargin/VBox"]
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_constants/separation = 15
+
+[node name="StartButton" type="Button" parent="LeftMargin/VBox/Buttons"]
+layout_mode = 2
+theme_override_colors/font_hover_color = Color(1, 0, 1, 1)
+theme_override_colors/font_color = Color(0, 1, 1, 1)
+theme_override_font_sizes/font_size = 38
+text = "START_FILE"
+flat = true
+alignment = 0
+
+[node name="SettingsButton" type="Button" parent="LeftMargin/VBox/Buttons"]
+layout_mode = 2
+theme_override_colors/font_hover_color = Color(1, 0, 1, 1)
+theme_override_colors/font_color = Color(0, 1, 1, 1)
+theme_override_font_sizes/font_size = 38
+text = "SYSTEM_CFG"
+flat = true
+alignment = 0
+
+[node name="ExitButton" type="Button" parent="LeftMargin/VBox/Buttons"]
+layout_mode = 2
+theme_override_colors/font_hover_color = Color(1, 0, 1, 1)
+theme_override_colors/font_color = Color(0, 1, 1, 1)
+theme_override_font_sizes/font_size = 38
+text = "SHUT_DOWN"
+flat = true
+alignment = 0
+
+[node name="VHSEffect" type="ColorRect" parent="."]
+material = SubResource("ShaderMaterial_vhs")
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer"]
-layout_mode = 2
-theme_override_constants/separation = 20
+[node name="GlitchSound" type="AudioStreamPlayer" parent="."]
+bus = &"SFX"
+script = ExtResource("4_sfx")
 
-[node name="Title" type="Label" parent="CenterContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 64
-text = "Dutch"
-horizontal_alignment = 1
-
-[node name="StartButton" type="Button" parent="CenterContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 32
-text = "Start"
-
-[node name="SettingsButton" type="Button" parent="CenterContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 32
-text = "Settings"
-
-[node name="ExitButton" type="Button" parent="CenterContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 32
-text = "Exit"
-
-[connection signal="pressed" from="CenterContainer/VBoxContainer/StartButton" to="." method="_on_start_button_pressed"]
-[connection signal="pressed" from="CenterContainer/VBoxContainer/SettingsButton" to="." method="_on_settings_button_pressed"]
-[connection signal="pressed" from="CenterContainer/VBoxContainer/ExitButton" to="." method="_on_exit_button_pressed"]
+[connection signal="mouse_entered" from="LeftMargin/VBox/Buttons/StartButton" to="." method="_on_button_mouse_entered" binds= ["Start"]]
+[connection signal="pressed" from="LeftMargin/VBox/Buttons/StartButton" to="." method="_on_start_button_pressed"]
+[connection signal="mouse_entered" from="LeftMargin/VBox/Buttons/SettingsButton" to="." method="_on_button_mouse_entered" binds= ["Settings"]]
+[connection signal="pressed" from="LeftMargin/VBox/Buttons/SettingsButton" to="." method="_on_settings_button_pressed"]
+[connection signal="mouse_entered" from="LeftMargin/VBox/Buttons/ExitButton" to="." method="_on_button_mouse_entered" binds= ["Exit"]]
+[connection signal="pressed" from="LeftMargin/VBox/Buttons/ExitButton" to="." method="_on_exit_button_pressed"]
