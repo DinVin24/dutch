@@ -1369,11 +1369,13 @@ func _on_jump_in_failed(player_idx, card_idx, _card_data):
 		# Wait for reveal duration
 		await get_tree().create_timer(1.5, false).timeout
 		
-		# Flip BACK with barrel roll
-		card_node.animate_flip(false)
+		# Flip BACK — but not in Easy Mode for the human player (cards stay visible)
+		if not (GameManager.easy_mode and player_idx == 0):
+			card_node.animate_flip(false)
 		
 		trigger_glitch(0.3, 0.4)
 		shake(0.2, 0.3)
+
 
 func _on_bot_action(message):
 	_show_message(message)
