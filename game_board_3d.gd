@@ -130,9 +130,9 @@ func _ready():
 func _create_hud_ui():
 	# Action Buttons Container: Moved to bottom-right to avoid overlapping hand cards
 	var action_container = VBoxContainer.new()
-	action_container.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	action_container.offset_left = -200
-	action_container.offset_right = -30
+	action_container.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	action_container.offset_left = 30
+	action_container.offset_right = 230
 	action_container.offset_top = -400
 	action_container.offset_bottom = -30
 	action_container.alignment = BoxContainer.ALIGNMENT_END
@@ -141,63 +141,65 @@ func _create_hud_ui():
 	action_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	# Standard HUD buttons
-	end_turn_btn = _create_button(action_container, "END TURN", Color(0.2, 0.6, 0.2))
-	jump_in_btn = _create_button(action_container, "JUMP IN", Color(0.2, 0.4, 0.8))
-	call_dutch_btn = _create_button(action_container, "CALL DUTCH!", Color(0.8, 0.2, 0.2))
-	confirm_dutch_btn = _create_button(action_container, "CONFIRM DUTCH", Color(0.2, 0.6, 0.2))
-	forfeit_dutch_btn = _create_button(action_container, "FORFEIT DUTCH", Color(0.8, 0.2, 0.2))
+	end_turn_btn = _create_button(action_container, "> END_TURN <", Color(0.0, 1.0, 1.0))
+	jump_in_btn = _create_button(action_container, "> JUMP_IN <", Color(0.0, 1.0, 1.0))
+	call_dutch_btn = _create_button(action_container, "> CALL_DUTCH <", Color(1.0, 0.0, 0.8))
+	confirm_dutch_btn = _create_button(action_container, "> CONFIRM_DUTCH <", Color(0.0, 1.0, 1.0))
+	forfeit_dutch_btn = _create_button(action_container, "> FORFEIT_DUTCH <", Color(1.0, 0.0, 0.8))
 	end_turn_btn.pressed.connect(_on_end_turn_pressed)
 	jump_in_btn.pressed.connect(_on_jump_in_pressed)
 	call_dutch_btn.pressed.connect(_on_call_dutch_pressed)
 	confirm_dutch_btn.pressed.connect(_on_confirm_dutch_pressed)
 	forfeit_dutch_btn.pressed.connect(_on_cancel_dutch_pressed)
 	
+	# Restyle the TurnLabel
+	turn_label.add_theme_color_override("font_color", Color(0.0, 1.0, 1.0))
+	turn_label.add_theme_color_override("font_shadow_color", Color(0.0, 1.0, 1.0, 0.3))
+	turn_label.add_theme_constant_override("shadow_offset_x", 0)
+	turn_label.add_theme_constant_override("shadow_offset_y", 2)
+	
 	# Local Player Money Label (Only show P0)
 	var l = Label.new()
 	l.text = "$0"
-	l.add_theme_font_size_override("font_size", 36)
-	l.add_theme_color_override("font_color", Color.GOLD)
-	l.add_theme_color_override("font_outline_color", Color.BLACK)
-	l.add_theme_constant_override("outline_size", 4)
-	$GameUI/MainHUD.add_child(l)
-	l.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	l.offset_left = 40
-	l.offset_top = -100
-	l.offset_bottom = -60
+	l.add_theme_font_size_override("font_size", 24)
+	l.add_theme_color_override("font_color", Color(1.0, 0.9, 0.2))
+	l.add_theme_color_override("font_shadow_color", Color(1.0, 0.9, 0.2, 0.3))
+	l.add_theme_constant_override("shadow_offset_x", 0)
+	l.add_theme_constant_override("shadow_offset_y", 2)
+	$GameUI/MainHUD/TopLeft.add_child(l)
 	money_labels.append(l)
 
 func _create_button(parent: Node, text: String, color: Color) -> Button:
 	var btn = Button.new()
 	btn.text = text
-	btn.add_theme_font_size_override("font_size", 20)
+	btn.add_theme_font_size_override("font_size", 24)
 
 	var style = StyleBoxFlat.new()
-	style.bg_color = color.darkened(0.7)
-	style.bg_color.a = 0.6 # Glassmorphism
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 2
-	style.border_color = color.lightened(0.3)
-	style.set_corner_radius_all(4)
-	style.shadow_color = color
-	style.shadow_size = 8
+	style.bg_color = Color(0, 0, 0, 0)
+	style.border_width_left = 4
+	style.border_color = color
 
-	var hover_style = style.duplicate()
-	hover_style.bg_color = color.darkened(0.5)
-	hover_style.bg_color.a = 0.8
-	hover_style.border_color = Color.WHITE
+	var hover_style = StyleBoxFlat.new()
+	hover_style.bg_color = color
+	hover_style.border_width_left = 4
+	hover_style.border_color = color.lightened(0.5)
 
 	btn.add_theme_stylebox_override("normal", style)
 	btn.add_theme_stylebox_override("hover", hover_style)
 	btn.add_theme_stylebox_override("pressed", hover_style)
+	
+	btn.add_theme_color_override("font_color", color)
+	btn.add_theme_color_override("font_hover_color", Color.BLACK)
+	btn.add_theme_color_override("font_pressed_color", Color.BLACK)
+	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	
 	parent.add_child(btn)
 	
 	# Explicitly set mouse filter to STOP for the button so it can still be clicked,
 	# but its PARENT (action_container) is IGNORE so clicks pass through the spacing.
 	btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	
-	btn.custom_minimum_size = Vector2(160, 45)
+	btn.custom_minimum_size = Vector2(240, 45)
 	btn.hide()
 	return btn
 
@@ -284,7 +286,7 @@ func _create_chicken_placeholder():
 	var chicken = CSGSphere3D.new()
 	chicken.radius = 0.4
 	# Move lower and slightly closer to center of the table so camera sees it
-	chicken.position = Vector3(0, 1.5, -3.5)
+	chicken.position = Vector3(4.0, 1.2, -3.5)
 	
 	var mat = StandardMaterial3D.new()
 	mat.albedo_color = Color(0.9, 0.9, 0.8) # Pale chicken
@@ -345,19 +347,19 @@ func _drop_egg_for(p_idx: int, ab: String):
 	if is_instance_valid(_chicken_node):
 		var tween = create_tween()
 		tween.tween_property(_chicken_node, "position:y", 2.0, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		tween.tween_property(_chicken_node, "position:y", 1.5, 0.2).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+		tween.tween_property(_chicken_node, "position:y", 1.2, 0.2).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
 
 		# Camera cinematic zoom - GUARD against re-entry
 		if not _chicken_zoom_active:
 			_chicken_zoom_active = true
-			var target_pos = _chicken_node.global_position + Vector3(0, 0.2, 1.0)
+			var target_pos = _chicken_node.global_position + Vector3(0, 0.8, 2.0)
 			var cam_tween = create_tween()
 			var old_base = _base_camera_pos
 			var original_fov = camera.fov
 			var original_rot = camera.rotation_degrees
 			
 			cam_tween.tween_property(camera, "global_position", target_pos, 0.3).set_trans(Tween.TRANS_CUBIC)
-			cam_tween.tween_property(camera, "rotation_degrees", Vector3(-10, 0, 0), 0.3).set_trans(Tween.TRANS_CUBIC)
+			cam_tween.parallel().tween_property(camera, "rotation_degrees", Vector3(-20, 0, 0), 0.3).set_trans(Tween.TRANS_CUBIC)
 			cam_tween.parallel().tween_property(camera, "fov", 45.0, 0.3).set_trans(Tween.TRANS_CUBIC)
 			cam_tween.tween_interval(0.8)
 			cam_tween.tween_property(camera, "global_position", old_base, 0.4).set_trans(Tween.TRANS_QUAD)
@@ -525,7 +527,7 @@ func _on_ability_played(player_idx, ability_id):
 
 func _on_turn_started(player_idx):
 	var p_info = GameManager.players_info[player_idx]
-	turn_label.text = p_info.name + "'s Turn"
+	turn_label.text = "> " + p_info.name.to_upper() + "'S TURN"
 	_animate_glitch_text(turn_label)
 	_update_turn_lights(player_idx)
 	if player_idx != 0:
@@ -682,9 +684,10 @@ func _show_message(text: String):
 	label.text = text
 	label.add_theme_font_size_override("font_size", 32)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.add_theme_color_override("font_color", Color(1, 1, 1))
-	label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	label.add_theme_constant_override("outline_size", 6)
+	label.add_theme_color_override("font_color", Color(0.0, 1.0, 1.0))
+	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	label.add_theme_constant_override("shadow_offset_x", 3)
+	label.add_theme_constant_override("shadow_offset_y", 3)
 	top_center.add_child(label)
 	# Bug 5: responsive pos
 	top_center.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -728,10 +731,10 @@ func _on_game_state_changed(new_state):
 
 	match new_state:
 		GameManager.GameState.DEAL_CARDS:
-			turn_label.text = "Dealing cards..."
+			turn_label.text = "> DEALING CARDS"
 			_handle_initial_deal()
 		GameManager.GameState.INITIAL_PEEK:
-			turn_label.text = "Peeking phase"
+			turn_label.text = "> PEEKING PHASE"
 			_start_peek_phase()
 			_update_turn_lights(-1, true)
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
@@ -855,6 +858,21 @@ func _hide_message():
 
 func _on_hand_updated(player_idx):
 	_update_hand_visuals(player_idx)
+	# Easy mode: handle card visibility persistence
+	if GameManager.easy_mode:
+		if player_idx == 0:
+			# Keep all of player 0's cards face-up
+			for card in player_hands[0]:
+				if is_instance_valid(card) and not card.data.is_face_up:
+					card.data.is_face_up = true
+					card.animate_flip(true)
+		else:
+			# Defensive: Force enemy cards face-down if they leaked (e.g. swapped from P0)
+			# EXCEPT if they are currently being peeked by an ability.
+			for card in player_hands[player_idx]:
+				if is_instance_valid(card) and card.data.is_face_up and not card.is_being_peeked:
+					card.data.is_face_up = false
+					card.animate_flip(false)
 
 func _on_card_hover_enter(card_node: Node3D):
 	if not is_instance_valid(card_node): return
@@ -1003,7 +1021,18 @@ func _handle_initial_deal():
 			_update_hand_visuals(p_idx)
 			await get_tree().create_timer(0.08, false).timeout
 
-	GameManager.change_state(GameManager.GameState.INITIAL_PEEK)
+	if GameManager.easy_mode:
+		# Transition through INITIAL_PEEK (required by FSM), then skip it immediately.
+		# Flip all player 0 cards face-up before the state completes.
+		for card in player_hands[0]:
+			if is_instance_valid(card):
+				card.data.is_face_up = true
+				card.animate_flip(true)
+		GameManager.change_state(GameManager.GameState.INITIAL_PEEK)
+		# Skip the peek immediately — bypasses the click-to-peek flow
+		GameManager.complete_initial_peek()
+	else:
+		GameManager.change_state(GameManager.GameState.INITIAL_PEEK)
 
 func _start_peek_phase():
 	print("GameBoard3D: _start_peek_phase started")
@@ -1056,7 +1085,7 @@ func _on_card_clicked(node, data):
 					for c in peeked_cards:
 						if is_instance_valid(c):
 							c.is_being_peeked = false
-							c.animate_flip(false)
+							c.animate_flip(false, 0.05)
 							c.set_interactive(false)
 					peeked_cards.clear()
 					GameManager.complete_initial_peek()
@@ -1352,11 +1381,13 @@ func _on_jump_in_failed(player_idx, card_idx, _card_data):
 		# Wait for reveal duration
 		await get_tree().create_timer(1.5, false).timeout
 		
-		# Flip BACK with barrel roll
-		card_node.animate_flip(false)
+		# Flip BACK — but not in Easy Mode for the human player (cards stay visible)
+		if not (GameManager.easy_mode and player_idx == 0):
+			card_node.animate_flip(false)
 		
 		trigger_glitch(0.3, 0.4)
 		shake(0.2, 0.3)
+
 
 func _on_bot_action(message):
 	_show_message(message)

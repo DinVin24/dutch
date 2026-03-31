@@ -92,9 +92,9 @@ func _update_visuals() -> void:
 	# Selection visuals
 	if is_selected:
 		# Premium glow / lift for selection
-		scale = Vector3(1.1, 1.1, 1.1)
+		scale = Vector3(0.95, 0.95, 0.95)
 	else:
-		scale = Vector3(1.0, 1.0, 1.0)
+		scale = Vector3(0.85, 0.85, 0.85)
 
 func _apply_atlas_textures():
 	if _master_texture == null:
@@ -124,8 +124,8 @@ func _apply_atlas_textures():
 	front_mat.uv1_scale = Vector3(1.0/13.0, 1.0/5.0, 1.0)
 	front_mat.uv1_offset = Vector3(float(col)/13.0, float(row)/5.0, 0.0)
 	
-	front_mat.metallic = 0.3
-	front_mat.roughness = 0.2
+	front_mat.metallic = 0.0
+	front_mat.roughness = 0.95
 	# user requested removal of blue highlights, so we keep emission OFF
 	
 	front_face.set_surface_override_material(0, front_mat)
@@ -137,8 +137,8 @@ func _apply_atlas_textures():
 	back_mat.uv1_scale = Vector3(1.0/13.0, 1.0/5.0, 1.0)
 	back_mat.uv1_offset = Vector3(0.0, 4.0/5.0, 0.0)
 	
-	back_mat.metallic = 0.5
-	back_mat.roughness = 0.1
+	back_mat.metallic = 0.0
+	back_mat.roughness = 0.95
 	# user requested removal of blue highlights, so we keep emission OFF
 		
 	back_face.set_surface_override_material(0, back_mat)

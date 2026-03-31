@@ -169,3 +169,7 @@ func _perfect_match(activator_idx: int):
 	# 5. Reinstate peeking phase for the new cards
 	# We use change_state(..., true) to ensure everyone wakes up!
 	gm.change_state(gm.GameState.INITIAL_PEEK, true)
+	
+	# Easy Mode: immediately skip the peek — P0's cards are always visible
+	if gm.easy_mode:
+		gm.complete_initial_peek()
