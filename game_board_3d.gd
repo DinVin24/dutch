@@ -855,12 +855,21 @@ func _hide_message():
 
 func _on_hand_updated(player_idx):
 	_update_hand_visuals(player_idx)
-	# Easy mode: keep all of player 0's cards face-up, including newly received ones
-	if GameManager.easy_mode and player_idx == 0:
-		for card in player_hands[0]:
-			if is_instance_valid(card) and not card.data.is_face_up:
-				card.data.is_face_up = true
-				card.animate_flip(true)
+	# Easy mode: handle card visibility persistence
+	if GameManager.easy_mode:
+		if player_idx == 0:
+			# Keep all of player 0's cards face-up
+			for card in player_hands[0]:
+				if is_instance_valid(card) and not card.data.is_face_up:
+					card.data.is_face_up = true
+					card.animate_flip(true)
+		else:
+			# Defensive: Force enemy cards face-down if they leaked (e.g. swapped from P0)
+			# EXCEPT if they are currently being peeked by an ability.
+			for card in player_hands[player_idx]:
+				if is_instance_valid(card) and card.data.is_face_up and not card.is_being_peeked:
+					card.data.is_face_up = false
+					card.animate_flip(false)
 
 func _on_card_hover_enter(card_node: Node3D):
 	if not is_instance_valid(card_node): return

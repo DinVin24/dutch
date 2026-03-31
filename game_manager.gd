@@ -786,6 +786,12 @@ func complete_swap_ability(player1_idx: int, card1_idx: int, player2_idx: int, c
 	h1[card1_idx] = h2[card2_idx]
 	h2[card2_idx] = temp_data
 	
+	# SECURITY/UX FIX: Always reset face-up state after a swap.
+	# In easy mode, P0's cards are always up, so if they swap with an enemy,
+	# we must ensure the enemy doesn't get a face-up card.
+	h1[card1_idx].is_face_up = false
+	h2[card2_idx].is_face_up = false
+	
 	hand_updated.emit(player1_idx)
 	hand_updated.emit(player2_idx)
 	
