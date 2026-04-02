@@ -1,3 +1,4 @@
+@tool
 extends Node3D
 
 @onready var deck_area = $DeckArea
@@ -43,13 +44,32 @@ var _debug_reveal := false
 var _debug_flipped_nodes: Array = []
 var card_scene = preload("res://card_3d.tscn")
 var pause_menu_scene = preload("res://pause_menu.tscn")
+var beer_scene = preload("res://assets/models/bere.glb")
 var pause_menu_instance: Node = null
 var noclip_enabled: bool = false
 var base_camera_transform: Transform3D
 var camera_rot_x: float = 0.0
 var camera_rot_y: float = 0.0
 
-# Tavern Mechanics Visuals
+# Tavern Visuals
+@export_group("Tavern Visuals")
+@export var beer_scale: Vector3 = Vector3(3.0, 3.0, 3.0):
+	set(value):
+		beer_scale = value
+		if Engine.is_editor_hint(): _create_beer_placeholders()
+@export var beer_spacing: float = 0.25:
+	set(value):
+		beer_spacing = value
+		if Engine.is_editor_hint(): _create_beer_placeholders()
+@export var beer_y_offset: float = 0.12:
+	set(value):
+		beer_y_offset = value
+		if Engine.is_editor_hint(): _create_beer_placeholders()
+@export var beer_emission: float = 0.08: # Much softer default
+	set(value):
+		beer_emission = value
+		if Engine.is_editor_hint(): _create_beer_placeholders()
+
 var player_beers_nodes: Array = [[], [], [], []]
 var money_labels: Array = []
 var _chicken_node: CSGSphere3D = null
@@ -67,6 +87,10 @@ var _is_waiting_for_target: bool = false
 var _pending_ability: Dictionary = {} # {id, token, activator}
 
 func _ready():
+	if Engine.is_editor_hint():
+		_create_beer_placeholders()
+		return
+
 	player_hands = [[], [], [], []]
 	print("Game Board 3D: Ready. Connecting signals...")
 	GameManager.stop_menu_music()
@@ -254,33 +278,70 @@ func _create_discard_indicator():
 	discard_indicator.position = Vector3(0, 0.01, 0)
 
 func _create_beer_placeholders():
+	# Clear existing editor-only or placeholder nodes first
 	for i in range(4):
-		var pos_node = player_pos_nodes[i]
+		var pos_node = _get_safe_player_pos(i)
+		if not pos_node: continue
+		for child in pos_node.get_children():
+			if child.is_in_group("beer_placeholders"):
+				child.queue_free()
+	
+	player_beers_nodes = [[], [], [], []]
+	
+	for i in range(4):
+		var pos_node = _get_safe_player_pos(i)
+		if not pos_node: continue
 		for b in range(3):
-			var beer = CSGCylinder3D.new()
-			beer.radius = 0.08
-			beer.height = 0.25
-			var mat = StandardMaterial3D.new()
-			mat.albedo_color = Color(0.8, 0.5, 0.1) # Beer color
-			mat.roughness = 0.2
-			beer.material = mat
+			var beer = beer_scene.instantiate()
+			beer.add_to_group("beer_placeholders")
+			beer.scale = beer_scale
 			
-			var foam = CSGCylinder3D.new()
-			foam.radius = 0.082
-			foam.height = 0.05
-			foam.position = Vector3(0, 0.125, 0)
-			var foam_mat = StandardMaterial3D.new()
-			foam_mat.albedo_color = Color(1.0, 1.0, 1.0)
-			foam.material = foam_mat
-			beer.add_child(foam)
+			# Apply emission energy if requested to clear up "dark sides"
+			# We recursively look for any MeshInstance3D inside the imported GLB
+			_apply_emission_to_meshes(beer, beer_emission)
 			
 			# Simple Row of 3
-			var grid_x = (b - 1.0) * 0.25
+			var grid_x = (b - 1.0) * beer_spacing
 			
 			# Stationed on the RIGHT of the cards
-			beer.position = Vector3(grid_x + 1.8, 0.11, -1.8) 
+			beer.position = Vector3(grid_x + 1.8, beer_y_offset, -1.8) 
 			pos_node.add_child(beer)
 			player_beers_nodes[i].append(beer)
+
+func _get_safe_player_pos(idx: int) -> Node3D:
+	# In tool mode, @onready vars might not be available, so fallback to direct get_node
+	if player_pos_nodes.has(idx) and is_instance_valid(player_pos_nodes[idx]):
+		return player_pos_nodes[idx]
+	
+	var paths = {
+		0: "PlayerPositions/Bottom",
+		1: "PlayerPositions/Left",
+		2: "PlayerPositions/Top",
+		3: "PlayerPositions/Right"
+	}
+	return get_node_or_null(paths[idx])
+
+func _apply_emission_to_meshes(node: Node, energy: float):
+	for child in node.get_children():
+		if child is MeshInstance3D and child.mesh:
+			for surface in range(child.mesh.get_surface_count()):
+				var mat = child.get_active_material(surface)
+				if mat is StandardMaterial3D:
+					# Subtle emission fill using the model's own colors
+					mat.emission_enabled = (energy > 0)
+					mat.emission_energy_multiplier = energy
+					mat.emission_texture = mat.albedo_texture
+					mat.emission = mat.albedo_color
+					
+					# BALANCED lighting interaction:
+					# Reset to realistic matte-plastic values (not wax, not void)
+					mat.roughness = 0.8
+					mat.metallic = 0.0
+					mat.specular = 0.5
+					
+					# Force the material to be unique per beer instance
+					child.set_surface_override_material(surface, mat)
+		_apply_emission_to_meshes(child, energy)
 
 func _create_chicken_placeholder():
 	var chicken = CSGSphere3D.new()
