@@ -30,6 +30,7 @@ static var _master_texture: Texture2D = null
 
 var _current_suit: String = ""
 var _current_rank: String = ""
+var _particles: CPUParticles3D
 
 func setup(p_data: CardData) -> void:
 	data = p_data
@@ -57,6 +58,10 @@ func _ready():
 	anchor.add_child(multiplier_label)
 	
 	_update_visuals()
+	
+	_particles = preload("res://card_particles.tscn").instantiate() as CPUParticles3D
+	add_child(_particles)
+	
 	if area:
 		area.input_event.connect(_on_input_event)
 		area.mouse_entered.connect(_on_mouse_entered)
@@ -190,7 +195,16 @@ func animate_flip(is_face_up: bool, target_y: float = -1.0):
 		data.is_face_up = is_face_up
 		_update_visuals()
 		card_flipped.emit(self, data)
+		
+		if is_face_up:
+			var burst_color = Color(1.0, 0.2, 0.4) if data.suit in ["Hearts", "Diamonds"] else Color(0.1, 0.9, 1.0)
+			burst_particles(burst_color)
 	)
+
+func burst_particles(color: Color):
+	if is_instance_valid(_particles):
+		_particles.color = color
+		_particles.restart()
 
 func set_highlight(enabled: bool):
 	is_highlighted = enabled

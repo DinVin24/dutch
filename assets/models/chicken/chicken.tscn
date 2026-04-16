@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/models/chicken/chick.glb" id="1_chick"]
+[ext_resource type="Material" path="res://assets/models/chicken/chicken_material.tres" id="2_material"]
+
+[node name="Chicken" type="Node3D"]
+
+[node name="ChickModel" parent="." instance=ExtResource("1_chick")]
+surface_material_override/0 = ExtResource("2_material")

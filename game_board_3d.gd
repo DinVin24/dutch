@@ -176,20 +176,21 @@ func _create_hud_ui():
 	confirm_dutch_btn.pressed.connect(_on_confirm_dutch_pressed)
 	forfeit_dutch_btn.pressed.connect(_on_cancel_dutch_pressed)
 	
-	# Restyle the TurnLabel
-	turn_label.add_theme_color_override("font_color", Color(0.0, 1.0, 1.0))
-	turn_label.add_theme_color_override("font_shadow_color", Color(0.0, 1.0, 1.0, 0.3))
+	# Restyle the TurnLabel (Neon Glass Theme)
+	turn_label.add_theme_font_size_override("font_size", 36)
+	turn_label.add_theme_color_override("font_color", Color(0.8, 1.0, 1.0))
+	turn_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.8, 1.0, 0.6))
 	turn_label.add_theme_constant_override("shadow_offset_x", 0)
-	turn_label.add_theme_constant_override("shadow_offset_y", 2)
+	turn_label.add_theme_constant_override("shadow_offset_y", 3)
 	
 	# Local Player Money Label (Only show P0)
 	var l = Label.new()
 	l.text = "$0"
-	l.add_theme_font_size_override("font_size", 24)
+	l.add_theme_font_size_override("font_size", 28)
 	l.add_theme_color_override("font_color", Color(1.0, 0.9, 0.2))
-	l.add_theme_color_override("font_shadow_color", Color(1.0, 0.9, 0.2, 0.3))
+	l.add_theme_color_override("font_shadow_color", Color(1.0, 0.5, 0.0, 0.6))
 	l.add_theme_constant_override("shadow_offset_x", 0)
-	l.add_theme_constant_override("shadow_offset_y", 2)
+	l.add_theme_constant_override("shadow_offset_y", 3)
 	$GameUI/MainHUD/TopLeft.add_child(l)
 	money_labels.append(l)
 
@@ -199,23 +200,26 @@ func _create_button(parent: Node, text: String, color: Color) -> Button:
 	btn.add_theme_font_size_override("font_size", 24)
 
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0, 0, 0, 0)
-	style.border_width_left = 4
+	style.bg_color = Color(0.05, 0.05, 0.1, 0.55)
+	style.border_width_left = 6
 	style.border_color = color
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_right = 6
+	style.corner_radius_bottom_left = 6
 
-	var hover_style = StyleBoxFlat.new()
-	hover_style.bg_color = color
-	hover_style.border_width_left = 4
-	hover_style.border_color = color.lightened(0.5)
+	var hover_style = style.duplicate() as StyleBoxFlat
+	hover_style.bg_color = Color(0.1, 0.2, 0.3, 0.8)
+	hover_style.border_color = color.lightened(0.4)
 
 	btn.add_theme_stylebox_override("normal", style)
 	btn.add_theme_stylebox_override("hover", hover_style)
 	btn.add_theme_stylebox_override("pressed", hover_style)
 	
 	btn.add_theme_color_override("font_color", color)
-	btn.add_theme_color_override("font_hover_color", Color.BLACK)
-	btn.add_theme_color_override("font_pressed_color", Color.BLACK)
-	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	btn.add_theme_color_override("font_hover_color", Color.WHITE)
+	btn.add_theme_color_override("font_pressed_color", Color.WHITE)
+	btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	
 	parent.add_child(btn)
 	
@@ -606,15 +610,27 @@ func _update_turn_lights(current_player: int, all_on: bool = false):
 		var light = player_lights[i]
 		var is_active = (i == current_player or all_on)
 		var hand_size = GameManager.players_info[i].hand.size()
-		var target_energy = 8.0 if is_active else 0.0
+		
+		# Remove any existing loops
+		for child in light.get_children():
+			if child is Tween:
+				child.kill()
+				child.queue_free()
+				
+		var target_energy = 10.0 if is_active else 0.0
 		var target_angle = 60.0 + max(0, (hand_size - 4) * 8.0) # Wider base and steeper growth
 		target_angle = min(target_angle, 85.0)
 		var tween = create_tween().set_parallel(true)
 		tween.tween_property(light, "light_energy", target_energy, 0.5).set_trans(Tween.TRANS_CUBIC)
 		tween.tween_property(light, "spot_angle", target_angle, 0.5).set_trans(Tween.TRANS_CUBIC)
-		tween.tween_property(light, "spot_range", 18.0, 0.5)
-		tween.tween_property(light, "position:y", 6.5, 0.5)
-		tween.tween_property(light, "scale", Vector3(1.0, 1.0, 1.0), 0.5)
+		tween.tween_property(light, "spot_range", 22.0, 0.5)
+		tween.tween_property(light, "position:y", 8.0, 0.5)
+		
+		if is_active and not all_on:
+			var pulse_tween = create_tween().set_loops()
+			light.add_child(pulse_tween)
+			pulse_tween.tween_property(light, "light_energy", target_energy * 0.7, 1.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			pulse_tween.tween_property(light, "light_energy", target_energy, 1.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 func _setup_table_noise():
 	var table_mesh = $Table as MeshInstance3D
@@ -727,7 +743,7 @@ func _on_card_discarded(player_idx, card_data):
 		tween.chain().tween_callback(func():
 			_update_discard_visual()
 			_update_deck_visual()
-			shake(0.05, 0.2)
+			shake(0.12, 0.25)
 			if is_instance_valid(card_to_discard):
 				card_to_discard.queue_free()
 		)
@@ -741,18 +757,34 @@ func _show_message(text: String):
 	for child in top_center.get_children():
 		child.queue_free()
 
+	var panel = PanelContainer.new()
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.02, 0.02, 0.05, 0.7)
+	style.border_width_bottom = 2
+	style.border_color = Color(0.0, 0.8, 1.0, 0.5)
+	style.corner_radius_bottom_left = 8
+	style.corner_radius_bottom_right = 8
+	style.content_margin_left = 20
+	style.content_margin_right = 20
+	style.content_margin_top = 10
+	style.content_margin_bottom = 10
+	panel.add_theme_stylebox_override("panel", style)
+
 	var label = Label.new()
 	label.text = text
 	label.add_theme_font_size_override("font_size", 32)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.add_theme_color_override("font_color", Color(0.0, 1.0, 1.0))
-	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
-	label.add_theme_constant_override("shadow_offset_x", 3)
-	label.add_theme_constant_override("shadow_offset_y", 3)
-	top_center.add_child(label)
+	label.add_theme_color_override("font_color", Color(0.8, 1.0, 1.0))
+	label.add_theme_color_override("font_shadow_color", Color(0, 0.8, 1.0, 0.5))
+	label.add_theme_constant_override("shadow_offset_x", 0)
+	label.add_theme_constant_override("shadow_offset_y", 2)
+	
+	panel.add_child(label)
+	top_center.add_child(panel)
+	
 	# Bug 5: responsive pos
 	top_center.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	label.show()
+	panel.show()
 
 func _on_end_turn_pressed():
 	if GameManager.can_player_end_turn(0):
@@ -1447,7 +1479,7 @@ func _on_jump_in_failed(player_idx, card_idx, _card_data):
 			card_node.animate_flip(false)
 		
 		trigger_glitch(0.3, 0.4)
-		shake(0.2, 0.3)
+		shake(0.25, 0.35)
 
 
 func _on_bot_action(message):
@@ -1489,17 +1521,13 @@ func trigger_glitch(intensity: float, duration: float):
 	var mat = crt_overlay.material as ShaderMaterial
 	if not mat: return
 
-	var tween = create_tween()
+	var tween = create_tween().set_parallel(true)
 	tween.tween_property(mat, "shader_parameter/glitch_intensity", intensity, duration * 0.2)
-	tween.tween_property(mat, "shader_parameter/glitch_intensity", 0.0, duration * 0.8)
-
-func _process_shader_time(_delta: float):
-	if crt_overlay:
-		var mat = crt_overlay.material as ShaderMaterial
-		if mat:
-			mat.set_shader_parameter("time", Time.get_ticks_msec() / 1000.0)
-
-# Replace the existing _process if it was simple, but I added more above
+	tween.tween_property(mat, "shader_parameter/aberration_amount", 8.0, duration * 0.2)
+	
+	var return_tween = create_tween().set_parallel(true)
+	return_tween.tween_property(mat, "shader_parameter/glitch_intensity", 0.0, duration * 0.8).set_delay(duration * 0.2)
+	return_tween.tween_property(mat, "shader_parameter/aberration_amount", 2.5, duration * 0.8).set_delay(duration * 0.2)
 
 func _handle_noclip_movement(delta: float) -> void:
 	var move_dir = Vector3.ZERO
@@ -1541,16 +1569,19 @@ func _on_jack_swap_resolved(p1: int, c1: int, p2: int, c2: int) -> void:
 func _on_all_cards_revealed():
 	# Flip all cards face-up for game over
 	_update_turn_lights(-1, true)
+	var delay = 0.0
 	for pos_node in player_pos_nodes.values():
 		for c3d in pos_node.get_children():
 			if c3d is Card3D:
-				c3d.animate_flip(true)
+				var t = create_tween()
+				t.tween_callback(func(): c3d.animate_flip(true)).set_delay(delay)
+				delay += 0.05
 
 func _on_dutch_called(player_idx: int):
 	var player_name = GameManager.players_info[player_idx].name
 	_show_message(player_name + " called DUTCH!")
-	trigger_glitch(0.5, 0.6)
-	shake(0.4, 0.5)
+	trigger_glitch(0.6, 0.7)
+	shake(0.45, 0.5)
 
 	# Turn on all lights for the drama
 	_update_turn_lights(-1, true)
