@@ -56,19 +56,19 @@ var camera_rot_y: float = 0.0
 @export var beer_scale: Vector3 = Vector3(3.0, 3.0, 3.0):
 	set(value):
 		beer_scale = value
-		if Engine.is_editor_hint(): _create_beer_placeholders()
+		if Engine.is_editor_hint() and is_inside_tree(): _create_beer_placeholders()
 @export var beer_spacing: float = 0.25:
 	set(value):
 		beer_spacing = value
-		if Engine.is_editor_hint(): _create_beer_placeholders()
+		if Engine.is_editor_hint() and is_inside_tree(): _create_beer_placeholders()
 @export var beer_y_offset: float = 0.12:
 	set(value):
 		beer_y_offset = value
-		if Engine.is_editor_hint(): _create_beer_placeholders()
+		if Engine.is_editor_hint() and is_inside_tree(): _create_beer_placeholders()
 @export var beer_emission: float = 0.08: # Much softer default
 	set(value):
 		beer_emission = value
-		if Engine.is_editor_hint(): _create_beer_placeholders()
+		if Engine.is_editor_hint() and is_inside_tree(): _create_beer_placeholders()
 
 var player_beers_nodes: Array = [[], [], [], []]
 var money_labels: Array = []
@@ -310,7 +310,7 @@ func _create_beer_placeholders():
 
 func _get_safe_player_pos(idx: int) -> Node3D:
 	# In tool mode, @onready vars might not be available, so fallback to direct get_node
-	if player_pos_nodes.has(idx) and is_instance_valid(player_pos_nodes[idx]):
+	if player_pos_nodes and player_pos_nodes.has(idx) and is_instance_valid(player_pos_nodes[idx]):
 		return player_pos_nodes[idx]
 	
 	var paths = {
@@ -1511,7 +1511,6 @@ func _handle_noclip_movement(delta: float) -> void:
 	if Input.is_key_pressed(KEY_Q): move_dir += Vector3.DOWN
 
 	camera.global_position += move_dir.normalized() * 10.0 * delta
-	_process_shader_time(delta)
 
 func _input(event: InputEvent) -> void:
 	if noclip_enabled and not DevConsole.window.visible and event is InputEventMouseMotion:
