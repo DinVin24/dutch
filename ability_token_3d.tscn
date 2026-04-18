@@ -1,0 +1,30 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://ability_token_3d.gd" id="1_script"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_1"]
+size = Vector3(0.65, 0.65, 0.1)
+
+[sub_resource type="QuadMesh" id="QuadMesh_1"]
+size = Vector2(0.65, 0.65)
+
+[sub_resource type="QuadMesh" id="QuadMesh_2"]
+size = Vector2(0.65, 0.65)
+
+[node name="AbilityToken3D" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="Visuals" type="Node3D" parent="."]
+
+[node name="FrontFace" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.01)
+mesh = SubResource("QuadMesh_1")
+
+[node name="BackFace" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(-1, 0, 8.74228e-08, 0, 1, 0, -8.74228e-08, 0, -1, 0, 0, -0.01)
+mesh = SubResource("QuadMesh_2")
+
+[node name="Area3D" type="Area3D" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Area3D"]
+shape = SubResource("BoxShape3D_1")

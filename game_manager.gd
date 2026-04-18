@@ -801,6 +801,12 @@ func complete_swap_ability(player1_idx: int, card1_idx: int, player2_idx: int, c
 func buy_ability(p_idx: int) -> bool:
 	"""Centralized purchase logic for both Human UI and Bot Controller."""
 	var cost = 50
+	
+	# Hard cap: Max 8 abilities
+	if players_info[p_idx].abilities.size() >= 8:
+		print("GM: Player ", p_idx, " is at max capacity (8 abilities).")
+		return false
+		
 	if players_info[p_idx].money >= cost:
 		players_info[p_idx].money -= cost
 		player_gained_money.emit(p_idx, -cost, players_info[p_idx].money)

@@ -1,0 +1,7 @@
+feat(assets): add initial set of ability card textures
+
+- Generated grimy/cinematic/Y2K icons for Bottoms Up, Refuel, Trim Off, Boulder, Reverse, and Skip.
+- Created directory structure for ability card assets.
+- Integrated textures into assets/images/cards/ability_cards/.
+
+Agent: The Reviewer (Agent 4)
