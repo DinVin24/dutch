@@ -84,6 +84,7 @@ var _base_camera_rotation: Vector3
 
 # Targeting state
 var _is_waiting_for_target: bool = false
+var _is_preparing_ability: bool = false # Interaction guard for reveals
 var _pending_ability: Dictionary = {} # {id, token, activator}
 
 func _ready():
@@ -396,6 +397,10 @@ func _on_chicken_clicked(_camera, event, _position, _normal, _shape_idx):
 			_try_buy_ability(0)
 
 func _try_buy_ability(p_idx: int):
+	if GameManager.players_info[p_idx].abilities.size() >= 8:
+		_show_message("Inventory Full! (Max 8)")
+		return
+		
 	if not GameManager.buy_ability(p_idx):
 		_show_message("Chicken wants $50 for an egg!")
 
@@ -435,13 +440,24 @@ func _drop_egg_for(p_idx: int, ab: String):
 	_update_ability_visuals(p_idx)
 	
 	# Spawn ability token visually
-	var token = load("res://ability_token_3d.gd").new()
+	var token_scene = load("res://ability_token_3d.tscn")
+	var token = token_scene.instantiate()
 	player_pos_nodes[p_idx].add_child(token)
 	token.setup(ab)
 	token.token_clicked.connect(_on_ability_token_clicked)
 	
 	# Spawn hovering above the table, then beautifully tween into the grid
+	# Rotation 180 on Y fixes the upside-down question mark
+	token.rotation_degrees = Vector3(90, 180, 0) 
 	token.position = Vector3(2.8, 0.5, -1.2) 
+	
+	# REVEAL ON RECEIPT: Show for 2 seconds then flip down
+	token.set_face_up(true)
+	get_tree().create_timer(2.0, false).timeout.connect(func():
+		if is_instance_valid(token):
+			token.animate_flip(false)
+	)
+	
 	_update_ability_visuals(p_idx)
 	
 func _update_ability_visuals(p_idx: int):
@@ -456,8 +472,8 @@ func _update_ability_visuals(p_idx: int):
 		var rows = floori(i / 4.0)
 		
 		# Clean, perfect 4x4 matrix centered right next to the hand
-		# Stationed further to the RIGHT (3.5) to avoid clashing with wide hand spreads
-		var target_pos = Vector3(3.5 + (cols * 0.7), 0.1, (rows * 0.8) - 0.6)
+		# x spacing: 0.8, z spacing: 0.8 (for 0.65m tokens)
+		var target_pos = Vector3(3.5 + (cols * 0.8), 0.1, (rows * 0.8) - 0.4)
 		
 		# Snappy, satisfying placement animation
 		var tween = create_tween()
@@ -470,6 +486,16 @@ func _on_ability_token_clicked(token):
 			p_idx = i; break
 	
 	if p_idx == GameManager.current_player_index:
+		if _is_preparing_ability or _is_waiting_for_target: return
+		
+		# REVEAL ON USE: Flip up and wait 2 seconds
+		_is_preparing_ability = true
+		token.animate_flip(true)
+		await get_tree().create_timer(2.0, false).timeout
+		_is_preparing_ability = false
+		
+		if not is_instance_valid(token): return
+		
 		var targeting_abilities = ["bottoms_up", "boulder", "skip", "inflation", "half_off", "shuffle", "jumpscare"]
 		
 		if token.ability_id in targeting_abilities:
@@ -576,11 +602,21 @@ func _on_ability_played(player_idx, ability_id):
 	
 	# CENTRALIZED VISUAL CLEANUP: Find and remove the 3D token
 	var pos_node = player_pos_nodes[player_idx]
+	var token_node: AbilityToken3D = null
 	for child in pos_node.get_children():
-		# Check for custom property injected during setup
 		if "ability_id" in child and child.ability_id == ability_id:
-			child.queue_free()
+			token_node = child
 			break
+	
+	if token_node:
+		# If it's a bot (p_idx != 0), we want to reveal the card for 2s too
+		# if it's not already face up (the human reveal handles p_idx=0)
+		if player_idx != 0:
+			token_node.animate_flip(true)
+			await get_tree().create_timer(2.0, false).timeout
+		
+		if is_instance_valid(token_node):
+			token_node.queue_free()
 	
 	# Re-layout remaining tokens for this player
 	await get_tree().process_frame
