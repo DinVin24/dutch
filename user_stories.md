@@ -87,14 +87,14 @@
 - [x] **Story**: As a system, I want the bot to recognize when an opponent discards a matching card, and automatically trigger a "Jump In". [KAN-34]
 
 ## Epic 7: Visual Overhaul & Aesthetics [KAN-35]
-- [ ] **Story**: As a player, I want the game environment to feel dark and suspenseful with focused spotlights on the table and volumetric fog. [KAN-43]
+- [x] **Story**: As a player, I want the game environment to feel dark and suspenseful with focused spotlights on the table and volumetric fog. [KAN-43]
   * **Acceptance Criteria**:
     * **Given** the game is played
     * **When** rendering the 3D scene
     * **Then** dynamic spotlights and fog create a tense atmosphere.
-- [ ] **Story**: As a player, I want to see CRT scanlines, chromatic aberration, and digital glitch effects (Y2K aesthetic), so that the game feels like a piece of retro-tech. [KAN-44]
-- [ ] **Story**: As a player, I want the UI to use high-saturation neons and glassmorphism contrasting with the dark 3D scene. [KAN-45]
-- [ ] **Story**: As a player, I want every card move, swap, and draw to have "juice" (screen shake, card wobble, subtle particle trails). [KAN-46]
+- [x] **Story**: As a player, I want to see CRT scanlines, chromatic aberration, and digital glitch effects (Y2K aesthetic), so that the game feels like a piece of retro-tech. [KAN-44]
+- [x] **Story**: As a player, I want the UI to use high-saturation neons and glassmorphism contrasting with the dark 3D scene. [KAN-45]
+- [x] **Story**: As a player, I want every card move, swap, and draw to have "juice" (screen shake, card wobble, subtle particle trails). [KAN-46]
 
 ## Epic 8: The Tavern Expansion [KAN-36]
 - [x] **Story**: As a player, I want 3 physical 3D beers spawned at my side, representing lives, which I must drink from if I fail a Jump-In or instantly discard a drawn card. [KAN-47]
@@ -121,13 +121,13 @@
     * **Then** the win condition flips, and the final scoring reflects the new goal (Lowest or Highest score).
 
 ## Epic 13: Quality of Life, Analytics & Accessibility [KAN-72]
-- [ ] **Story**: As a player who struggles with memory, I want an "Easy Mode" toggle that keeps my cards face-up at all times, so that I can focus on strategy rather than memorization.
-- [ ] **Story**: As a player, I want a standardized keybinding system (Jump-In, End Turn, Dutch, Forfeit, Choosing cards) so that I can play efficiently without a mouse.
-- [ ] **Story**: As a player, I want my volume, resolution, and keybind settings saved persistently so I don't have to reconfigure them every launch.
+- [x] **Story**: As a player who struggles with memory, I want an "Easy Mode" toggle that keeps my cards face-up at all times, so that I can focus on strategy rather than memorization.
+- [x] **Story**: As a player, I want a standardized keybinding system (Jump-In, End Turn, Dutch, Forfeit, Choosing cards) so that I can play efficiently without a mouse.
+- [x] **Story**: As a player, I want my volume, resolution, and keybind settings saved persistently so I don't have to reconfigure them every launch.
 - [ ] **Story**: As a persistent winner, I want my "Matches Won" stat saved to my profile so I can flex on my enemies.
 
 ## Epic 14: The Immersive Tavern (Roadmap Phase 2) [KAN-73]
-- [ ] **Story**: As a player, I want to feel the atmosphere of a "Run-down Bar" with thematic table, chairs, and surroundings.
+- [x] **Story**: As a player, I want to feel the atmosphere of a "Run-down Bar" with thematic table, chairs, and surroundings.
 - [ ] **Story**: As a player, I want to see the 3D Chicken animated and reacting to my purchases.
 - [ ] **Story**: As a player, I want to see 3D Beer mugs that visually empty as I drink them for penalties.
 

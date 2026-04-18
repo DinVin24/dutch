@@ -8,12 +8,12 @@ gantt
     title Dutch Development Timeline
     dateFormat  YYYY-MM-DD
     section Phase 1: UX & Input
-    Keybinds & Navigation    :active, des1, 2026-03-23, 7d
-    Easy Mode & UI Polish     :des2, after des1, 5d
+    Keybinds & Navigation    :done, des1, 2026-03-23, 7d
+    Easy Mode & UI Polish     :done, des2, after des1, 5d
     section Phase 2: Immersive Bar
-    Environment & Atmosphere :des3, 2026-04-01, 12d
-    Chicken & Beer Models    :des4, after des3, 5d
-    Ability Card Textures    :des5, after des4, 4d
+    Environment & Atmosphere :done, des3, 2026-04-01, 12d
+    Chicken & Beer Models    :active, des4, after des3, 5d
+    Ability Card Textures    :done, des5, after des4, 4d
     section Phase 3: Networking
     Lobby & User Management  :des6, 2026-04-15, 14d
     Persistence & Stats      :des7, after des6, 7d
@@ -29,15 +29,15 @@ gantt
 
 ### 🛠️ Tasks
 1.  **Standardized Keybinds**:
-    - [ ] `Space` (Jump-In), `Enter` (End Turn), `D` (Call Dutch), `C` (Confirm Dutch), `F` (Forfeit Dutch).
-    - [ ] Numeric keys or arrow-based card selection.
+    - [x] `Space` (Jump-In), `Enter` (End Turn), `D` (Call Dutch), `C` (Confirm Dutch), `F` (Forfeit Dutch).
+    - [x] Numeric keys or arrow-based card selection.
 2.  **Easy Mode**:
-    - [ ] Accessibility toggle to keep player cards face-up at all times.
+    - [x] Accessibility toggle to keep player cards face-up at all times.
 3.  **UI/Scene Optimization**:
-    - [ ] Rework 3D view angle for optimal board visibility.
-    - [ ] Reduce UI saturation and "bloat" for a premium, clean aesthetic.
+    - [x] Rework 3D view angle for optimal board visibility.
+    - [x] Reduce UI saturation and "bloat" for a premium, clean aesthetic.
 4.  **Sound Design**:
-    - [ ] High-fidelity foley for card moves and environment sounds.
+    - [/] High-fidelity foley for card moves and environment sounds.
 
 ---
 
@@ -46,14 +46,14 @@ gantt
 
 ### 🛠️ Tasks
 1.  **Atmosphere & Scene**:
-    - [ ] Complete rework of the surroundings into a "Run-down Bar".
-    - [ ] Thematic table and chairs.
+    - [x] Complete rework of the surroundings into a "Run-down Bar".
+    - [x] Thematic table and chairs.
 2.  **Interactive 3D Models**:
     - [ ] **The Chicken**: Animated model that interacts with money/eggs.
     - [ ] **Beers**: 3D rendered mugs (3 per player) that disappear upon consumption.
 3.  **Visual Polish**:
-    - [ ] Custom textures for all Ability Cards.
-    - [ ] Enhanced animations for drawing, swapping, and ability execution.
+    - [x] Custom textures for all Ability Cards.
+    - [x] Enhanced animations for drawing, swapping, and ability execution.
 
 ---
 
