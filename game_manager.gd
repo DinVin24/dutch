@@ -44,7 +44,11 @@ signal polarity_shifted(new_state: bool)
 
 var current_state: GameState = GameState.INITIALIZING
 var deck_manager: DeckManager
-var bg_music_player: AudioStreamPlayer
+var menu_music_p1: AudioStreamPlayer
+var menu_music_p2: AudioStreamPlayer
+var current_menu_player: AudioStreamPlayer
+var next_menu_player: AudioStreamPlayer
+var is_menu_music_active: bool = false
 var ability_manager: AbilityManager
 
 # Match Settings
@@ -69,23 +73,53 @@ func _ready():
 	ability_manager = AbilityManager.new()
 	add_child(ability_manager)
 	
-	# Background Music Setup
-	bg_music_player = AudioStreamPlayer.new()
-	bg_music_player.stream = preload("res://assets/music/bg_music.ogg")
-	if bg_music_player.stream is AudioStreamOggVorbis:
-		bg_music_player.stream.loop = true
-	bg_music_player.volume_db = -10.0
-	bg_music_player.bus = "Music"
-	bg_music_player.process_mode = Node.PROCESS_MODE_ALWAYS # Keep playing when paused
-	add_child(bg_music_player)
+	# Background Music Setup (Dual Players for Seamless Loop)
+	menu_music_p1 = AudioStreamPlayer.new()
+	menu_music_p2 = AudioStreamPlayer.new()
 	
+	var menu_stream = preload("res://assets/music/main_menu.mp3")
+	menu_music_p1.stream = menu_stream
+	menu_music_p2.stream = menu_stream
+	
+	for p in [menu_music_p1, menu_music_p2]:
+		p.volume_db = -10.0
+		p.bus = "Music"
+		p.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(p)
+	
+	current_menu_player = menu_music_p1
+	next_menu_player = menu_music_p2
+
+func _process(_delta: float) -> void:
+	if is_menu_music_active and current_menu_player.playing:
+		var pos = current_menu_player.get_playback_position()
+		var length = current_menu_player.stream.get_length()
+		
+		# Trigger crossfade 2 seconds before the end
+		if pos > length - 2.0 and not next_menu_player.playing:
+			_start_menu_music_crossfade()
+
+func _start_menu_music_crossfade() -> void:
+	next_menu_player.play()
+	var tween = create_tween().set_parallel(true)
+	tween.tween_property(current_menu_player, "volume_db", -80.0, 2.0)
+	tween.tween_property(next_menu_player, "volume_db", -10.0, 2.0)
+	
+	# Swap roles
+	var temp = current_menu_player
+	current_menu_player = next_menu_player
+	next_menu_player = temp
+
 func play_menu_music() -> void:
-	if bg_music_player and not bg_music_player.playing:
-		bg_music_player.play()
+	is_menu_music_active = true
+	if not current_menu_player.playing:
+		current_menu_player.volume_db = -10.0
+		current_menu_player.play()
 
 func stop_menu_music() -> void:
-	if bg_music_player and bg_music_player.playing:
-		bg_music_player.stop()
+	is_menu_music_active = false
+	if menu_music_p1.playing: menu_music_p1.stop()
+	if menu_music_p2.playing: menu_music_p2.stop()
 
 func initialize_game(p_count: int = 4):
 	num_players = p_count
