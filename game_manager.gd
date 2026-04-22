@@ -49,6 +49,13 @@ var menu_music_p2: AudioStreamPlayer
 var current_menu_player: AudioStreamPlayer
 var next_menu_player: AudioStreamPlayer
 var is_menu_music_active: bool = false
+
+var game_music_p1: AudioStreamPlayer
+var game_music_p2: AudioStreamPlayer
+var current_game_player: AudioStreamPlayer
+var next_game_player: AudioStreamPlayer
+var is_game_music_active: bool = false
+
 var ability_manager: AbilityManager
 
 # Match Settings
@@ -89,6 +96,23 @@ func _ready():
 	
 	current_menu_player = menu_music_p1
 	next_menu_player = menu_music_p2
+	
+	# Game Music Setup
+	game_music_p1 = AudioStreamPlayer.new()
+	game_music_p2 = AudioStreamPlayer.new()
+	
+	var game_stream = preload("res://assets/music/game_music.wav")
+	game_music_p1.stream = game_stream
+	game_music_p2.stream = game_stream
+	
+	for p in [game_music_p1, game_music_p2]:
+		p.volume_db = -10.0
+		p.bus = "Music"
+		p.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(p)
+		
+	current_game_player = game_music_p1
+	next_game_player = game_music_p2
 
 func _process(_delta: float) -> void:
 	if is_menu_music_active and current_menu_player.playing:
@@ -98,6 +122,13 @@ func _process(_delta: float) -> void:
 		# Trigger crossfade 2 seconds before the end
 		if pos > length - 2.0 and not next_menu_player.playing:
 			_start_menu_music_crossfade()
+			
+	if is_game_music_active and current_game_player.playing:
+		var pos = current_game_player.get_playback_position()
+		var length = current_game_player.stream.get_length()
+		
+		if pos > length - 2.0 and not next_game_player.playing:
+			_start_game_music_crossfade()
 
 func _start_menu_music_crossfade() -> void:
 	next_menu_player.play()
@@ -120,6 +151,29 @@ func stop_menu_music() -> void:
 	is_menu_music_active = false
 	if menu_music_p1.playing: menu_music_p1.stop()
 	if menu_music_p2.playing: menu_music_p2.stop()
+
+func play_game_music() -> void:
+	if is_game_music_active: return
+	is_game_music_active = true
+	if not current_game_player.playing:
+		current_game_player.volume_db = -10.0
+		current_game_player.play()
+
+func stop_game_music() -> void:
+	is_game_music_active = false
+	if game_music_p1.playing: game_music_p1.stop()
+	if game_music_p2.playing: game_music_p2.stop()
+
+func _start_game_music_crossfade() -> void:
+	next_game_player.play()
+	var tween = create_tween().set_parallel(true)
+	tween.tween_property(current_game_player, "volume_db", -80.0, 2.0)
+	tween.tween_property(next_game_player, "volume_db", -10.0, 2.0)
+	
+	# Swap roles
+	var temp = current_game_player
+	current_game_player = next_game_player
+	next_game_player = temp
 
 func initialize_game(p_count: int = 4):
 	num_players = p_count
