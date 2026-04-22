@@ -95,6 +95,7 @@ func _ready():
 	player_hands = [[], [], [], []]
 	print("Game Board 3D: Ready. Connecting signals...")
 	GameManager.stop_menu_music()
+	GameManager.play_game_music()
 	GameManager.game_state_changed.connect(_on_game_state_changed)
 	GameManager.turn_started.connect(_on_turn_started)
 	GameManager.card_drawn_to_pending.connect(_on_card_drawn_to_pending)

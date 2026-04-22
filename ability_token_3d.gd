@@ -79,6 +79,9 @@ func animate_flip(p_up: bool):
 	is_animating = true
 	is_face_up = p_up
 	
+	if GameManager:
+		GameManager.play_sfx(GameManager.sfx_card_flip)
+	
 	var target_y = 180.0 if p_up else 0.0
 	var tween = create_tween()
 	

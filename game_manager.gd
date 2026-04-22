@@ -44,7 +44,23 @@ signal polarity_shifted(new_state: bool)
 
 var current_state: GameState = GameState.INITIALIZING
 var deck_manager: DeckManager
-var bg_music_player: AudioStreamPlayer
+var menu_music_p1: AudioStreamPlayer
+var menu_music_p2: AudioStreamPlayer
+var current_menu_player: AudioStreamPlayer
+var next_menu_player: AudioStreamPlayer
+var is_menu_music_active: bool = false
+
+var game_music_p1: AudioStreamPlayer
+var game_music_p2: AudioStreamPlayer
+var current_game_player: AudioStreamPlayer
+var next_game_player: AudioStreamPlayer
+var is_game_music_active: bool = false
+
+# Audio Streams
+var sfx_card_flip = preload("res://assets/sfx/card_flip.mp3")
+var sfx_beer_drink = preload("res://assets/sfx/beer_drink.mp3")
+var sfx_chicken = preload("res://assets/sfx/chicken.mp3")
+
 var ability_manager: AbilityManager
 
 # Match Settings
@@ -69,23 +85,116 @@ func _ready():
 	ability_manager = AbilityManager.new()
 	add_child(ability_manager)
 	
-	# Background Music Setup
-	bg_music_player = AudioStreamPlayer.new()
-	bg_music_player.stream = preload("res://assets/music/bg_music.ogg")
-	if bg_music_player.stream is AudioStreamOggVorbis:
-		bg_music_player.stream.loop = true
-	bg_music_player.volume_db = -10.0
-	bg_music_player.bus = "Music"
-	bg_music_player.process_mode = Node.PROCESS_MODE_ALWAYS # Keep playing when paused
-	add_child(bg_music_player)
+	# Background Music Setup (Dual Players for Seamless Loop)
+	menu_music_p1 = AudioStreamPlayer.new()
+	menu_music_p2 = AudioStreamPlayer.new()
 	
+	var menu_stream = preload("res://assets/music/main_menu.mp3")
+	menu_music_p1.stream = menu_stream
+	menu_music_p2.stream = menu_stream
+	
+	for p in [menu_music_p1, menu_music_p2]:
+		p.volume_db = 0.0
+		p.bus = "Music"
+		p.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(p)
+	
+	current_menu_player = menu_music_p1
+	next_menu_player = menu_music_p2
+	
+	# Game Music Setup
+	game_music_p1 = AudioStreamPlayer.new()
+	game_music_p2 = AudioStreamPlayer.new()
+	
+	var game_stream = preload("res://assets/music/game_music.wav")
+	game_music_p1.stream = game_stream
+	game_music_p2.stream = game_stream
+	
+	for p in [game_music_p1, game_music_p2]:
+		p.volume_db = 0.0
+		p.bus = "Music"
+		p.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(p)
+		
+	current_game_player = game_music_p1
+	next_game_player = game_music_p2
+
+func _process(_delta: float) -> void:
+	if is_menu_music_active and current_menu_player.playing:
+		var pos = current_menu_player.get_playback_position()
+		var length = current_menu_player.stream.get_length()
+		
+		# Trigger crossfade 2 seconds before the end
+		if pos > length - 2.0 and not next_menu_player.playing:
+			_start_menu_music_crossfade()
+			
+	if is_game_music_active and current_game_player.playing:
+		var pos = current_game_player.get_playback_position()
+		var length = current_game_player.stream.get_length()
+		
+		if pos > length - 2.0 and not next_game_player.playing:
+			_start_game_music_crossfade()
+
+func _start_menu_music_crossfade() -> void:
+	next_menu_player.play()
+	var tween = create_tween().set_parallel(true)
+	tween.tween_property(current_menu_player, "volume_db", -80.0, 2.0)
+	tween.tween_property(next_menu_player, "volume_db", 0.0, 2.0)
+	
+	# Swap roles
+	var temp = current_menu_player
+	current_menu_player = next_menu_player
+	next_menu_player = temp
+
 func play_menu_music() -> void:
-	if bg_music_player and not bg_music_player.playing:
-		bg_music_player.play()
+	stop_game_music()
+	is_menu_music_active = true
+	if not current_menu_player.playing:
+		current_menu_player.volume_db = 0.0
+		current_menu_player.play()
 
 func stop_menu_music() -> void:
-	if bg_music_player and bg_music_player.playing:
-		bg_music_player.stop()
+	is_menu_music_active = false
+	if menu_music_p1.playing: menu_music_p1.stop()
+	if menu_music_p2.playing: menu_music_p2.stop()
+
+func play_game_music() -> void:
+	stop_menu_music()
+	if is_game_music_active: return
+	is_game_music_active = true
+	if not current_game_player.playing:
+		current_game_player.volume_db = 0.0
+		current_game_player.play()
+
+func stop_game_music() -> void:
+	is_game_music_active = false
+	if game_music_p1.playing: game_music_p1.stop()
+	if game_music_p2.playing: game_music_p2.stop()
+
+func stop_all_music() -> void:
+	stop_menu_music()
+	stop_game_music()
+
+func play_sfx(stream: AudioStream) -> void:
+	if not stream: return
+	var p = AudioStreamPlayer.new()
+	p.stream = stream
+	p.bus = "SFX"
+	p.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(p)
+	p.play()
+	p.finished.connect(p.queue_free)
+
+func _start_game_music_crossfade() -> void:
+	next_game_player.play()
+	var tween = create_tween().set_parallel(true)
+	tween.tween_property(current_game_player, "volume_db", -80.0, 2.0)
+	tween.tween_property(next_game_player, "volume_db", 0.0, 2.0)
+	
+	# Swap roles
+	var temp = current_game_player
+	current_game_player = next_game_player
+	next_game_player = temp
 
 func initialize_game(p_count: int = 4):
 	num_players = p_count
@@ -404,6 +513,7 @@ func _check_elimination_win_condition() -> bool:
 func drink_beer(p_idx: int):
 	if players_info[p_idx].is_eliminated: return
 	players_info[p_idx].beers -= 1
+	play_sfx(sfx_beer_drink)
 	player_drank_beer.emit(p_idx, players_info[p_idx].beers)
 	print("Player ", p_idx, " drank a beer! Remaining: ", players_info[p_idx].beers)
 	
@@ -815,6 +925,7 @@ func buy_ability(p_idx: int) -> bool:
 		var list = ["bottoms_up", "refuel", "trim_off", "boulder", "reverse", "skip", "perfect_match", "inflation", "half_off", "jumpscare", "shuffle", "polarity_shift"]
 		var ab = list[randi() % list.size()]
 		players_info[p_idx].abilities.append(ab)
+		play_sfx(sfx_chicken)
 		ability_unlocked.emit(p_idx, ab)
 		print("GM: Player ", p_idx, " bought ability: ", ab)
 		return true

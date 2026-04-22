@@ -164,6 +164,8 @@ func animate_flip(is_face_up: bool, target_y: float = -1.0):
 	if is_flipping: return
 	is_flipping = true
 	
+	GameManager.play_sfx(GameManager.sfx_card_flip)
+	
 	if highlight_tween:
 		highlight_tween.kill()
 		highlight_tween = null
