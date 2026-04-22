@@ -14,7 +14,7 @@ var base_y = 0.0
 func _ready() -> void:
 	# Ensure background music in GameManager is stopped if any
 	if GameManager:
-		GameManager.stop_menu_music()
+		GameManager.stop_all_music()
 	
 	# Wait for one frame to ensure layout anchors are processed for centering
 	await get_tree().process_frame

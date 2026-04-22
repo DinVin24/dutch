@@ -142,6 +142,7 @@ func _start_menu_music_crossfade() -> void:
 	next_menu_player = temp
 
 func play_menu_music() -> void:
+	stop_game_music()
 	is_menu_music_active = true
 	if not current_menu_player.playing:
 		current_menu_player.volume_db = 0.0
@@ -153,6 +154,7 @@ func stop_menu_music() -> void:
 	if menu_music_p2.playing: menu_music_p2.stop()
 
 func play_game_music() -> void:
+	stop_menu_music()
 	if is_game_music_active: return
 	is_game_music_active = true
 	if not current_game_player.playing:
@@ -163,6 +165,10 @@ func stop_game_music() -> void:
 	is_game_music_active = false
 	if game_music_p1.playing: game_music_p1.stop()
 	if game_music_p2.playing: game_music_p2.stop()
+
+func stop_all_music() -> void:
+	stop_menu_music()
+	stop_game_music()
 
 func _start_game_music_crossfade() -> void:
 	next_game_player.play()
