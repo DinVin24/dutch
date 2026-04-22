@@ -89,7 +89,7 @@ func _ready():
 	menu_music_p2.stream = menu_stream
 	
 	for p in [menu_music_p1, menu_music_p2]:
-		p.volume_db = -10.0
+		p.volume_db = 0.0
 		p.bus = "Music"
 		p.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(p)
@@ -106,7 +106,7 @@ func _ready():
 	game_music_p2.stream = game_stream
 	
 	for p in [game_music_p1, game_music_p2]:
-		p.volume_db = -10.0
+		p.volume_db = 0.0
 		p.bus = "Music"
 		p.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(p)
@@ -134,7 +134,7 @@ func _start_menu_music_crossfade() -> void:
 	next_menu_player.play()
 	var tween = create_tween().set_parallel(true)
 	tween.tween_property(current_menu_player, "volume_db", -80.0, 2.0)
-	tween.tween_property(next_menu_player, "volume_db", -10.0, 2.0)
+	tween.tween_property(next_menu_player, "volume_db", 0.0, 2.0)
 	
 	# Swap roles
 	var temp = current_menu_player
@@ -144,7 +144,7 @@ func _start_menu_music_crossfade() -> void:
 func play_menu_music() -> void:
 	is_menu_music_active = true
 	if not current_menu_player.playing:
-		current_menu_player.volume_db = -10.0
+		current_menu_player.volume_db = 0.0
 		current_menu_player.play()
 
 func stop_menu_music() -> void:
@@ -156,7 +156,7 @@ func play_game_music() -> void:
 	if is_game_music_active: return
 	is_game_music_active = true
 	if not current_game_player.playing:
-		current_game_player.volume_db = -10.0
+		current_game_player.volume_db = 0.0
 		current_game_player.play()
 
 func stop_game_music() -> void:
@@ -168,7 +168,7 @@ func _start_game_music_crossfade() -> void:
 	next_game_player.play()
 	var tween = create_tween().set_parallel(true)
 	tween.tween_property(current_game_player, "volume_db", -80.0, 2.0)
-	tween.tween_property(next_game_player, "volume_db", -10.0, 2.0)
+	tween.tween_property(next_game_player, "volume_db", 0.0, 2.0)
 	
 	# Swap roles
 	var temp = current_game_player
