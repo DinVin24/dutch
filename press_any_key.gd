@@ -1,6 +1,6 @@
 extends Control
 
-@onready var prompt_label = $CenterContainer/PromptLabel
+@onready var prompt_label = $PromptLabel
 @onready var music_player_1 = $MusicPlayer1
 @onready var music_player_2 = $MusicPlayer2
 
@@ -16,6 +16,8 @@ func _ready() -> void:
 	if GameManager:
 		GameManager.stop_menu_music()
 	
+	# Wait for one frame to ensure layout anchors are processed for centering
+	await get_tree().process_frame
 	base_y = prompt_label.position.y
 	
 	# Setup Music
