@@ -56,6 +56,11 @@ var current_game_player: AudioStreamPlayer
 var next_game_player: AudioStreamPlayer
 var is_game_music_active: bool = false
 
+# Audio Streams
+var sfx_card_flip = preload("res://assets/sfx/card_flip.mp3")
+var sfx_beer_drink = preload("res://assets/sfx/beer_drink.mp3")
+var sfx_chicken = preload("res://assets/sfx/chicken.mp3")
+
 var ability_manager: AbilityManager
 
 # Match Settings
@@ -169,6 +174,16 @@ func stop_game_music() -> void:
 func stop_all_music() -> void:
 	stop_menu_music()
 	stop_game_music()
+
+func play_sfx(stream: AudioStream) -> void:
+	if not stream: return
+	var p = AudioStreamPlayer.new()
+	p.stream = stream
+	p.bus = "SFX"
+	p.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(p)
+	p.play()
+	p.finished.connect(p.queue_free)
 
 func _start_game_music_crossfade() -> void:
 	next_game_player.play()
@@ -498,6 +513,7 @@ func _check_elimination_win_condition() -> bool:
 func drink_beer(p_idx: int):
 	if players_info[p_idx].is_eliminated: return
 	players_info[p_idx].beers -= 1
+	play_sfx(sfx_beer_drink)
 	player_drank_beer.emit(p_idx, players_info[p_idx].beers)
 	print("Player ", p_idx, " drank a beer! Remaining: ", players_info[p_idx].beers)
 	
@@ -909,6 +925,7 @@ func buy_ability(p_idx: int) -> bool:
 		var list = ["bottoms_up", "refuel", "trim_off", "boulder", "reverse", "skip", "perfect_match", "inflation", "half_off", "jumpscare", "shuffle", "polarity_shift"]
 		var ab = list[randi() % list.size()]
 		players_info[p_idx].abilities.append(ab)
+		play_sfx(sfx_chicken)
 		ability_unlocked.emit(p_idx, ab)
 		print("GM: Player ", p_idx, " bought ability: ", ab)
 		return true
