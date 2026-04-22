@@ -1,0 +1,15 @@
+feat(abilities): implement texture mapping, reveal animations, and inventory cap
+
+- Mapped 12 ability icons and backside texture to AbilityToken3D using the new grid layout.
+- Refactored AbilityToken3D into a scene with Front/Back faces for proper 3D rendering.
+- Implemented a 2-second reveal sequence for both receiving and using ability cards.
+- Fixed token rotation to lay flat on the table with correct orientation.
+- Added a hard cap of 8 abilities in the inventory with UI feedback.
+- Ensured bots also follow the reveal animation timing for better player visibility.
+
+Jira Tasks:
+- KAN-55 (Reverse)
+- KAN-69 (Polarity Shift)
+- KAN-49 (Handoff)
+
+Agent: The Reviewer (Agent 4)

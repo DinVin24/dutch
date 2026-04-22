@@ -1,0 +1,65 @@
+[gd_scene load_steps=6 format=3 uid="uid://b8y7x3m4p5q2r"]
+
+[ext_resource type="Script" path="res://press_any_key.gd" id="1_logic"]
+[ext_resource type="Texture2D" path="res://assets/images/main_menu_background.jpg" id="2_bg"]
+[ext_resource type="Shader" path="res://vhs_effect.gdshader" id="3_vhs"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_vhs"]
+shader = ExtResource("3_vhs")
+shader_parameter/scanline_count = 400.0
+shader_parameter/distortion_intensity = 0.003
+shader_parameter/noise_intensity = 0.15
+shader_parameter/roll_speed = 2.0
+
+[node name="PressAnyKey" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_logic")
+
+[node name="Background" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_bg")
+expand_mode = 2
+stretch_mode = 0
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="PromptLabel" type="Label" parent="CenterContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(1, 0, 1, 1)
+theme_override_constants/outline_size = 10
+theme_override_font_sizes/font_size = 48
+text = "PRESS ANY KEY TO CONTINUE"
+horizontal_alignment = 1
+
+[node name="VHSEffect" type="ColorRect" parent="."]
+material = SubResource("ShaderMaterial_vhs")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="MusicPlayer1" type="AudioStreamPlayer" parent="."]
+bus = &"Music"
+
+[node name="MusicPlayer2" type="AudioStreamPlayer" parent="."]
+bus = &"Music"
