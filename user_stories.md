@@ -150,5 +150,13 @@
     * **Then** Chippy's speech bubble updates with a contextual, concise tip (max 2 sentences)
     * **And** the player can press [NEXT >] to step through multi-part tips, or [SKIP TUTORIAL] to dismiss the overlay at any time
     * **And** one-off event tips appear when the player first drinks a beer, buys an ability, or Dutch is called
-    * **And** pressing SKIP removes Chippy cleanly without affecting the running game
+
+## Epic 17: Game Balance & Economy [KAN-79]
+- [x] **Story**: As a player, I want powerful abilities like 'Perfect Match' and 'Polarity Shift' to be limited in supply (2 per match), so the game remains fair and strategic even when players have a lot of money. [KAN-80]
+  * **Acceptance Criteria**:
+    * **Given** a match is in progress
+    * **When** 2 'Perfect Match' abilities have already been bought by any combination of players
+    * **Then** the Chicken will no longer generate 'Perfect Match' for subsequent purchases
+    * **And** the same rule applies independently to 'Polarity Shift'
+    * **And** these limits reset every time a new match is initialized
 

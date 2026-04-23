@@ -1,29 +1,12 @@
-fix(tutorial): Chippy now respects turn ownership and adds smart proactive tips
+feat(balance): limit game-breaking abilities to 2 per match
 
-Resolves four feedback issues from playtest:
+Implements Epic 17 (KAN-79). Limits the supply of 'Perfect Match' and
+'Polarity Shift' abilities to a maximum of 2 each per match. Once the
+global limit is reached, these abilities are filtered out of the
+Chicken's random pool.
 
-1. PLAYER-ONLY STATES: FSM state tips (TURN_START_DRAW, TURN_RESOLVE_DRAWN,
-   TURN_END_CHOICE, etc.) are now gated on current_player_index == 0.
-   Chippy stays silent during bot turns instead of narrating them as if
-   they were the player's own action.
-
-2. JUMP-IN SUGGESTION: Chippy now listens to card_discarded signal. When
-   another player discards a card whose rank matches any card in the human's
-   hand (and a jump-in is currently legal), Chippy proactively suggests it
-   with a transient tip showing the matching rank.
-
-3. BUY ABILITY SUGGESTION: Chippy listens to player_gained_money. When the
-   human's total crosses $50 from below (including after spending and earning
-   back up), Chippy suggests clicking the Chicken to buy an ability egg.
-
-4. ABILITY DESCRIPTION ON PURCHASE: _on_ability_unlocked now shows a per-ability
-   description from the ABILITY_DESCRIPTIONS dictionary (12 abilities covered)
-   instead of a generic "You bought an egg!" message.
-
-Other changes:
-- Added _show_transient_tip() helper for ad-hoc tips that don't consume event slots
-- dutch_called tip now distinguishes self-called vs other-called Dutch
-- PLAYER_ONLY_STATES const replaces ad-hoc deduplication for these states
-- _last_money var tracks previous money total for threshold crossing detection
+- Added global_ability_counts tracking to GameManager.
+- Reset counts in initialize_game().
+- Updated buy_ability() to enforce limits.
 
 Agent: Executor (Antigravity)
