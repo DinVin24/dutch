@@ -78,6 +78,10 @@ var win_condition_lowest_wins: bool = true
 var jump_in_was_own_draw_phase: bool = false
 var easy_mode: bool = false # Easy Mode: Player 0's cards are always visible
 var tutorial_mode: bool = false # Tutorial Mode: TutorialOverlay is instantiated on the board
+var global_ability_counts: Dictionary = {
+	"perfect_match": 0,
+	"polarity_shift": 0
+}
 
 func _ready():
 	deck_manager = DeckManager.new()
@@ -206,6 +210,10 @@ func initialize_game(p_count: int = 4):
 	dutch_caller_index = -1
 	jump_in_player_idx = -1
 	win_condition_lowest_wins = true
+	global_ability_counts = {
+		"perfect_match": 0,
+		"polarity_shift": 0
+	}
 	jump_in_resume_state = GameState.INITIALIZING
 	drawn_card_data = null
 	# Note: easy_mode and tutorial_mode are intentionally NOT reset here — they are set
@@ -924,10 +932,22 @@ func buy_ability(p_idx: int) -> bool:
 		
 		# Generate random ability
 		var list = ["bottoms_up", "refuel", "trim_off", "boulder", "reverse", "skip", "perfect_match", "inflation", "half_off", "jumpscare", "shuffle", "polarity_shift"]
+		
+		# Filter limited abilities (Epic 16 feedback: Polarity Shift and Perfect Match are game-breaking)
+		if global_ability_counts["perfect_match"] >= 2:
+			list.erase("perfect_match")
+		if global_ability_counts["polarity_shift"] >= 2:
+			list.erase("polarity_shift")
+			
 		var ab = list[randi() % list.size()]
+		
+		# Update global counts for limited abilities
+		if ab in global_ability_counts:
+			global_ability_counts[ab] += 1
+			
 		players_info[p_idx].abilities.append(ab)
 		play_sfx(sfx_chicken)
 		ability_unlocked.emit(p_idx, ab)
-		print("GM: Player ", p_idx, " bought ability: ", ab)
+		print("GM: Player ", p_idx, " bought ability: ", ab, " (Limit Tracking: ", global_ability_counts, ")")
 		return true
 	return false
