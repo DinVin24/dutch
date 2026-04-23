@@ -1497,6 +1497,8 @@ func _on_bot_action(message):
 	_show_message(message)
 
 func _process(delta: float) -> void:
+	if Engine.is_editor_hint(): return
+	
 	if _shake_timer > 0:
 		_shake_timer -= delta
 		var offset = Vector3(
