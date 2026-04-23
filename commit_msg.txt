@@ -1,7 +1,4 @@
-feat(visuals): replace placeholder table with custom 3D model
-
-Replaces the SubResource BoxMesh table in game_board_3d.tscn with the
-new custom table.glb model from assets/models. Cleaned up unused
-table-specific sub-resources.
+feat(balance): limit game-breaking abilities to 2 per match
+feat(visuals): implement custom room and table models with full-bright lighting
 
 Agent: Executor (Antigravity)
