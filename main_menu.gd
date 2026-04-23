@@ -42,12 +42,21 @@ func _on_start_button_pressed() -> void:
 func _on_normal_pressed() -> void:
 	glitch_player.play_glitch_click()
 	GameManager.easy_mode = false
+	GameManager.tutorial_mode = false
 	await get_tree().create_timer(0.15).timeout
 	get_tree().change_scene_to_file("res://game_board_3d.tscn")
 
 func _on_easy_pressed() -> void:
 	glitch_player.play_glitch_click()
 	GameManager.easy_mode = true
+	GameManager.tutorial_mode = false
+	await get_tree().create_timer(0.15).timeout
+	get_tree().change_scene_to_file("res://game_board_3d.tscn")
+
+func _on_tutorial_pressed() -> void:
+	glitch_player.play_glitch_click()
+	GameManager.easy_mode = true   # Tutorial always plays with cards visible
+	GameManager.tutorial_mode = true
 	await get_tree().create_timer(0.15).timeout
 	get_tree().change_scene_to_file("res://game_board_3d.tscn")
 
