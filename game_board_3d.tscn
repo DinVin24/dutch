@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://bdxak4r8w6swu" path="res://game_board_3d.gd" id="1_script"]
 [ext_resource type="Shader" uid="uid://chcpger88sefc" path="res://shaders/crt_glitch.gdshader" id="2_shader"]
-[ext_resource type="PackedScene" uid="uid://table_model" path="res://assets/models/table.glb" id="3_table"]
+[ext_resource type="PackedScene" uid="uid://dwowse5ksiil0" path="res://assets/models/table.glb" id="3_table"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -73,12 +73,11 @@ spot_range = 12.0
 spot_angle = 50.0
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=701076918]
-transform = Transform3D(1, 0, 0, 0, 0.6354183, 0.77216816, 0, -0.77216816, 0.6354183, 0, 6.1097326, 5.7597327)
+transform = Transform3D(-0.33882597, -0.7264937, 0.5978327, 0, 0.63541824, 0.77216816, -0.94084907, 0.26163062, -0.2152962, 0, 6.1097326, 5.7597327)
 fov = 60.0
 
-[node name="Table" parent="." instance=ExtResource("3_table")]
-unique_id = 1174919008
-transform = Transform3D(12, 0, 0, 0, 3, 0, 0, 0, 12, 0, -0.5, 0)
+[node name="Table" parent="." unique_id=1261982012 instance=ExtResource("3_table")]
+transform = Transform3D(20.680212, 0, 0, 0, 3.0000007, 0, 0, 0, 24.131344, 0, -1.6886296, 0)
 
 [node name="Grass" type="MeshInstance3D" parent="." unique_id=990473504]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1, 0)
