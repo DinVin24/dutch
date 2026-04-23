@@ -2,11 +2,13 @@
 
 [ext_resource type="Script" uid="uid://bdxak4r8w6swu" path="res://game_board_3d.gd" id="1_script"]
 [ext_resource type="Shader" uid="uid://chcpger88sefc" path="res://shaders/crt_glitch.gdshader" id="2_shader"]
+[ext_resource type="PackedScene" uid="uid://dwowse5ksiil0" path="res://assets/models/table.glb" id="3_table"]
+[ext_resource type="PackedScene" uid="uid://ckb1pwxfqlsej" path="res://assets/models/room.glb" id="4_room"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
-ambient_light_source = 1
-ambient_light_color = Color(0.01, 0.01, 0.01, 1)
+ambient_light_source = 2
+ambient_light_color = Color(1, 1, 1, 1)
 tonemap_mode = 3
 glow_intensity = 0.0
 glow_strength = 0.0
@@ -15,23 +17,6 @@ fog_light_color = Color(0.02, 0.02, 0.02, 1)
 fog_density = 0.0
 volumetric_fog_density = 0.0
 volumetric_fog_albedo = Color(0.05, 0.05, 0.05, 1)
-
-[sub_resource type="BoxMesh" id="BoxMesh_Table"]
-size = Vector3(15, 0.2, 10)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_Table"]
-albedo_color = Color(0.1, 0.09, 0.08, 1)
-metallic = 0.05
-roughness = 0.9
-emission_enabled = true
-emission = Color(0.1, 0.08, 0.05, 1)
-emission_energy_multiplier = 0.02
-
-[sub_resource type="PlaneMesh" id="PlaneMesh_Grass"]
-size = Vector2(100, 100)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_Grass"]
-albedo_color = Color(0.1, 0.3, 0.1, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_Deck"]
 size = Vector3(1.2, 0.5, 1.6)
@@ -55,48 +40,15 @@ beer_y_offset = 0.75
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=125711330]
 environment = SubResource("Environment_1")
 
-[node name="SpotLight_Deck" type="SpotLight3D" parent="." unique_id=45875596]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, -1.5, 3.5, 0)
-light_color = Color(1, 0.95, 0.9, 1)
-light_energy = 0.05
-light_volumetric_fog_energy = 0.0
-shadow_enabled = true
-spot_range = 8.0
-spot_angle = 25.0
-
-[node name="SpotLight_Discard" type="SpotLight3D" parent="." unique_id=158839449]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 1.5, 3.5, 0)
-light_color = Color(1, 0.8, 0.8, 1)
-light_energy = 0.05
-light_volumetric_fog_energy = 0.0
-shadow_enabled = true
-spot_range = 8.0
-spot_angle = 25.0
-
-[node name="SpotLight_Table" type="SpotLight3D" parent="." unique_id=1825334186]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 5, 0)
-light_color = Color(1, 0.95, 0.85, 1)
-light_energy = 0.4
-light_volumetric_fog_energy = 0.0
-shadow_enabled = true
-spot_range = 12.0
-spot_angle = 50.0
-
 [node name="Camera3D" type="Camera3D" parent="." unique_id=701076918]
 transform = Transform3D(1, 0, 0, 0, 0.6354183, 0.77216816, 0, -0.77216816, 0.6354183, 0, 6.1097326, 5.7597327)
 fov = 60.0
 
-[node name="Table" type="MeshInstance3D" parent="." unique_id=1174919008]
-mesh = SubResource("BoxMesh_Table")
-surface_material_override/0 = SubResource("StandardMaterial3D_Table")
+[node name="Table" parent="." unique_id=1261982012 instance=ExtResource("3_table")]
+transform = Transform3D(20.680212, 0, 0, 0, 3.0000007, 0, 0, 0, 24.131344, 0, -1.6886296, 0)
 
-[node name="Grass" type="MeshInstance3D" parent="." unique_id=990473504]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1, 0)
-mesh = SubResource("PlaneMesh_Grass")
-
-[node name="GrassMesh" type="MeshInstance3D" parent="Grass" unique_id=165266394]
-mesh = SubResource("PlaneMesh_Grass")
-surface_material_override/0 = SubResource("StandardMaterial3D_Grass")
+[node name="Room" parent="." unique_id=1019395394 instance=ExtResource("4_room")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.8, 0)
 
 [node name="DeckArea" type="Node3D" parent="." unique_id=650630562]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0.1, 0)
@@ -119,51 +71,14 @@ shape = SubResource("BoxShape3D_Deck")
 [node name="Bottom" type="Node3D" parent="PlayerPositions" unique_id=1640482197]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 4)
 
-[node name="Spotlight_P0" type="SpotLight3D" parent="PlayerPositions/Bottom" unique_id=495142937]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 3.4, 0.6592293)
-light_color = Color(0.2, 0.8, 1, 1)
-light_energy = 0.0
-shadow_enabled = true
-spot_range = 6.0
-spot_angle = 35.0
-
 [node name="Top" type="Node3D" parent="PlayerPositions" unique_id=1531237525]
 transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 0, 0.1, -4)
-
-[node name="Spotlight_P2" type="SpotLight3D" parent="PlayerPositions/Top" unique_id=1783742724]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 3.4, 0)
-light_color = Color(1, 1, 0.8, 1)
-light_energy = 0.0
-shadow_enabled = true
-spot_range = 6.0
-spot_angle = 35.0
 
 [node name="Left" type="Node3D" parent="PlayerPositions" unique_id=346409451]
 transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -5.5, 0.1, 0)
 
-[node name="Spotlight_P1" type="SpotLight3D" parent="PlayerPositions/Left" unique_id=672307767]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 3.4, 0)
-light_color = Color(1, 1, 0.8, 1)
-light_energy = 0.0
-shadow_enabled = true
-spot_range = 6.0
-spot_angle = 35.0
-
 [node name="Right" type="Node3D" parent="PlayerPositions" unique_id=1342769357]
 transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 5.5, 0.1, 0)
-
-[node name="Spotlight_P3" type="SpotLight3D" parent="PlayerPositions/Right" unique_id=1947534400]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 3.4, 0)
-light_color = Color(1, 1, 0.8, 1)
-light_energy = 0.0
-shadow_enabled = true
-spot_range = 6.0
-spot_angle = 35.0
-
-[node name="AmbientFill" type="DirectionalLight3D" parent="." unique_id=1546069566]
-transform = Transform3D(0.707107, -0.353553, 0.612372, 0, 0.866025, 0.5, -0.707107, -0.353553, 0.612372, 0, 10, 0)
-light_color = Color(0.25, 0.25, 0.25, 1)
-light_energy = 0.15
 
 [node name="GameUI" type="CanvasLayer" parent="." unique_id=322047825]
 
