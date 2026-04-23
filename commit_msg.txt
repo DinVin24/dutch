@@ -1,12 +1,7 @@
-feat(balance): limit game-breaking abilities to 2 per match
+feat(visuals): replace placeholder table with custom 3D model
 
-Implements Epic 17 (KAN-79). Limits the supply of 'Perfect Match' and
-'Polarity Shift' abilities to a maximum of 2 each per match. Once the
-global limit is reached, these abilities are filtered out of the
-Chicken's random pool.
-
-- Added global_ability_counts tracking to GameManager.
-- Reset counts in initialize_game().
-- Updated buy_ability() to enforce limits.
+Replaces the SubResource BoxMesh table in game_board_3d.tscn with the
+new custom table.glb model from assets/models. Cleaned up unused
+table-specific sub-resources.
 
 Agent: Executor (Antigravity)

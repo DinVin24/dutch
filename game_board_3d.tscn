@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://bdxak4r8w6swu" path="res://game_board_3d.gd" id="1_script"]
 [ext_resource type="Shader" uid="uid://chcpger88sefc" path="res://shaders/crt_glitch.gdshader" id="2_shader"]
+[ext_resource type="PackedScene" uid="uid://table_model" path="res://assets/models/table.glb" id="3_table"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -15,17 +16,6 @@ fog_light_color = Color(0.02, 0.02, 0.02, 1)
 fog_density = 0.0
 volumetric_fog_density = 0.0
 volumetric_fog_albedo = Color(0.05, 0.05, 0.05, 1)
-
-[sub_resource type="BoxMesh" id="BoxMesh_Table"]
-size = Vector3(15, 0.2, 10)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_Table"]
-albedo_color = Color(0.1, 0.09, 0.08, 1)
-metallic = 0.05
-roughness = 0.9
-emission_enabled = true
-emission = Color(0.1, 0.08, 0.05, 1)
-emission_energy_multiplier = 0.02
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_Grass"]
 size = Vector2(100, 100)
@@ -86,9 +76,8 @@ spot_angle = 50.0
 transform = Transform3D(1, 0, 0, 0, 0.6354183, 0.77216816, 0, -0.77216816, 0.6354183, 0, 6.1097326, 5.7597327)
 fov = 60.0
 
-[node name="Table" type="MeshInstance3D" parent="." unique_id=1174919008]
-mesh = SubResource("BoxMesh_Table")
-surface_material_override/0 = SubResource("StandardMaterial3D_Table")
+[node name="Table" parent="." instance=ExtResource("3_table")]
+unique_id = 1174919008
 
 [node name="Grass" type="MeshInstance3D" parent="." unique_id=990473504]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1, 0)
