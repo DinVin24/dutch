@@ -153,6 +153,12 @@ func _ready():
 	GameManager.initialize_game(4)
 	trigger_glitch(0.4, 0.8) # Intro glitch
 
+	# Tutorial Mode: Inject Chippy's overlay into the UI layer
+	if GameManager.tutorial_mode:
+		var tut_scene = preload("res://tutorial_overlay.tscn")
+		var tut = tut_scene.instantiate()
+		$GameUI.add_child(tut)
+
 func _create_hud_ui():
 	# Action Buttons Container: Moved to bottom-right to avoid overlapping hand cards
 	var action_container = VBoxContainer.new()

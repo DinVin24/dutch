@@ -134,3 +134,21 @@
 ## Epic 15: Social & Multiplayer (Roadmap Phase 3 & 4) [KAN-74]
 - [ ] **Story**: As a player, I want to host or join a multiplayer room from a lobby list and pick my own username.
 - [ ] **Story**: As a winner, I want to trigger a unique emote animation and celebrate in spatial voice chat.
+
+## Epic 16: Interactive Tutorial Mode [KAN-76]
+- [/] **Story**: As a first-time player, I want a Tutorial option on the main menu start screen (alongside Normal/Easy), so that I can opt into a guided experience without reading a manual. [KAN-77]
+  * **Acceptance Criteria**:
+    * **Given** I click START_FILE
+    * **When** the difficulty prompt appears
+    * **Then** a TUTORIAL button is visible alongside Normal and Easy
+    * **When** I click TUTORIAL
+    * **Then** the game loads in Easy Mode with the TutorialOverlay active
+- [/] **Story**: As a first-time player, I want a funny little guide character (Chippy the Card Goblin) to appear on screen during the tutorial game and explain what's happening at each stage, so I understand how to play without the game feeling bloated or overwhelming. [KAN-78]
+  * **Acceptance Criteria**:
+    * **Given** a tutorial game is active
+    * **When** the FSM transitions to a new game state (deal, peek, draw, resolve, jump-in, dutch, etc.)
+    * **Then** Chippy's speech bubble updates with a contextual, concise tip (max 2 sentences)
+    * **And** the player can press [NEXT >] to step through multi-part tips, or [SKIP TUTORIAL] to dismiss the overlay at any time
+    * **And** one-off event tips appear when the player first drinks a beer, buys an ability, or Dutch is called
+    * **And** pressing SKIP removes Chippy cleanly without affecting the running game
+
