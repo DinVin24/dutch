@@ -7,8 +7,8 @@
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
-ambient_light_source = 1
-ambient_light_color = Color(0.01, 0.01, 0.01, 1)
+ambient_light_source = 2
+ambient_light_color = Color(1, 1, 1, 1)
 tonemap_mode = 3
 glow_intensity = 0.0
 glow_strength = 0.0
@@ -40,32 +40,6 @@ beer_y_offset = 0.75
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=125711330]
 environment = SubResource("Environment_1")
 
-[node name="SpotLight_Deck" type="SpotLight3D" parent="." unique_id=45875596]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, -1.5, 3.5, 0)
-light_color = Color(1, 0.95, 0.9, 1)
-light_energy = 0.05
-light_volumetric_fog_energy = 0.0
-shadow_enabled = true
-spot_range = 8.0
-spot_angle = 25.0
-
-[node name="SpotLight_Discard" type="SpotLight3D" parent="." unique_id=158839449]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 1.5, 3.5, 0)
-light_color = Color(1, 0.8, 0.8, 1)
-light_energy = 0.05
-light_volumetric_fog_energy = 0.0
-shadow_enabled = true
-spot_range = 8.0
-spot_angle = 25.0
-
-[node name="SpotLight_Table" type="SpotLight3D" parent="." unique_id=1825334186]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 5, 0)
-light_color = Color(1, 0.95, 0.85, 1)
-light_energy = 0.4
-light_volumetric_fog_energy = 0.0
-shadow_enabled = true
-spot_range = 12.0
-spot_angle = 50.0
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=701076918]
 transform = Transform3D(1, 0, 0, 0, 0.6354183, 0.77216816, 0, -0.77216816, 0.6354183, 0, 6.1097326, 5.7597327)
@@ -98,51 +72,19 @@ shape = SubResource("BoxShape3D_Deck")
 [node name="Bottom" type="Node3D" parent="PlayerPositions" unique_id=1640482197]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 4)
 
-[node name="Spotlight_P0" type="SpotLight3D" parent="PlayerPositions/Bottom" unique_id=495142937]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 3.4, 0.6592293)
-light_color = Color(0.2, 0.8, 1, 1)
-light_energy = 0.0
-shadow_enabled = true
-spot_range = 6.0
-spot_angle = 35.0
 
 [node name="Top" type="Node3D" parent="PlayerPositions" unique_id=1531237525]
 transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 0, 0.1, -4)
 
-[node name="Spotlight_P2" type="SpotLight3D" parent="PlayerPositions/Top" unique_id=1783742724]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 3.4, 0)
-light_color = Color(1, 1, 0.8, 1)
-light_energy = 0.0
-shadow_enabled = true
-spot_range = 6.0
-spot_angle = 35.0
 
 [node name="Left" type="Node3D" parent="PlayerPositions" unique_id=346409451]
 transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -5.5, 0.1, 0)
 
-[node name="Spotlight_P1" type="SpotLight3D" parent="PlayerPositions/Left" unique_id=672307767]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 3.4, 0)
-light_color = Color(1, 1, 0.8, 1)
-light_energy = 0.0
-shadow_enabled = true
-spot_range = 6.0
-spot_angle = 35.0
 
 [node name="Right" type="Node3D" parent="PlayerPositions" unique_id=1342769357]
 transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 5.5, 0.1, 0)
 
-[node name="Spotlight_P3" type="SpotLight3D" parent="PlayerPositions/Right" unique_id=1947534400]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 3.4, 0)
-light_color = Color(1, 1, 0.8, 1)
-light_energy = 0.0
-shadow_enabled = true
-spot_range = 6.0
-spot_angle = 35.0
 
-[node name="AmbientFill" type="DirectionalLight3D" parent="." unique_id=1546069566]
-transform = Transform3D(0.707107, -0.353553, 0.612372, 0, 0.866025, 0.5, -0.707107, -0.353553, 0.612372, 0, 10, 0)
-light_color = Color(0.25, 0.25, 0.25, 1)
-light_energy = 0.15
 
 [node name="GameUI" type="CanvasLayer" parent="." unique_id=322047825]
 

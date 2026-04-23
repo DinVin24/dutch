@@ -12,12 +12,7 @@ extends Node3D
 @onready var turn_label = $GameUI/MainHUD/TopLeft/TurnLabel
 @onready var top_center = $GameUI/MainHUD/TopCenter
 @onready var crt_overlay = $PostProcessing/CRT_Overlay
-@onready var player_lights = {
-	0: $PlayerPositions/Bottom/Spotlight_P0,
-	1: $PlayerPositions/Left/Spotlight_P1,
-	2: $PlayerPositions/Top/Spotlight_P2,
-	3: $PlayerPositions/Right/Spotlight_P3
-}
+var player_lights = {}
 
 var bot_controller: BotController = null
 var end_turn_btn: Button
@@ -595,9 +590,6 @@ func _on_player_drank_beer(player_idx, remaining):
 
 func _on_player_eliminated(player_idx):
 	_show_message(GameManager.players_info[player_idx].name + " PASSED OUT!")
-	# Turn their zone red
-	player_lights[player_idx].light_color = Color(1, 0, 0)
-	player_lights[player_idx].light_energy = 10.0
 
 func _on_player_gained_money(player_idx, _amount, total):
 	if player_idx == 0 and money_labels.size() > 0:
@@ -637,27 +629,9 @@ func _on_turn_started(player_idx):
 	if player_idx != 0:
 		_show_message(p_info.name + " is thinking...")
 
-func _update_turn_lights(current_player: int, all_on: bool = false):
-	# Safety: during initial ready call, players_info might not be initialized yet
-	if GameManager.players_info.size() < 4:
-		# Just set baseline energy for all lights if we can't check hand sizes yet
-		for i in range(4):
-			player_lights[i].light_energy = (6.0 if all_on else 0.0)
-		return
-
-	for i in range(4):
-		var light = player_lights[i]
-		var is_active = (i == current_player or all_on)
-		var hand_size = GameManager.players_info[i].hand.size()
-		var target_energy = 8.0 if is_active else 0.0
-		var target_angle = 60.0 + max(0, (hand_size - 4) * 8.0) # Wider base and steeper growth
-		target_angle = min(target_angle, 85.0)
-		var tween = create_tween().set_parallel(true)
-		tween.tween_property(light, "light_energy", target_energy, 0.5).set_trans(Tween.TRANS_CUBIC)
-		tween.tween_property(light, "spot_angle", target_angle, 0.5).set_trans(Tween.TRANS_CUBIC)
-		tween.tween_property(light, "spot_range", 18.0, 0.5)
-		tween.tween_property(light, "position:y", 6.5, 0.5)
-		tween.tween_property(light, "scale", Vector3(1.0, 1.0, 1.0), 0.5)
+func _update_turn_lights(_current_player: int, _all_on: bool = false):
+	# Lights removed as per 'Full Bright' request
+	return
 
 func _setup_table_noise():
 	var table_mesh = $Table as MeshInstance3D
