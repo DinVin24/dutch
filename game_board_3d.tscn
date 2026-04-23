@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://bdxak4r8w6swu" path="res://game_board_3d.gd" id="1_script"]
 [ext_resource type="Shader" uid="uid://chcpger88sefc" path="res://shaders/crt_glitch.gdshader" id="2_shader"]
 [ext_resource type="PackedScene" uid="uid://dwowse5ksiil0" path="res://assets/models/table.glb" id="3_table"]
+[ext_resource type="PackedScene" uid="uid://room_model" path="res://assets/models/room.glb" id="4_room"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -16,12 +17,6 @@ fog_light_color = Color(0.02, 0.02, 0.02, 1)
 fog_density = 0.0
 volumetric_fog_density = 0.0
 volumetric_fog_albedo = Color(0.05, 0.05, 0.05, 1)
-
-[sub_resource type="PlaneMesh" id="PlaneMesh_Grass"]
-size = Vector2(100, 100)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_Grass"]
-albedo_color = Color(0.1, 0.3, 0.1, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_Deck"]
 size = Vector3(1.2, 0.5, 1.6)
@@ -79,13 +74,8 @@ fov = 60.0
 [node name="Table" parent="." unique_id=1261982012 instance=ExtResource("3_table")]
 transform = Transform3D(20.680212, 0, 0, 0, 3.0000007, 0, 0, 0, 24.131344, 0, -1.6886296, 0)
 
-[node name="Grass" type="MeshInstance3D" parent="." unique_id=990473504]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1, 0)
-mesh = SubResource("PlaneMesh_Grass")
-
-[node name="GrassMesh" type="MeshInstance3D" parent="Grass" unique_id=165266394]
-mesh = SubResource("PlaneMesh_Grass")
-surface_material_override/0 = SubResource("StandardMaterial3D_Grass")
+[node name="Room" parent="." instance=ExtResource("4_room")]
+unique_id = 990473504
 
 [node name="DeckArea" type="Node3D" parent="." unique_id=650630562]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0.1, 0)
