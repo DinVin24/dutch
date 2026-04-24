@@ -303,11 +303,9 @@ func _create_beer_placeholders():
 			# We recursively look for any MeshInstance3D inside the imported GLB
 			_apply_emission_to_meshes(beer, beer_emission)
 			
-			# Simple Row of 3
-			var grid_x = (b - 1.0) * beer_spacing
-			
-			# Stationed on the LEFT of the cards
-			beer.position = Vector3(grid_x - 2.5, beer_y_offset, -1.8) 
+			# Column of 3 on the LEFT, centered with cards (z=0)
+			var grid_z = (b - 1.0) * beer_spacing
+			beer.position = Vector3(-4.0, beer_y_offset, grid_z) 
 			pos_node.add_child(beer)
 			player_beers_nodes[i].append(beer)
 
@@ -349,8 +347,8 @@ func _apply_emission_to_meshes(node: Node, energy: float):
 func _create_chicken_placeholder():
 	var chicken = CSGSphere3D.new()
 	chicken.radius = 0.4
-	# Move to the center of the table
-	chicken.position = Vector3(0, 1.2, 0)
+	# Raise chicken up
+	chicken.position = Vector3(0, 2.0, 0)
 	
 	var mat = StandardMaterial3D.new()
 	mat.albedo_color = Color(0.9, 0.9, 0.8) # Pale chicken
@@ -451,7 +449,7 @@ func _drop_egg_for(p_idx: int, ab: String):
 	# Spawn at the chicken's global position, then beautifully tween into the grid
 	# Rotation 180 on Y fixes the upside-down question mark
 	token.rotation_degrees = Vector3(90, 180, 0) 
-	token.global_position = Vector3(0, 1.2, 0) 
+	token.global_position = Vector3(0, 2.0, 0) 
 	
 	# REVEAL ON RECEIPT: Show for 2 seconds then flip down
 	token.set_face_up(true)
