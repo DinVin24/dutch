@@ -1,0 +1,179 @@
+[gd_scene load_steps=2 format=3 uid="uid://cx6y8v2q1p4r"]
+
+[ext_resource type="Script" path="res://lobby.gd" id="1_lobby"]
+
+[node name="Lobby" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_lobby")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.05, 0.05, 0.05, 1)
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 50
+theme_override_constants/margin_top = 50
+theme_override_constants/margin_right = 50
+theme_override_constants/margin_bottom = 50
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="Title" type="Label" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "MULTIPLAYER LOBBY"
+horizontal_alignment = 1
+
+[node name="SetupPanel" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="HBoxName" type="HBoxContainer" parent="MarginContainer/VBoxContainer/SetupPanel"]
+layout_mode = 2
+alignment = 1
+
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/SetupPanel/HBoxName"]
+layout_mode = 2
+text = "Username:"
+
+[node name="NameEdit" type="LineEdit" parent="MarginContainer/VBoxContainer/SetupPanel/HBoxName"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+text = "Player"
+
+[node name="HBoxConnection" type="HBoxContainer" parent="MarginContainer/VBoxContainer/SetupPanel"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 20
+
+[node name="HostButton" type="Button" parent="MarginContainer/VBoxContainer/SetupPanel/HBoxConnection"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Host Game"
+
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/SetupPanel/HBoxConnection"]
+layout_mode = 2
+text = "- or -"
+
+[node name="CodeEdit" type="LineEdit" parent="MarginContainer/VBoxContainer/SetupPanel/HBoxConnection"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+placeholder_text = "Room Code"
+
+[node name="JoinButton" type="Button" parent="MarginContainer/VBoxContainer/SetupPanel/HBoxConnection"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "Join"
+
+[node name="ActiveLobbyPanel" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 50
+
+[node name="PlayersList" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer/PlayersList"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Players"
+
+[node name="ItemList" type="ItemList" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer/PlayersList"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Settings" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer/Settings"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Match Options"
+
+[node name="AbilitiesCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer/Settings"]
+layout_mode = 2
+text = "Disable Abilities (Infinite Money)"
+
+[node name="HBoxBeers" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer/Settings"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer/Settings/HBoxBeers"]
+layout_mode = 2
+text = "Starting Beers:"
+
+[node name="BeersSpinBox" type="SpinBox" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer/Settings/HBoxBeers"]
+layout_mode = 2
+min_value = 1.0
+max_value = 5.0
+value = 3.0
+
+[node name="HBoxVisibility" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer/Settings"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer/Settings/HBoxVisibility"]
+layout_mode = 2
+text = "Cards Visibility:"
+
+[node name="VisibilityOption" type="OptionButton" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer/Settings/HBoxVisibility"]
+layout_mode = 2
+selected = 0
+item_count = 3
+popup/item_0/text = "Normal"
+popup/item_0/id = 0
+popup/item_1/text = "All Cards Up"
+popup/item_1/id = 1
+popup/item_2/text = "All Cards Down"
+popup/item_2/id = 2
+
+[node name="HBoxRoomCode" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 12
+
+[node name="RoomCodeLabel" type="Label" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxRoomCode"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Room Code: "
+horizontal_alignment = 1
+
+[node name="CopyCodeButton" type="Button" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxRoomCode"]
+layout_mode = 2
+text = "📋 Copy"
+tooltip_text = "Copy room code to clipboard"
+
+[node name="StartButton" type="Button" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "START GAME"
+
+[node name="BackButton" type="Button" parent="MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Back to Menu"

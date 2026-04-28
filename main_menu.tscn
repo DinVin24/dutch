@@ -68,6 +68,15 @@ text = "START_FILE"
 flat = true
 alignment = 0
 
+[node name="MultiplayerButton" type="Button" parent="LeftMargin/VBox/Buttons"]
+layout_mode = 2
+theme_override_colors/font_hover_color = Color(1, 0, 1, 1)
+theme_override_colors/font_color = Color(0, 1, 1, 1)
+theme_override_font_sizes/font_size = 38
+text = "MULTIPLAYER"
+flat = true
+alignment = 0
+
 [node name="SettingsButton" type="Button" parent="LeftMargin/VBox/Buttons"]
 layout_mode = 2
 theme_override_colors/font_hover_color = Color(1, 0, 1, 1)
@@ -209,6 +218,8 @@ script = ExtResource("4_sfx")
 
 [connection signal="mouse_entered" from="LeftMargin/VBox/Buttons/StartButton" to="." method="_on_button_mouse_entered" binds= ["Start"]]
 [connection signal="pressed" from="LeftMargin/VBox/Buttons/StartButton" to="." method="_on_start_button_pressed"]
+[connection signal="mouse_entered" from="LeftMargin/VBox/Buttons/MultiplayerButton" to="." method="_on_button_mouse_entered" binds= ["Multiplayer"]]
+[connection signal="pressed" from="LeftMargin/VBox/Buttons/MultiplayerButton" to="." method="_on_multiplayer_button_pressed"]
 [connection signal="mouse_entered" from="LeftMargin/VBox/Buttons/SettingsButton" to="." method="_on_button_mouse_entered" binds= ["Settings"]]
 [connection signal="pressed" from="LeftMargin/VBox/Buttons/SettingsButton" to="." method="_on_settings_button_pressed"]
 [connection signal="mouse_entered" from="LeftMargin/VBox/Buttons/ExitButton" to="." method="_on_button_mouse_entered" binds= ["Exit"]]
