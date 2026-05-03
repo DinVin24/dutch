@@ -1,6 +1,16 @@
-[gd_scene load_steps=2 format=3 uid="uid://cx6y8v2q1p4r"]
+[gd_scene load_steps=5 format=3 uid="uid://cx6y8v2q1p4r"]
 
 [ext_resource type="Script" path="res://lobby.gd" id="1_lobby"]
+[ext_resource type="Texture2D" path="res://assets/images/main_menu_background.jpg" id="2_bg"]
+[ext_resource type="Shader" uid="uid://dyqrwlcqm46x3" path="res://vhs_effect.gdshader" id="3_vhs"]
+[ext_resource type="Script" uid="uid://dxi8we5qx2ilr" path="res://glitch_sound_gen.gd" id="4_sfx"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_vhs"]
+shader = ExtResource("3_vhs")
+shader_parameter/scanline_count = 400.0
+shader_parameter/distortion_intensity = 0.003
+shader_parameter/noise_intensity = 0.15
+shader_parameter/roll_speed = 2.0
 
 [node name="Lobby" type="Control"]
 layout_mode = 3
@@ -11,137 +21,171 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_lobby")
 
-[node name="ColorRect" type="ColorRect" parent="."]
+[node name="Background" type="TextureRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.05, 0.05, 0.05, 1)
+texture = ExtResource("2_bg")
+expand_mode = 2
+stretch_mode = 0
 
-[node name="MarginContainer" type="MarginContainer" parent="."]
+[node name="LeftMargin" type="MarginContainer" parent="."]
 layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
+anchors_preset = 9
 anchor_bottom = 1.0
-grow_horizontal = 2
+offset_right = 520.0
 grow_vertical = 2
 theme_override_constants/margin_left = 50
-theme_override_constants/margin_top = 50
-theme_override_constants/margin_right = 50
-theme_override_constants/margin_bottom = 50
+theme_override_constants/margin_top = 40
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+[node name="VBox" type="VBoxContainer" parent="LeftMargin"]
 layout_mode = 2
-theme_override_constants/separation = 20
+size_flags_vertical = 4
+theme_override_constants/separation = 28
 
-[node name="Title" type="Label" parent="MarginContainer/VBoxContainer"]
+[node name="Title" type="Label" parent="LeftMargin/VBox"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 48
-text = "MULTIPLAYER LOBBY"
-horizontal_alignment = 1
+theme_override_colors/font_color = Color(0, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(1, 0, 1, 1)
+theme_override_constants/outline_size = 10
+theme_override_font_sizes/font_size = 64
+text = "// LOBBY_NET"
+horizontal_alignment = 0
 
-[node name="SetupPanel" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+[node name="SetupPanel" type="VBoxContainer" parent="LeftMargin/VBox"]
 layout_mode = 2
-theme_override_constants/separation = 15
+theme_override_constants/separation = 14
 
-[node name="HBoxName" type="HBoxContainer" parent="MarginContainer/VBoxContainer/SetupPanel"]
+[node name="HBoxName" type="HBoxContainer" parent="LeftMargin/VBox/SetupPanel"]
 layout_mode = 2
-alignment = 1
+theme_override_constants/separation = 12
 
-[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/SetupPanel/HBoxName"]
+[node name="Label" type="Label" parent="LeftMargin/VBox/SetupPanel/HBoxName"]
 layout_mode = 2
-text = "Username:"
+theme_override_colors/font_color = Color(0.85, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 20
+text = "USERNAME"
 
-[node name="NameEdit" type="LineEdit" parent="MarginContainer/VBoxContainer/SetupPanel/HBoxName"]
-custom_minimum_size = Vector2(200, 0)
+[node name="NameEdit" type="LineEdit" parent="LeftMargin/VBox/SetupPanel/HBoxName"]
+custom_minimum_size = Vector2(220, 0)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "Player"
 
-[node name="HBoxConnection" type="HBoxContainer" parent="MarginContainer/VBoxContainer/SetupPanel"]
+[node name="HBoxConnection" type="HBoxContainer" parent="LeftMargin/VBox/SetupPanel"]
 layout_mode = 2
-alignment = 1
-theme_override_constants/separation = 20
+theme_override_constants/separation = 12
 
-[node name="HostButton" type="Button" parent="MarginContainer/VBoxContainer/SetupPanel/HBoxConnection"]
-custom_minimum_size = Vector2(150, 0)
+[node name="HostButton" type="Button" parent="LeftMargin/VBox/SetupPanel/HBoxConnection"]
+custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
-text = "Host Game"
+theme_override_colors/font_hover_color = Color(1, 0, 1, 1)
+theme_override_colors/font_color = Color(0, 1, 1, 1)
+theme_override_font_sizes/font_size = 30
+text = "HOST_SESSION"
+flat = true
+alignment = 0
 
-[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/SetupPanel/HBoxConnection"]
+[node name="OrLabel" type="Label" parent="LeftMargin/VBox/SetupPanel/HBoxConnection"]
 layout_mode = 2
-text = "- or -"
+theme_override_colors/font_color = Color(0.55, 0.55, 0.65, 1)
+text = "//"
 
-[node name="CodeEdit" type="LineEdit" parent="MarginContainer/VBoxContainer/SetupPanel/HBoxConnection"]
-custom_minimum_size = Vector2(200, 0)
+[node name="CodeEdit" type="LineEdit" parent="LeftMargin/VBox/SetupPanel/HBoxConnection"]
+custom_minimum_size = Vector2(160, 0)
 layout_mode = 2
-placeholder_text = "Room Code"
+placeholder_text = "ROOM_CODE"
 
-[node name="JoinButton" type="Button" parent="MarginContainer/VBoxContainer/SetupPanel/HBoxConnection"]
-custom_minimum_size = Vector2(100, 0)
+[node name="JoinButton" type="Button" parent="LeftMargin/VBox/SetupPanel/HBoxConnection"]
+custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
-text = "Join"
+theme_override_colors/font_hover_color = Color(1, 0, 1, 1)
+theme_override_colors/font_color = Color(0, 1, 1, 1)
+theme_override_font_sizes/font_size = 30
+text = "JOIN_SESSION"
+flat = true
+alignment = 0
 
-[node name="ActiveLobbyPanel" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+[node name="ActiveLobbyPanel" type="VBoxContainer" parent="LeftMargin/VBox"]
 visible = false
 layout_mode = 2
 size_flags_vertical = 3
+theme_override_constants/separation = 16
 
-[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel"]
+[node name="HBoxContainer" type="HBoxContainer" parent="LeftMargin/VBox/ActiveLobbyPanel"]
 layout_mode = 2
 size_flags_vertical = 3
-theme_override_constants/separation = 50
+theme_override_constants/separation = 36
 
-[node name="PlayersList" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer"]
+[node name="PlayersList" type="VBoxContainer" parent="LeftMargin/VBox/ActiveLobbyPanel/HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_constants/separation = 8
 
-[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer/PlayersList"]
+[node name="Label" type="Label" parent="LeftMargin/VBox/ActiveLobbyPanel/HBoxContainer/PlayersList"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 24
-text = "Players"
+theme_override_colors/font_color = Color(0, 1, 1, 1)
+theme_override_font_sizes/font_size = 22
+text = "> CONNECTED"
 
-[node name="ItemList" type="ItemList" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer/PlayersList"]
+[node name="ItemList" type="ItemList" parent="LeftMargin/VBox/ActiveLobbyPanel/HBoxContainer/PlayersList"]
+custom_minimum_size = Vector2(0, 120)
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="Settings" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer"]
+[node name="Settings" type="VBoxContainer" parent="LeftMargin/VBox/ActiveLobbyPanel/HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 10
 
-[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer/Settings"]
+[node name="SettingsTitle" type="Label" parent="LeftMargin/VBox/ActiveLobbyPanel/HBoxContainer/Settings"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 24
-text = "Match Options"
+theme_override_colors/font_color = Color(0, 1, 1, 1)
+theme_override_font_sizes/font_size = 22
+text = "> MATCH_CFG"
 
-[node name="AbilitiesCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer/Settings"]
+[node name="AbilitiesCheck" type="CheckBox" parent="LeftMargin/VBox/ActiveLobbyPanel/HBoxContainer/Settings"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 16
 text = "Disable Abilities (Infinite Money)"
 
-[node name="HBoxBeers" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer/Settings"]
+[node name="FillBotsCheck" type="CheckBox" parent="LeftMargin/VBox/ActiveLobbyPanel/HBoxContainer/Settings"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "Fill empty seats with bots (4 seats)"
 
-[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer/Settings/HBoxBeers"]
+[node name="HBoxBeers" type="HBoxContainer" parent="LeftMargin/VBox/ActiveLobbyPanel/HBoxContainer/Settings"]
 layout_mode = 2
-text = "Starting Beers:"
+theme_override_constants/separation = 10
 
-[node name="BeersSpinBox" type="SpinBox" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer/Settings/HBoxBeers"]
+[node name="Label" type="Label" parent="LeftMargin/VBox/ActiveLobbyPanel/HBoxContainer/Settings/HBoxBeers"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.9, 1, 1)
+text = "Beers:"
+
+[node name="BeersSpinBox" type="SpinBox" parent="LeftMargin/VBox/ActiveLobbyPanel/HBoxContainer/Settings/HBoxBeers"]
 layout_mode = 2
 min_value = 1.0
 max_value = 5.0
 value = 3.0
 
-[node name="HBoxVisibility" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer/Settings"]
+[node name="HBoxVisibility" type="HBoxContainer" parent="LeftMargin/VBox/ActiveLobbyPanel/HBoxContainer/Settings"]
 layout_mode = 2
+theme_override_constants/separation = 10
 
-[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer/Settings/HBoxVisibility"]
+[node name="Label2" type="Label" parent="LeftMargin/VBox/ActiveLobbyPanel/HBoxContainer/Settings/HBoxVisibility"]
 layout_mode = 2
-text = "Cards Visibility:"
+theme_override_colors/font_color = Color(0.85, 0.9, 1, 1)
+text = "Cards:"
 
-[node name="VisibilityOption" type="OptionButton" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxContainer/Settings/HBoxVisibility"]
+[node name="VisibilityOption" type="OptionButton" parent="LeftMargin/VBox/ActiveLobbyPanel/HBoxContainer/Settings/HBoxVisibility"]
 layout_mode = 2
+size_flags_horizontal = 3
 selected = 0
 item_count = 3
 popup/item_0/text = "Normal"
@@ -151,29 +195,59 @@ popup/item_1/id = 1
 popup/item_2/text = "All Cards Down"
 popup/item_2/id = 2
 
-[node name="HBoxRoomCode" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel"]
+[node name="HBoxRoomCode" type="HBoxContainer" parent="LeftMargin/VBox/ActiveLobbyPanel"]
 layout_mode = 2
-alignment = 1
 theme_override_constants/separation = 12
 
-[node name="RoomCodeLabel" type="Label" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxRoomCode"]
+[node name="RoomCodeLabel" type="Label" parent="LeftMargin/VBox/ActiveLobbyPanel/HBoxRoomCode"]
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
 theme_override_font_sizes/font_size = 20
 text = "Room Code: "
-horizontal_alignment = 1
+horizontal_alignment = 0
 
-[node name="CopyCodeButton" type="Button" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel/HBoxRoomCode"]
+[node name="CopyCodeButton" type="Button" parent="LeftMargin/VBox/ActiveLobbyPanel/HBoxRoomCode"]
 layout_mode = 2
-text = "📋 Copy"
-tooltip_text = "Copy room code to clipboard"
+theme_override_colors/font_hover_color = Color(1, 0, 1, 1)
+theme_override_colors/font_color = Color(0, 1, 1, 1)
+theme_override_font_sizes/font_size = 22
+text = "COPY_CODE"
+flat = true
 
-[node name="StartButton" type="Button" parent="MarginContainer/VBoxContainer/ActiveLobbyPanel"]
+[node name="StartHintLabel" type="Label" parent="LeftMargin/VBox/ActiveLobbyPanel"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 32
-text = "START GAME"
+theme_override_colors/font_color = Color(0.55, 0.55, 0.7, 1)
+theme_override_font_sizes/font_size = 14
+text = "Host needs at least 2 human players to start."
 
-[node name="BackButton" type="Button" parent="MarginContainer/VBoxContainer"]
-custom_minimum_size = Vector2(150, 0)
+[node name="StartButton" type="Button" parent="LeftMargin/VBox/ActiveLobbyPanel"]
 layout_mode = 2
-size_flags_horizontal = 4
-text = "Back to Menu"
+theme_override_colors/font_hover_color = Color(1, 0, 1, 1)
+theme_override_colors/font_color = Color(0, 1, 1, 1)
+theme_override_font_sizes/font_size = 34
+text = "> START_MATCH <"
+flat = true
+alignment = 0
+
+[node name="BackButton" type="Button" parent="LeftMargin/VBox"]
+layout_mode = 2
+theme_override_colors/font_hover_color = Color(1, 0, 1, 1)
+theme_override_colors/font_color = Color(0.55, 0.55, 0.65, 1)
+theme_override_font_sizes/font_size = 24
+text = "[ BACK_TO_MENU ]"
+flat = true
+alignment = 0
+
+[node name="VHSEffect" type="ColorRect" parent="."]
+material = SubResource("ShaderMaterial_vhs")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="GlitchSound" type="AudioStreamPlayer" parent="."]
+bus = &"SFX"
+script = ExtResource("4_sfx")

@@ -34,7 +34,8 @@ var players = {}
 var match_settings = {
 	"no_abilities": false,
 	"beers": 3,
-	"cards_visibility": 0 # 0: Normal, 1: All Up, 2: All Down
+	"cards_visibility": 0, # 0: Normal, 1: All Up, 2: All Down
+	"fill_bots": false
 }
 
 func _ready():
@@ -350,7 +351,8 @@ func sync_match_settings(settings: Dictionary):
 	print("NetworkManager: Match settings synced.")
 
 @rpc("authority", "call_local", "reliable")
-func start_game():
-	print("NetworkManager: Starting game...")
-	# Make sure everyone drops into the main game board
+func start_match(total_players: int, deck_seed: int):
+	print("NetworkManager: Starting match (players=", total_players, ", seed=", deck_seed, ")")
+	GameManager.pending_mp_player_count = clampi(total_players, 2, 4)
+	GameManager.pending_match_seed = deck_seed
 	game_started.emit()

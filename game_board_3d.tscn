@@ -3,7 +3,6 @@
 [ext_resource type="Script" uid="uid://bdxak4r8w6swu" path="res://game_board_3d.gd" id="1_script"]
 [ext_resource type="Shader" uid="uid://chcpger88sefc" path="res://shaders/crt_glitch.gdshader" id="2_shader"]
 [ext_resource type="PackedScene" uid="uid://dwowse5ksiil0" path="res://assets/models/table.glb" id="3_table"]
-[ext_resource type="PackedScene" uid="uid://ckb1pwxfqlsej" path="res://assets/models/room.glb" id="4_room"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -46,9 +45,6 @@ fov = 60.0
 
 [node name="Table" parent="." unique_id=1261982012 instance=ExtResource("3_table")]
 transform = Transform3D(20.680212, 0, 0, 0, 3.0000007, 0, 0, 0, 24.131344, 0, -1.6886296, 0)
-
-[node name="Room" parent="." unique_id=1019395394 instance=ExtResource("4_room")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.8, 0)
 
 [node name="DeckArea" type="Node3D" parent="." unique_id=650630562]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0.1, 0)

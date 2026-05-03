@@ -41,6 +41,7 @@ signal player_eliminated(player_idx)
 signal player_gained_money(player_idx, amount, total)
 signal ability_unlocked(player_idx, ability_id)
 signal polarity_shifted(new_state: bool)
+signal multiplayer_sync_applied
 
 var current_state: GameState = GameState.INITIALIZING
 var deck_manager: DeckManager
@@ -67,6 +68,15 @@ var ability_manager: AbilityManager
 var num_players: int = 4 # Hotseat local play
 var players_info: Array = []
 var current_player_index: int = 0
+
+# Multiplayer tracking
+var is_multiplayer: bool = false
+var local_player_idx: int = 0
+var peer_to_idx: Dictionary = {}
+var idx_to_peer: Dictionary = {}
+var pending_mp_player_count: int = 0
+var pending_match_seed: int = -1
+var _mp_initial_peek_done: Dictionary = {}
 var turn_direction: int = 1 # 1 for clockwise, -1 for counter-clockwise (Uno Reverse)
 var dutch_caller_index: int = -1 # -1 means no one has called Dutch yet
 var jump_in_player_idx: int = -1 # who is currently attempting the jump-in
@@ -202,7 +212,14 @@ func _start_game_music_crossfade() -> void:
 	next_game_player = temp
 
 func initialize_game(p_count: int = 4):
-	num_players = p_count
+	var count: int = p_count
+	if pending_mp_player_count >= 2:
+		count = pending_mp_player_count
+	pending_mp_player_count = 0
+	num_players = count
+	peer_to_idx.clear()
+	idx_to_peer.clear()
+	_mp_initial_peek_done.clear()
 	players_info.clear()
 	current_state = GameState.INITIALIZING
 	current_player_index = 0
@@ -216,27 +233,64 @@ func initialize_game(p_count: int = 4):
 	}
 	jump_in_resume_state = GameState.INITIALIZING
 	drawn_card_data = null
+	is_multiplayer = multiplayer.multiplayer_peer != null and multiplayer.multiplayer_peer is ENetMultiplayerPeer and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
+	
+	var networked_players = []
+	if is_multiplayer:
+		# Copy the dictionary values and sort by ID to ensure deterministic ordering
+		var keys = NetworkManager.players.keys()
+		keys.sort()
+		for k in keys:
+			networked_players.append({"peer_id": k, "info": NetworkManager.players[k]})
+		
+		# Set settings
+		easy_mode = NetworkManager.match_settings["cards_visibility"] == 1
+		tutorial_mode = false # Disallow tutorial in multiplayer
+		
 	# Note: easy_mode and tutorial_mode are intentionally NOT reset here — they are set
 	# before initialize_game() is called from the difficulty prompt in main_menu.gd.
 	for i in range(num_players):
+		var p_name = "Player_" + str(i + 1)
+		var is_bot = true
+		
+		if is_multiplayer:
+			if i < networked_players.size():
+				var p_data = networked_players[i]
+				p_name = p_data["info"]["name"]
+				is_bot = false
+				peer_to_idx[p_data["peer_id"]] = i
+				idx_to_peer[i] = p_data["peer_id"]
+				if p_data["peer_id"] == multiplayer.get_unique_id():
+					local_player_idx = i
+			else:
+				p_name = "BOT_%d" % (i + 1)
+		else:
+			if i == 0:
+				is_bot = false
+			
 		players_info.append({
 			"id": i,
-			"name": "Player_" + str(i + 1),
+			"name": p_name,
 			"score": 0,
 			"hand": [], # CardData objects
 			"can_call_dutch": true,
-			"beers": 3,
+			"beers": NetworkManager.match_settings["beers"] if is_multiplayer else 3,
 			"money": 0,
 			"abilities": [],
 			"is_eliminated": false,
 			"is_skipped": false,
-			# bot_memory: { player_idx: { card_idx: CardData } }
-			# Populated by BotController during INITIAL_PEEK.
+			"is_bot": is_bot,
 			"bot_memory": {}
 		})
 	
 	# Ensure a fresh deck is ready for the new match
 	deck_manager.create_deck()
+	var use_seed: int = pending_match_seed
+	pending_match_seed = -1
+	if use_seed >= 0:
+		deck_manager.shuffle_deck_seeded(use_seed)
+	else:
+		deck_manager.shuffle_deck()
 	deck_ready.emit()
 	
 	start_game()
@@ -273,6 +327,7 @@ func change_state(new_state: GameState, force_signal: bool = false):
 			turn_started.emit(current_player_index)
 		GameState.GAME_OVER:
 			_handle_game_over()
+	_mp_broadcast_state_if_server()
 
 func _can_transition_to(new_state: GameState) -> bool:
 	match current_state:
@@ -347,7 +402,7 @@ func can_player_start_jump_in(player_idx: int) -> bool:
 		return false
 	if deck_manager == null or deck_manager.discard_pile.is_empty():
 		return false
-	if player_idx == 0:
+	if not players_info[player_idx].is_bot:
 		if current_state in [
 			GameState.INITIALIZING,
 			GameState.DEAL_CARDS,
@@ -360,7 +415,7 @@ func can_player_start_jump_in(player_idx: int) -> bool:
 		]:
 			return false
 		if current_state == GameState.TURN_RESOLVE_DRAWN:
-			return current_player_index != 0
+			return current_player_index != player_idx
 		return true
 	return current_state == GameState.TURN_END_CHOICE and player_idx != current_player_index
 
@@ -409,20 +464,21 @@ func should_human_show_jump_in_button(player_idx: int = 0) -> bool:
 func can_human_interact_with_hand_card(owner_idx: int, card_idx: int, card_is_face_up: bool = false) -> bool:
 	if not _is_valid_player_index(owner_idx):
 		return false
+	var human_idx: int = local_player_idx if is_multiplayer else 0
 	match current_state:
 		GameState.INITIAL_PEEK:
-			return owner_idx == 0 and _hand_has_index(0, card_idx)
+			return owner_idx == human_idx and _hand_has_index(human_idx, card_idx)
 		GameState.TURN_RESOLVE_DRAWN:
-			return can_player_swap_drawn_card(0, owner_idx, card_idx)
+			return can_player_swap_drawn_card(human_idx, owner_idx, card_idx)
 		GameState.TURN_JUMP_IN_SELECTION:
-			return can_player_select_jump_in_card(0, owner_idx, card_idx)
+			return can_player_select_jump_in_card(human_idx, owner_idx, card_idx)
 		GameState.TURN_PEEK_ABILITY:
-			return can_player_use_peek_ability(0, owner_idx, card_is_face_up) and _hand_has_index(owner_idx, card_idx)
+			return can_player_use_peek_ability(human_idx, owner_idx, card_is_face_up) and _hand_has_index(owner_idx, card_idx)
 		GameState.TURN_SWAP_ABILITY:
-			return can_player_select_swap_card(0, owner_idx, card_idx)
+			return can_player_select_swap_card(human_idx, owner_idx, card_idx)
 		_:
 			# FALLBACK: If human can jump-in, their cards should always be interactive
-			return owner_idx == 0 and can_player_start_jump_in(0)
+			return owner_idx == human_idx and can_player_start_jump_in(human_idx)
 func _consume_jump_in_resume_state() -> GameState:
 	var resume_state := jump_in_resume_state
 	jump_in_resume_state = GameState.INITIALIZING
@@ -437,6 +493,73 @@ func _resolve_post_interrupt_state() -> GameState:
 	if current_player_index == dutch_caller_index:
 		return GameState.TURN_CONFIRM_DUTCH
 	return GameState.TURN_END_CHOICE
+
+func _on_deck_reshuffled():
+	pass
+
+# --- Multiplayer RPCs ---
+
+@rpc("any_peer", "call_local", "reliable")
+func request_action(action: String, args: Dictionary = {}):
+	var player_idx = 0 # Default to 0 for local
+	
+	if is_multiplayer:
+		if not multiplayer.is_server():
+			return # Only the server processes requests
+		var sender_id = multiplayer.get_remote_sender_id()
+		if sender_id == 0:
+			sender_id = multiplayer.get_unique_id()
+		player_idx = peer_to_idx.get(sender_id, -1)
+		
+	if player_idx == -1 and action != "start_jump_in" and action != "validate_jump_in":
+		return
+		
+	print("GameManager: Received request ", action, " from player ", player_idx)
+	
+	match action:
+		"draw_card":
+			if current_player_index == player_idx:
+				player_draw_card()
+		"discard_drawn":
+			if current_player_index == player_idx:
+				player_discard_drawn_card()
+		"swap_drawn":
+			if current_player_index == player_idx:
+				player_swap_drawn_card(args.get("card_idx"))
+		"start_jump_in":
+			start_jump_in(player_idx)
+		"cancel_jump_in":
+			if jump_in_player_idx == player_idx:
+				cancel_jump_in()
+		"validate_jump_in":
+			if jump_in_player_idx == player_idx:
+				validate_jump_in(args.get("card_idx"))
+		"end_turn":
+			if current_player_index == player_idx:
+				end_turn()
+		"call_dutch":
+			if current_player_index == player_idx:
+				call_dutch(player_idx)
+		"confirm_dutch":
+			if current_player_index == player_idx:
+				confirm_dutch()
+		"cancel_dutch":
+			if current_player_index == player_idx:
+				cancel_dutch()
+		"play_ability":
+			play_ability(player_idx, args.get("ability_id"), args.get("target_idx", -1))
+		"buy_ability":
+			buy_ability(player_idx)
+		"initial_peek_done":
+			report_mp_initial_peek_done(player_idx)
+		"drink_beer":
+			drink_beer(player_idx)
+		"complete_peek_ability":
+			if active_ability_player == player_idx:
+				complete_peek_ability()
+		"complete_swap_ability":
+			if active_ability_player == player_idx:
+				complete_swap_ability(args.get("p1"), args.get("c1"), args.get("p2"), args.get("c2"))
 
 func next_turn():
 	# Loop until we find a player who is not eliminated and not skipped
@@ -669,26 +792,11 @@ func start_jump_in(player_idx: int = -1) -> void:
 		print("FSM Guard: Eliminated player cannot start a jump-in.")
 		return
 		
-	if resolved_idx == 0:
-		# Human player: allow jump-in from any state EXCEPT their own active draw/resolve.
-		var blocked_states := [
-			GameState.INITIALIZING, GameState.DEAL_CARDS, GameState.INITIAL_PEEK,
-			GameState.TURN_JUMP_IN_SELECTION, GameState.GAME_OVER,
-			GameState.TURN_PEEK_ABILITY, GameState.TURN_SWAP_ABILITY
-		]
-		# Block if currently in a forbidden state.
-		if (current_state in blocked_states):
-			return
-		# Require a non-empty discard pile to jump into.
-		if deck_manager.discard_pile.is_empty():
-			return
-	else:
-		# Bots may only jump in during TURN_END_CHOICE.
-		if current_state != GameState.TURN_END_CHOICE:
-			return
-	
-	# Track if player 0 is jumping in at the start of their own draw turn.
-	if resolved_idx == 0 and current_state == GameState.TURN_START_DRAW:
+	if not can_player_start_jump_in(resolved_idx):
+		return
+		
+	# Track if player is jumping in at the start of their own draw turn.
+	if current_player_index == resolved_idx and current_state == GameState.TURN_START_DRAW:
 		jump_in_was_own_draw_phase = true
 	else:
 		jump_in_was_own_draw_phase = false
@@ -739,6 +847,7 @@ func validate_jump_in(card_idx: int) -> bool:
 		var p_idx_for_signal = jump_in_player_idx
 		card_discarded.emit(p_idx_for_signal, selected_card)
 		gain_money_for_discard(p_idx_for_signal, selected_card)
+		_mp_broadcast_state_if_server()
 		
 		var played_by = p_idx_for_signal
 		jump_in_player_idx = -1
@@ -751,6 +860,7 @@ func validate_jump_in(card_idx: int) -> bool:
 	print("No match. Jump In invalid.")
 	jump_in_failed.emit(jump_in_player_idx, card_idx, selected_card)
 	drink_beer(jump_in_player_idx)
+	_mp_broadcast_state_if_server()
 	
 	if players_info[jump_in_player_idx].is_eliminated:
 		jump_in_player_idx = -1
@@ -764,6 +874,7 @@ func validate_jump_in(card_idx: int) -> bool:
 		hand.append(p_card)
 		hand_updated.emit(jump_in_player_idx)
 		jump_in_penalty.emit(jump_in_player_idx, p_card)
+		_mp_broadcast_state_if_server()
 
 	jump_in_player_idx = -1
 	change_state(_resolve_post_interrupt_state())
@@ -819,6 +930,7 @@ func player_discard_drawn_card():
 	deck_manager.discard_pile.append(drawn_card_data)
 	card_discarded.emit(current_player_index, drawn_card_data)
 	gain_money_for_discard(current_player_index, drawn_card_data)
+	_mp_broadcast_state_if_server()
 	
 	var p_idx = current_player_index
 	drink_beer(p_idx)
@@ -830,6 +942,7 @@ func player_discard_drawn_card():
 	var discarded_handled = drawn_card_data
 	drawn_card_data = null
 	pending_card_consumed.emit()
+	_mp_broadcast_state_if_server()
 	
 	_resolve_discard_effects(discarded_handled)
 
@@ -854,6 +967,7 @@ func player_swap_drawn_card(card_idx: int):
 	
 	drawn_card_data = null
 	pending_card_consumed.emit()
+	_mp_broadcast_state_if_server()
 	
 	_resolve_discard_effects(old_card)
 
@@ -875,11 +989,27 @@ func _resolve_discard_effects(card: CardData, player_idx: int = -1):
 func complete_initial_peek():
 	if current_state != GameState.INITIAL_PEEK:
 		return
-	# SECURITY FIX: only Player 0 (human) or the system (after a global timer) 
-	# should be able to end the initial peek phase.
-	# For now, we assume this is called by the human board.
+	if is_multiplayer and not multiplayer.is_server():
+		return
 	change_state(GameState.TURN_START_DRAW)
 	print("[FSM] INITIAL_PEEK -> TURN_START_DRAW")
+
+func report_mp_initial_peek_done(player_idx: int) -> void:
+	if not is_multiplayer or not multiplayer.is_server():
+		return
+	if current_state != GameState.INITIAL_PEEK:
+		return
+	if not _is_valid_player_index(player_idx) or players_info[player_idx].is_bot:
+		return
+	_mp_initial_peek_done[player_idx] = true
+	for i in range(num_players):
+		if players_info[i].is_bot:
+			continue
+		if not _mp_initial_peek_done.get(i, false):
+			return
+	_mp_initial_peek_done.clear()
+	change_state(GameState.TURN_START_DRAW)
+	print("[FSM] INITIAL_PEEK -> TURN_START_DRAW (all humans ready)")
 
 func complete_peek_ability():
 	if current_state != GameState.TURN_PEEK_ABILITY:
@@ -951,3 +1081,156 @@ func buy_ability(p_idx: int) -> bool:
 		print("GM: Player ", p_idx, " bought ability: ", ab, " (Limit Tracking: ", global_ability_counts, ")")
 		return true
 	return false
+
+func _card_to_dict(c: CardData) -> Dictionary:
+	return {
+		"r": c.rank,
+		"s": c.suit,
+		"u": c.is_face_up,
+		"pm": c.point_modifier
+	}
+
+func _dict_to_card(d: Dictionary) -> CardData:
+	var c := CardData.new(str(d.get("r", "Ace")), str(d.get("s", "Clubs")))
+	c.is_face_up = bool(d.get("u", false))
+	c.point_modifier = float(d.get("pm", 1.0))
+	c.recalc_point_value()
+	return c
+
+func _mp_broadcast_state_if_server() -> void:
+	if not is_multiplayer:
+		return
+	if multiplayer.multiplayer_peer == null:
+		return
+	if not multiplayer.is_server():
+		return
+	if players_info.is_empty():
+		return
+	sync_match_state.rpc(_build_mp_sync_payload())
+
+func _build_mp_sync_payload() -> Dictionary:
+	var players_arr: Array = []
+	for i in range(num_players):
+		var p: Dictionary = players_info[i]
+		var hand_arr: Array = []
+		for c in p["hand"]:
+			if c is CardData:
+				hand_arr.append(_card_to_dict(c))
+		players_arr.append({
+			"name": p["name"],
+			"is_bot": p["is_bot"],
+			"beers": p["beers"],
+			"money": p["money"],
+			"is_eliminated": p["is_eliminated"],
+			"is_skipped": p["is_skipped"],
+			"can_call_dutch": p["can_call_dutch"],
+			"abilities": p["abilities"].duplicate(),
+			"hand": hand_arr
+		})
+	var deck_arr: Array = []
+	for c in deck_manager.deck:
+		if c is CardData:
+			deck_arr.append(_card_to_dict(c))
+	var disc_arr: Array = []
+	for c in deck_manager.discard_pile:
+		if c is CardData:
+			disc_arr.append(_card_to_dict(c))
+	var peer_pairs: Array = []
+	for k in peer_to_idx.keys():
+		peer_pairs.append([int(k), int(peer_to_idx[k])])
+	var drawn_d: Variant = null
+	if drawn_card_data != null:
+		drawn_d = _card_to_dict(drawn_card_data)
+	return {
+		"v": 1,
+		"state": int(current_state),
+		"cur": current_player_index,
+		"td": turn_direction,
+		"dutch_i": dutch_caller_index,
+		"jump_i": jump_in_player_idx,
+		"jump_resume": int(jump_in_resume_state),
+		"jump_own_draw": jump_in_was_own_draw_phase,
+		"active_ab": active_ability_player,
+		"win_low": win_condition_lowest_wins,
+		"global_ab": global_ability_counts.duplicate(),
+		"easy": easy_mode,
+		"tutorial": tutorial_mode,
+		"num": num_players,
+		"local_idx": local_player_idx,
+		"peers": peer_pairs,
+		"players": players_arr,
+		"deck": deck_arr,
+		"discard": disc_arr,
+		"drawn": drawn_d
+	}
+
+func _apply_mp_sync_payload(payload: Dictionary) -> void:
+	if payload.get("v", 0) != 1:
+		return
+	num_players = int(payload.get("num", 4))
+	current_state = int(payload.get("state", 0)) as GameState
+	current_player_index = int(payload.get("cur", 0))
+	turn_direction = int(payload.get("td", 1))
+	dutch_caller_index = int(payload.get("dutch_i", -1))
+	jump_in_player_idx = int(payload.get("jump_i", -1))
+	jump_in_resume_state = int(payload.get("jump_resume", 0)) as GameState
+	jump_in_was_own_draw_phase = bool(payload.get("jump_own_draw", false))
+	active_ability_player = int(payload.get("active_ab", -1))
+	win_condition_lowest_wins = bool(payload.get("win_low", true))
+	global_ability_counts = (payload.get("global_ab", {}) as Dictionary).duplicate()
+	easy_mode = bool(payload.get("easy", false))
+	tutorial_mode = bool(payload.get("tutorial", false))
+	local_player_idx = int(payload.get("local_idx", 0))
+	peer_to_idx.clear()
+	idx_to_peer.clear()
+	for pair in payload.get("peers", []):
+		if pair is Array and pair.size() >= 2:
+			var pid: int = int(pair[0])
+			var idx: int = int(pair[1])
+			peer_to_idx[pid] = idx
+			idx_to_peer[idx] = pid
+	players_info.clear()
+	var _pidx := 0
+	for p in payload.get("players", []):
+		if p is Dictionary:
+			var hand: Array = []
+			for hd in p.get("hand", []):
+				if hd is Dictionary:
+					hand.append(_dict_to_card(hd))
+			players_info.append({
+				"id": _pidx,
+				"name": str(p.get("name", "Player")),
+				"score": 0,
+				"hand": hand,
+				"can_call_dutch": bool(p.get("can_call_dutch", true)),
+				"beers": int(p.get("beers", 3)),
+				"money": int(p.get("money", 0)),
+				"abilities": (p.get("abilities", []) as Array).duplicate(),
+				"is_eliminated": bool(p.get("is_eliminated", false)),
+				"is_skipped": bool(p.get("is_skipped", false)),
+				"is_bot": bool(p.get("is_bot", false)),
+				"bot_memory": {}
+			})
+			_pidx += 1
+	deck_manager.deck.clear()
+	for hd in payload.get("deck", []):
+		if hd is Dictionary:
+			deck_manager.deck.append(_dict_to_card(hd))
+	deck_manager.discard_pile.clear()
+	for hd in payload.get("discard", []):
+		if hd is Dictionary:
+			deck_manager.discard_pile.append(_dict_to_card(hd))
+	var dr = payload.get("drawn", null)
+	if dr is Dictionary:
+		drawn_card_data = _dict_to_card(dr)
+	else:
+		drawn_card_data = null
+
+@rpc("authority", "call_local", "reliable")
+func sync_match_state(payload: Dictionary) -> void:
+	if not is_multiplayer:
+		return
+	if multiplayer.is_server():
+		return
+	_apply_mp_sync_payload(payload)
+	multiplayer_sync_applied.emit()
