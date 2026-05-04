@@ -3,6 +3,7 @@ extends Node3D
 
 @onready var deck_area = $DeckArea
 @onready var discard_area = $DiscardArea
+@onready var player_positions_root = $PlayerPositions
 @onready var player_pos_nodes = {
 	0: $PlayerPositions/Bottom,
 	1: $PlayerPositions/Left,
@@ -76,6 +77,8 @@ var _shake_intensity: float = 0.0
 var _shake_timer: float = 0.0
 var _base_camera_pos: Vector3
 var _base_camera_rotation: Vector3
+## Extra shift on top of scene default camera position (e.g. multiplayer seat framing).
+var _mp_camera_offset: Vector3 = Vector3.ZERO
 
 # Targeting state
 var _is_waiting_for_target: bool = false
@@ -148,6 +151,7 @@ func _ready():
 	print("Game Board 3D: Starting game...")
 	GameManager.initialize_game(4)
 	_configure_visible_player_seats(GameManager.num_players)
+	_apply_local_player_seat_rotation()
 	trigger_glitch(0.4, 0.8) # Intro glitch
 
 	# Tutorial Mode: Inject Chippy's overlay into the UI layer
@@ -165,6 +169,28 @@ func _send_action(action: String, args: Dictionary = {}):
 func _human_ui_idx() -> int:
 	return GameManager.local_player_idx if GameManager.is_multiplayer else 0
 
+func _effective_camera_base_local() -> Vector3:
+	return _base_camera_pos + _mp_camera_offset
+
+## Rotates the four seats around the table so the local peer's hand sits at the bottom (camera-near),
+## matching physical \"your cards in front of you\" in multiplayer. Single-player / hotseat: no rotation.
+func _apply_local_player_seat_rotation() -> void:
+	if not is_instance_valid(player_positions_root):
+		return
+	if GameManager.is_multiplayer:
+		player_positions_root.rotation.y = GameManager.local_player_idx * (TAU / 4.0)
+		# Seat 1: after 90° rotation the near hand sits higher in the frustum — drop camera slightly so cards stay visible.
+		const MP_P1_CAMERA_LOWER_Y := 0.9
+		if GameManager.local_player_idx == 1:
+			_mp_camera_offset = Vector3(0, -MP_P1_CAMERA_LOWER_Y, 0)
+		else:
+			_mp_camera_offset = Vector3.ZERO
+	else:
+		player_positions_root.rotation.y = 0.0
+		_mp_camera_offset = Vector3.ZERO
+	if is_instance_valid(camera):
+		camera.position = _effective_camera_base_local()
+
 func _configure_visible_player_seats(n: int) -> void:
 	for seat in range(4):
 		if player_pos_nodes.has(seat):
@@ -174,6 +200,7 @@ func _on_multiplayer_sync_applied() -> void:
 	if is_instance_valid(pending_card):
 		pending_card.queue_free()
 		pending_card = null
+	_apply_local_player_seat_rotation()
 	_configure_visible_player_seats(GameManager.num_players)
 	for i in range(GameManager.num_players):
 		_update_hand_visuals(i)
@@ -467,7 +494,7 @@ func _drop_egg_for(p_idx: int, ab: String):
 			_chicken_zoom_active = true
 			var target_pos = _chicken_node.global_position + Vector3(0, 0.8, 2.0)
 			var cam_tween = create_tween()
-			var old_base = _base_camera_pos
+			var restore_cam_local = _effective_camera_base_local()
 			var original_fov = camera.fov
 			var original_rot = camera.rotation_degrees
 			
@@ -475,11 +502,11 @@ func _drop_egg_for(p_idx: int, ab: String):
 			cam_tween.parallel().tween_property(camera, "rotation_degrees", Vector3(-20, 0, 0), 0.3).set_trans(Tween.TRANS_CUBIC)
 			cam_tween.parallel().tween_property(camera, "fov", 45.0, 0.3).set_trans(Tween.TRANS_CUBIC)
 			cam_tween.tween_interval(0.8)
-			cam_tween.tween_property(camera, "global_position", old_base, 0.4).set_trans(Tween.TRANS_QUAD)
+			cam_tween.tween_property(camera, "position", restore_cam_local, 0.4).set_trans(Tween.TRANS_QUAD)
 			cam_tween.parallel().tween_property(camera, "rotation_degrees", original_rot, 0.4).set_trans(Tween.TRANS_QUAD)
 			cam_tween.parallel().tween_property(camera, "fov", original_fov, 0.4).set_trans(Tween.TRANS_QUAD)
 			cam_tween.tween_callback(func():
-				_base_camera_pos = old_base
+				camera.position = restore_cam_local
 				_chicken_zoom_active = false
 			)
 	# authoritative inventory is now managed in GameManager.buy_ability
@@ -1525,9 +1552,9 @@ func _process(delta: float) -> void:
 			randf_range(-1, 1) * _shake_intensity,
 			0
 		)
-		camera.position = _base_camera_pos + offset
+		camera.position = _effective_camera_base_local() + offset
 		if _shake_timer <= 0:
-			camera.position = _base_camera_pos
+			camera.position = _effective_camera_base_local()
 
 	if noclip_enabled and not DevConsole.window.visible:
 		_handle_noclip_movement(delta)

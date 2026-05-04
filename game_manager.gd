@@ -1156,7 +1156,6 @@ func _build_mp_sync_payload() -> Dictionary:
 		"easy": easy_mode,
 		"tutorial": tutorial_mode,
 		"num": num_players,
-		"local_idx": local_player_idx,
 		"peers": peer_pairs,
 		"players": players_arr,
 		"deck": deck_arr,
@@ -1180,7 +1179,6 @@ func _apply_mp_sync_payload(payload: Dictionary) -> void:
 	global_ability_counts = (payload.get("global_ab", {}) as Dictionary).duplicate()
 	easy_mode = bool(payload.get("easy", false))
 	tutorial_mode = bool(payload.get("tutorial", false))
-	local_player_idx = int(payload.get("local_idx", 0))
 	peer_to_idx.clear()
 	idx_to_peer.clear()
 	for pair in payload.get("peers", []):
@@ -1189,6 +1187,8 @@ func _apply_mp_sync_payload(payload: Dictionary) -> void:
 			var idx: int = int(pair[1])
 			peer_to_idx[pid] = idx
 			idx_to_peer[idx] = pid
+	# Never trust payload "local_idx" — it was the host's slot. Re-derive this peer's seat.
+	local_player_idx = int(peer_to_idx.get(multiplayer.get_unique_id(), 0))
 	players_info.clear()
 	var _pidx := 0
 	for p in payload.get("players", []):
@@ -1225,6 +1225,8 @@ func _apply_mp_sync_payload(payload: Dictionary) -> void:
 		drawn_card_data = _dict_to_card(dr)
 	else:
 		drawn_card_data = null
+	if current_state == GameState.TURN_START_DRAW:
+		turn_started.emit(current_player_index)
 
 @rpc("authority", "call_local", "reliable")
 func sync_match_state(payload: Dictionary) -> void:
