@@ -179,12 +179,9 @@ func _apply_local_player_seat_rotation() -> void:
 		return
 	if GameManager.is_multiplayer:
 		player_positions_root.rotation.y = GameManager.local_player_idx * (TAU / 4.0)
-		# Seat 1: after 90° rotation the near hand sits higher in the frustum — drop camera slightly so cards stay visible.
-		const MP_P1_CAMERA_LOWER_Y := 0.9
-		if GameManager.local_player_idx == 1:
-			_mp_camera_offset = Vector3(0, -MP_P1_CAMERA_LOWER_Y, 0)
-		else:
-			_mp_camera_offset = Vector3.ZERO
+		# Same +Z dolly in board space for every seat so the local hand stays fully in frame after seat rotation.
+		const MP_CAMERA_DOLLY_Z := 1.55
+		_mp_camera_offset = Vector3(0, 0, MP_CAMERA_DOLLY_Z)
 	else:
 		player_positions_root.rotation.y = 0.0
 		_mp_camera_offset = Vector3.ZERO
