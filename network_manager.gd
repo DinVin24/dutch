@@ -25,6 +25,7 @@ var discovery_deadline_ms: int = 0
 var detected_host_lan_ip: String = "127.0.0.1"
 var _last_connect_target_ip: String = ""
 var _last_connect_target_port: int = DEFAULT_PORT
+var _last_connect_started_ms: int = 0
 
 # Local player info
 var local_player_info = {
@@ -67,7 +68,11 @@ func host_game(port: int = DEFAULT_PORT):
 	# For LAN tests on Windows, allow inbound UDP on this port in Windows Firewall.
 	var error = multiplayer_peer.create_server(port, MAX_PLAYERS)
 	if error != OK:
-		print("NetworkManager: Failed to create server on UDP %d. Error %d (%s)" % [port, error, _describe_error(error)])
+		if error == ERR_ALREADY_IN_USE:
+			print("NetworkManager: Failed to start server on UDP %d -> address/port already in use (ERR_ALREADY_IN_USE)." % port)
+			print("NetworkManager: Next checks: close duplicate host process or choose another UDP port.")
+		else:
+			print("NetworkManager: Failed to create server on UDP %d. Error %d (%s)" % [port, error, _describe_error(error)])
 		return false
 	
 	multiplayer.multiplayer_peer = multiplayer_peer
@@ -255,6 +260,7 @@ func _connect_to_host(ip: String, port: int = DEFAULT_PORT) -> bool:
 	multiplayer_peer = ENetMultiplayerPeer.new()
 	_last_connect_target_ip = ip
 	_last_connect_target_port = port
+	_last_connect_started_ms = Time.get_ticks_msec()
 	var error = multiplayer_peer.create_client(ip, port)
 	if error != OK:
 		print("NetworkManager: Failed to create client for %s:%d. Error %d (%s)" % [ip, port, error, _describe_error(error)])
@@ -341,6 +347,25 @@ func _describe_error(error_code: int) -> String:
 		return "Unknown error"
 	return readable
 
+func _classify_connect_failure(elapsed_ms: int) -> Dictionary:
+	if _last_connect_target_ip.begins_with("127."):
+		return {
+			"label": "loopback-mismatch",
+			"cause": "Client targeted localhost; that only works when both peers run on the same PC.",
+			"next_checks": "Use the host LAN IPv4 from host logs/UI and retry."
+		}
+	if elapsed_ms > 0 and elapsed_ms < 1500:
+		return {
+			"label": "refused-or-unreachable-fast-fail",
+			"cause": "Fast failure usually means wrong IP/port, no host listener, or immediate block by firewall/router.",
+			"next_checks": "Confirm host is running, verify target IP:port, and allow UDP port in firewall."
+		}
+	return {
+		"label": "timeout-or-blocked",
+		"cause": "No response before timeout; packets are likely dropped or not routed.",
+		"next_checks": "Check firewall rules (Private/Public), ping host, verify same subnet, and disable AP/client isolation."
+	}
+
 # --- Callbacks ---
 
 func _on_player_connected(id: int):
@@ -370,10 +395,17 @@ func _on_connected_ok():
 	players_updated.emit()
 
 func _on_connected_fail():
+	var elapsed_ms = 0
+	if _last_connect_started_ms > 0:
+		elapsed_ms = Time.get_ticks_msec() - _last_connect_started_ms
+	var fail_profile = _classify_connect_failure(elapsed_ms)
 	var addresses = ", ".join(_collect_lan_ipv4_addresses())
-	print("NetworkManager: Failed to connect to server target=%s:%d local_ips=[%s]" % [_last_connect_target_ip, _last_connect_target_port, addresses])
+	print("NetworkManager: Failed to connect to server target=%s:%d local_ips=[%s] elapsed_ms=%d profile=%s" % [_last_connect_target_ip, _last_connect_target_port, addresses, elapsed_ms, fail_profile["label"]])
+	print("NetworkManager: Likely cause: %s" % fail_profile["cause"])
+	print("NetworkManager: Next checks: %s" % fail_profile["next_checks"])
 	if multiplayer_peer != null and multiplayer_peer.has_method("get_connection_status"):
 		print("NetworkManager: Connection status code at fail: %s" % str(multiplayer_peer.get_connection_status()))
+	_last_connect_started_ms = 0
 	multiplayer.multiplayer_peer = null
 
 func _on_server_disconnected():
