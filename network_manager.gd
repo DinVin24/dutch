@@ -23,6 +23,8 @@ var discovery_client: PacketPeerUDP = null
 var pending_join_code: String = ""
 var discovery_deadline_ms: int = 0
 var detected_host_lan_ip: String = "127.0.0.1"
+var _last_connect_target_ip: String = ""
+var _last_connect_target_port: int = DEFAULT_PORT
 
 # Local player info
 var local_player_info = {
@@ -55,6 +57,12 @@ func set_local_player_name(new_name: String):
 func host_game(port: int = DEFAULT_PORT):
 	_stop_discovery_client()
 	multiplayer_peer = ENetMultiplayerPeer.new()
+	# Explicitly request bind on all interfaces for LAN accessibility.
+	if multiplayer_peer.has_method("set_bind_ip"):
+		multiplayer_peer.set_bind_ip("0.0.0.0")
+		print("NetworkManager: Server bind_ip forced to 0.0.0.0")
+	else:
+		print("NetworkManager: ENet peer has no set_bind_ip(); relying on Godot default all-interface bind")
 	# ENet server sockets use UDP and bind on all interfaces by default in Godot.
 	# For LAN tests on Windows, allow inbound UDP on this port in Windows Firewall.
 	var error = multiplayer_peer.create_server(port, MAX_PLAYERS)
@@ -245,6 +253,8 @@ func join_test_game(ip: String = "127.0.0.1") -> bool:
 
 func _connect_to_host(ip: String, port: int = DEFAULT_PORT) -> bool:
 	multiplayer_peer = ENetMultiplayerPeer.new()
+	_last_connect_target_ip = ip
+	_last_connect_target_port = port
 	var error = multiplayer_peer.create_client(ip, port)
 	if error != OK:
 		print("NetworkManager: Failed to create client for %s:%d. Error %d (%s)" % [ip, port, error, _describe_error(error)])
@@ -334,6 +344,7 @@ func _describe_error(error_code: int) -> String:
 # --- Callbacks ---
 
 func _on_player_connected(id: int):
+	print("NetworkManager: Peer connected -> id=%d" % id)
 	print("NetworkManager: Player ", id, " connected.")
 	# Host sends its own info to the new player (host is always peer 1)
 	_register_player.rpc_id(id, local_player_info, 1)
@@ -359,7 +370,10 @@ func _on_connected_ok():
 	players_updated.emit()
 
 func _on_connected_fail():
-	print("NetworkManager: Failed to connect to server.")
+	var addresses = ", ".join(_collect_lan_ipv4_addresses())
+	print("NetworkManager: Failed to connect to server target=%s:%d local_ips=[%s]" % [_last_connect_target_ip, _last_connect_target_port, addresses])
+	if multiplayer_peer != null and multiplayer_peer.has_method("get_connection_status"):
+		print("NetworkManager: Connection status code at fail: %s" % str(multiplayer_peer.get_connection_status()))
 	multiplayer.multiplayer_peer = null
 
 func _on_server_disconnected():

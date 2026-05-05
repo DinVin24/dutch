@@ -160,7 +160,7 @@ func set_selected(p_selected: bool):
 func flip() -> void:
 	animate_flip(!data.is_face_up)
 
-func animate_flip(is_face_up: bool, target_y: float = -1.0):
+func animate_flip(is_face_up: bool, target_y: float = -1.0, persist_data_state: bool = true):
 	if is_flipping: return
 	is_flipping = true
 	
@@ -189,7 +189,9 @@ func animate_flip(is_face_up: bool, target_y: float = -1.0):
 	
 	tween.finished.connect(func():
 		is_flipping = false
-		data.is_face_up = is_face_up
+		# Peek effects must be visual-only in multiplayer; callers can disable data persistence.
+		if persist_data_state:
+			data.is_face_up = is_face_up
 		_update_visuals()
 		card_flipped.emit(self, data)
 	)

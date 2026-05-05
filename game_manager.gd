@@ -1090,6 +1090,12 @@ func _card_to_dict(c: CardData) -> Dictionary:
 		"pm": c.point_modifier
 	}
 
+func _hand_card_to_public_dict(c: CardData) -> Dictionary:
+	var d := _card_to_dict(c)
+	# Multiplayer privacy: hand cards are private knowledge and must never replicate as face-up.
+	d["u"] = false
+	return d
+
 func _dict_to_card(d: Dictionary) -> CardData:
 	var c := CardData.new(str(d.get("r", "Ace")), str(d.get("s", "Clubs")))
 	c.is_face_up = bool(d.get("u", false))
@@ -1115,7 +1121,7 @@ func _build_mp_sync_payload() -> Dictionary:
 		var hand_arr: Array = []
 		for c in p["hand"]:
 			if c is CardData:
-				hand_arr.append(_card_to_dict(c))
+				hand_arr.append(_hand_card_to_public_dict(c))
 		players_arr.append({
 			"name": p["name"],
 			"is_bot": p["is_bot"],

@@ -1226,7 +1226,8 @@ func _on_card_clicked(node, data):
 				if peeked_cards.size() >= 2: return # Strict limit
 				if node in peeked_cards: return
 				node.is_being_peeked = true
-				node.animate_flip(true)
+				# Keep peek local-only; do not mutate authoritative CardData face-up state.
+				node.animate_flip(true, -1.0, false)
 				peeked_cards.append(node)
 				if peeked_cards.size() >= 2:
 					await get_tree().create_timer(2.0, false).timeout
@@ -1234,7 +1235,7 @@ func _on_card_clicked(node, data):
 					for c in peeked_cards:
 						if is_instance_valid(c):
 							c.is_being_peeked = false
-							c.animate_flip(false, 0.05)
+							c.animate_flip(false, 0.05, false)
 							c.set_interactive(false)
 					peeked_cards.clear()
 					if GameManager.is_multiplayer:
@@ -1265,11 +1266,12 @@ func _on_card_clicked(node, data):
 				return
 			_set_all_cards_interactive(false)
 			node.is_being_peeked = true
-			node.animate_flip(true)
+			# Queen peek is temporary information; never replicate it via CardData.
+			node.animate_flip(true, -1.0, false)
 			await get_tree().create_timer(3.5, false).timeout
 			_clear_all_highlights()
 			node.is_being_peeked = false
-			node.animate_flip(false)
+			node.animate_flip(false, -1.0, false)
 			_refresh_human_interactivity()
 			_send_action("complete_peek_ability")
 
