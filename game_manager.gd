@@ -77,6 +77,8 @@ var idx_to_peer: Dictionary = {}
 var pending_mp_player_count: int = 0
 var pending_match_seed: int = -1
 var _mp_initial_peek_done: Dictionary = {}
+var _mp_sync_seq: int = 0
+var _mp_last_applied_sync_seq: int = -1
 var turn_direction: int = 1 # 1 for clockwise, -1 for counter-clockwise (Uno Reverse)
 var dutch_caller_index: int = -1 # -1 means no one has called Dutch yet
 var jump_in_player_idx: int = -1 # who is currently attempting the jump-in
@@ -220,6 +222,8 @@ func initialize_game(p_count: int = 4):
 	peer_to_idx.clear()
 	idx_to_peer.clear()
 	_mp_initial_peek_done.clear()
+	_mp_sync_seq = 0
+	_mp_last_applied_sync_seq = -1
 	players_info.clear()
 	current_state = GameState.INITIALIZING
 	current_player_index = 0
@@ -1112,6 +1116,7 @@ func _mp_broadcast_state_if_server() -> void:
 		return
 	if players_info.is_empty():
 		return
+	_mp_sync_seq += 1
 	sync_match_state.rpc(_build_mp_sync_payload())
 
 func _build_mp_sync_payload() -> Dictionary:
@@ -1149,6 +1154,7 @@ func _build_mp_sync_payload() -> Dictionary:
 		drawn_d = _card_to_dict(drawn_card_data)
 	return {
 		"v": 1,
+		"seq": _mp_sync_seq,
 		"state": int(current_state),
 		"cur": current_player_index,
 		"td": turn_direction,
@@ -1172,6 +1178,14 @@ func _build_mp_sync_payload() -> Dictionary:
 func _apply_mp_sync_payload(payload: Dictionary) -> void:
 	if payload.get("v", 0) != 1:
 		return
+	var incoming_seq := int(payload.get("seq", -1))
+	if incoming_seq != -1:
+		if incoming_seq <= _mp_last_applied_sync_seq:
+			print("GameManager: Ignoring stale sync payload seq=%d last=%d" % [incoming_seq, _mp_last_applied_sync_seq])
+			return
+		if _mp_last_applied_sync_seq != -1 and incoming_seq > _mp_last_applied_sync_seq + 1:
+			print("GameManager: Sync sequence gap detected prev=%d new=%d" % [_mp_last_applied_sync_seq, incoming_seq])
+		_mp_last_applied_sync_seq = incoming_seq
 	num_players = int(payload.get("num", 4))
 	current_state = int(payload.get("state", 0)) as GameState
 	current_player_index = int(payload.get("cur", 0))

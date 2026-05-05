@@ -84,6 +84,13 @@ var _mp_camera_offset: Vector3 = Vector3.ZERO
 var _is_waiting_for_target: bool = false
 var _is_preparing_ability: bool = false # Interaction guard for reveals
 var _pending_ability: Dictionary = {} # {id, token, activator}
+var _last_sync_diag := {
+	"state": -1,
+	"cur": -1,
+	"deck": -1,
+	"discard": -1,
+	"pending": false
+}
 
 func _ready():
 	if Engine.is_editor_hint():
@@ -194,7 +201,16 @@ func _configure_visible_player_seats(n: int) -> void:
 			player_pos_nodes[seat].visible = seat < clampi(n, 1, 4)
 
 func _on_multiplayer_sync_applied() -> void:
-	if is_instance_valid(pending_card):
+	var new_state: int = int(GameManager.current_state)
+	var new_cur: int = GameManager.current_player_index
+	var new_deck: int = GameManager.deck_manager.deck.size()
+	var new_discard: int = GameManager.deck_manager.discard_pile.size()
+	var new_pending: bool = GameManager.drawn_card_data != null
+	var state_changed: bool = _last_sync_diag["state"] != new_state or _last_sync_diag["cur"] != new_cur
+	var deck_changed: bool = _last_sync_diag["deck"] != new_deck or _last_sync_diag["discard"] != new_discard
+	var pending_changed: bool = _last_sync_diag["pending"] != new_pending
+
+	if pending_changed and not new_pending and is_instance_valid(pending_card):
 		pending_card.queue_free()
 		pending_card = null
 	_apply_local_player_seat_rotation()
@@ -206,11 +222,13 @@ func _on_multiplayer_sync_applied() -> void:
 			if is_instance_valid(c):
 				c.queue_free()
 		player_hands[j].clear()
-	_update_deck_visual()
-	_update_discard_visual()
+	if deck_changed:
+		_update_deck_visual()
+		_update_discard_visual()
 	if GameManager.drawn_card_data != null \
 			and GameManager.current_state == GameManager.GameState.TURN_RESOLVE_DRAWN \
-			and GameManager.current_player_index == GameManager.local_player_idx:
+			and GameManager.current_player_index == GameManager.local_player_idx \
+			and pending_card == null:
 		var d = GameManager.drawn_card_data
 		pending_card = card_scene.instantiate()
 		pending_card.name = "PendingCard"
@@ -221,7 +239,13 @@ func _on_multiplayer_sync_applied() -> void:
 		pending_card.position = deck_area.position + Vector3(0, 0.6, 0.5)
 		pending_card.rotation_degrees = Vector3(90, 0, 0)
 		pending_card.set_interactive(true)
-	_on_game_state_changed(GameManager.current_state)
+	if state_changed:
+		_on_game_state_changed(GameManager.current_state)
+	_last_sync_diag["state"] = new_state
+	_last_sync_diag["cur"] = new_cur
+	_last_sync_diag["deck"] = new_deck
+	_last_sync_diag["discard"] = new_discard
+	_last_sync_diag["pending"] = new_pending
 
 func _create_hud_ui():
 	# Action Buttons Container: Moved to bottom-right to avoid overlapping hand cards
@@ -1132,12 +1156,16 @@ func _update_hand_visuals(player_idx: int):
 			if card_node == _hovered_card_node:
 				target_pos.y += 0.3 
 			
-			var tween = create_tween().set_parallel(true)
-			tween.tween_property(card_node, "position", target_pos, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-			
 			var target_rot_y = 180.0 if (player_idx == 0 or player_idx == 2) else 0.0
 			var target_basis = Basis.from_euler(Vector3(deg_to_rad(90), deg_to_rad(target_rot_y), 0))
-			tween.tween_property(card_node, "quaternion", target_basis.get_rotation_quaternion(), 0.25)
+			var target_quat = target_basis.get_rotation_quaternion()
+			var pos_close: bool = card_node.position.distance_to(target_pos) <= 0.02
+			var rot_close: bool = card_node.quaternion.dot(target_quat) >= 0.999
+			if pos_close and rot_close:
+				continue
+			var tween = create_tween().set_parallel(true)
+			tween.tween_property(card_node, "position", target_pos, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tween.tween_property(card_node, "quaternion", target_quat, 0.25)
 
 func _handle_initial_deal():
 	print("GameBoard3D: _handle_initial_deal started")

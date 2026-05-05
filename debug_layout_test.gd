@@ -2,10 +2,13 @@ extends Node
 
 const HOST_WINDOW_SIZE := Vector2i(1280, 720)
 const CLIENT_WINDOW_SIZE := Vector2i(400, 800)
-const TEST_PORT := 1234
+const DEFAULT_TEST_PORT := 1234
 const TEST_HOST := "127.0.0.1"
 const SCREENSHOT_DIR := "res://debug/test_runs"
 const HANDSHAKE_WAIT_SECONDS := 5.0
+const AUTO_START_PLAYER_COUNT := 2
+const AUTO_START_SEED := 424242
+const CHECKPOINT_DELAYS := [1.0, 1.2, 1.2]
 
 enum TestRole {
 	NONE,
@@ -16,6 +19,9 @@ enum TestRole {
 var _role: TestRole = TestRole.NONE
 var _role_label: String = "Standalone"
 var _screenshot_taken: bool = false
+var _run_stamp: String = ""
+var _auto_match_started: bool = false
+var _test_port: int = DEFAULT_TEST_PORT
 
 func _ready() -> void:
 	_role = _resolve_role()
@@ -24,8 +30,10 @@ func _ready() -> void:
 		return
 
 	_role_label = "Server" if _role == TestRole.HOST else "Client"
+	_test_port = _resolve_test_port()
 	_apply_window_layout()
 	NetworkManager.player_connected.connect(_on_network_connected)
+	NetworkManager.game_started.connect(_on_game_started)
 	call_deferred("_bootstrap_network_role")
 
 func _input(event: InputEvent) -> void:
@@ -60,31 +68,25 @@ func _bootstrap_network_role() -> void:
 	# Ensure Multiplayer peers are only auto-started in explicit test mode.
 	if _role == TestRole.HOST:
 		NetworkManager.set_local_player_name("TestHost")
-		var started: bool = bool(NetworkManager.host_game(TEST_PORT))
+		var started: bool = bool(NetworkManager.host_game(_test_port))
 		if started:
-			print("DebugLayoutTest: Host started on UDP port ", TEST_PORT)
+			print("DebugLayoutTest: Host started on UDP port ", _test_port)
 			print("DebugLayoutTest: Host LAN IPv4 candidate: ", NetworkManager.get_detected_host_lan_ip())
 		else:
-			push_warning("DebugLayoutTest: Failed to start host on port %d" % TEST_PORT)
+			push_warning("DebugLayoutTest: Failed to start host on port %d" % _test_port)
 		return
 
 	NetworkManager.set_local_player_name("TestClient")
 	var target_host := _resolve_connect_target()
-	var connected: bool = bool(NetworkManager.connect_to_host_direct(target_host, TEST_PORT))
+	var connected: bool = bool(NetworkManager.connect_to_host_direct(target_host, _test_port))
 	if connected:
-		print("DebugLayoutTest: Client connecting to %s:%d" % [target_host, TEST_PORT])
+		print("DebugLayoutTest: Client connecting to %s:%d" % [target_host, _test_port])
 	else:
-		push_warning("DebugLayoutTest: Failed to connect client to %s:%d" % [target_host, TEST_PORT])
-
-func _on_network_connected(_id: int = -1, _info: Dictionary = {}) -> void:
-	if _screenshot_taken:
-		return
-	_screenshot_taken = true
-	call_deferred("_capture_after_handshake_delay")
+		push_warning("DebugLayoutTest: Failed to connect client to %s:%d" % [target_host, _test_port])
 
 func _capture_after_handshake_delay() -> void:
 	await get_tree().create_timer(HANDSHAKE_WAIT_SECONDS).timeout
-	take_test_screenshot()
+	take_test_screenshot("lobby_handshake")
 
 func _resolve_connect_target() -> String:
 	var args := OS.get_cmdline_user_args()
@@ -99,12 +101,31 @@ func _resolve_connect_target() -> String:
 			push_warning("DebugLayoutTest: Missing IP after --connect-to, defaulting to %s" % TEST_HOST)
 	return target
 
+func _resolve_test_port() -> int:
+	var args := OS.get_cmdline_user_args()
+	var default_port := DEFAULT_TEST_PORT
+	var arg_index := args.find("--port")
+	if arg_index == -1 or arg_index + 1 >= args.size():
+		return default_port
+	var candidate := String(args[arg_index + 1]).strip_edges()
+	if candidate.is_valid_int():
+		var parsed := int(candidate)
+		if parsed >= 1 and parsed <= 65535:
+			return parsed
+	return default_port
+
 @rpc("any_peer", "call_local", "reliable")
 func _trigger_synced_screenshot() -> void:
-	take_test_screenshot()
+	take_test_screenshot("manual")
 
-func take_test_screenshot() -> void:
-	var abs_dir := ProjectSettings.globalize_path(SCREENSHOT_DIR)
+@rpc("any_peer", "call_local", "reliable")
+func _trigger_synced_checkpoint(label: String) -> void:
+	take_test_screenshot(label)
+
+func take_test_screenshot(label: String = "checkpoint") -> void:
+	if _run_stamp == "":
+		_run_stamp = Time.get_datetime_string_from_system().replace(":", "").replace("-", "").replace(" ", "_")
+	var abs_dir := ProjectSettings.globalize_path("%s/%s" % [SCREENSHOT_DIR, _run_stamp])
 	var dir_error := DirAccess.make_dir_recursive_absolute(abs_dir)
 	if dir_error != OK and dir_error != ERR_ALREADY_EXISTS:
 		push_warning("DebugLayoutTest: Could not create screenshot directory. Error: %d" % dir_error)
@@ -113,7 +134,7 @@ func take_test_screenshot() -> void:
 	var image := get_viewport().get_texture().get_image()
 	var resolution := _resolution_label()
 	var timestamp := Time.get_datetime_string_from_system().replace(":", "-").replace(" ", "_")
-	var filename := "Test_%s_%s_%s.png" % [_role_label, resolution, timestamp]
+	var filename := "%s_%s_%s_%s.png" % [_role_label, label, resolution, timestamp]
 	var path := "%s/%s" % [abs_dir, filename]
 	var save_error := image.save_png(path)
 	if save_error != OK:
@@ -126,3 +147,29 @@ func _resolution_label() -> String:
 	if size.y > 0:
 		return "%dp" % size.y
 	return "%dx%d" % [size.x, size.y]
+
+func _on_network_connected(_id: int = -1, _info: Dictionary = {}) -> void:
+	if _role == TestRole.HOST and not _auto_match_started and NetworkManager.players.size() >= AUTO_START_PLAYER_COUNT:
+		_auto_match_started = true
+		print("DebugLayoutTest: Auto-starting multiplayer match players=%d seed=%d" % [AUTO_START_PLAYER_COUNT, AUTO_START_SEED])
+		NetworkManager.start_match.rpc(AUTO_START_PLAYER_COUNT, AUTO_START_SEED)
+	if _screenshot_taken:
+		return
+	_screenshot_taken = true
+	call_deferred("_capture_after_handshake_delay")
+
+func _on_game_started() -> void:
+	get_tree().change_scene_to_file("res://game_board_3d.tscn")
+	call_deferred("_run_checkpoint_flow")
+
+func _run_checkpoint_flow() -> void:
+	await get_tree().create_timer(2.0).timeout
+	if _role == TestRole.HOST:
+		_trigger_synced_checkpoint.rpc("cp1_deal")
+		await get_tree().create_timer(float(CHECKPOINT_DELAYS[0])).timeout
+		GameManager.request_action("draw_card")
+		await get_tree().create_timer(float(CHECKPOINT_DELAYS[1])).timeout
+		_trigger_synced_checkpoint.rpc("cp2_drawn")
+		GameManager.request_action("discard_drawn")
+		await get_tree().create_timer(float(CHECKPOINT_DELAYS[2])).timeout
+		_trigger_synced_checkpoint.rpc("cp3_discarded")
