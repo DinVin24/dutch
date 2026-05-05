@@ -1,6 +1,7 @@
 extends Node
 
-const DEFAULT_PORT = 8910
+const DEFAULT_PORT = 1234
+const DEFAULT_TEST_PORT = 1234
 const MAX_PLAYERS = 4
 const DISCOVERY_PORT = 8911
 const DISCOVERY_TIMEOUT_SEC = 4.0
@@ -13,6 +14,7 @@ signal server_disconnected
 signal players_updated
 signal game_started
 signal match_settings_updated
+signal host_lan_ip_updated(ip: String)
 
 var multiplayer_peer: ENetMultiplayerPeer = null
 var room_code: String = ""
@@ -20,6 +22,7 @@ var discovery_server: PacketPeerUDP = null
 var discovery_client: PacketPeerUDP = null
 var pending_join_code: String = ""
 var discovery_deadline_ms: int = 0
+var detected_host_lan_ip: String = "127.0.0.1"
 
 # Local player info
 var local_player_info = {
@@ -49,24 +52,31 @@ func _ready():
 func set_local_player_name(new_name: String):
 	local_player_info["name"] = new_name
 
-func host_game():
+func host_game(port: int = DEFAULT_PORT):
 	_stop_discovery_client()
 	multiplayer_peer = ENetMultiplayerPeer.new()
-	var error = multiplayer_peer.create_server(DEFAULT_PORT, MAX_PLAYERS)
+	# ENet server sockets use UDP and bind on all interfaces by default in Godot.
+	# For LAN tests on Windows, allow inbound UDP on this port in Windows Firewall.
+	var error = multiplayer_peer.create_server(port, MAX_PLAYERS)
 	if error != OK:
-		print("NetworkManager: Failed to create server! Error: ", error)
+		print("NetworkManager: Failed to create server on UDP %d. Error %d (%s)" % [port, error, _describe_error(error)])
 		return false
 	
 	multiplayer.multiplayer_peer = multiplayer_peer
 	local_player_info["is_host"] = true
-	room_code = _generate_room_code(get_local_ip())
+	detected_host_lan_ip = get_local_ip()
+	host_lan_ip_updated.emit(detected_host_lan_ip)
+	room_code = _generate_room_code(detected_host_lan_ip)
 	players[1] = local_player_info
 	_start_discovery_server()
 	players_updated.emit()
+	print("NetworkManager: Server started on UDP %d (all interfaces)." % port)
+	print("NetworkManager: Host LAN IPv4 candidate: %s" % detected_host_lan_ip)
+	print("NetworkManager: Local IPv4 addresses: %s" % ", ".join(_collect_lan_ipv4_addresses()))
 	print("NetworkManager: Server started with room code ", room_code)
 	return true
 
-func join_game(code: String):
+func join_game(code: String, port: int = DEFAULT_PORT):
 	_stop_discovery_server()
 	_stop_discovery_client()
 	var raw_code = code.strip_edges()
@@ -75,11 +85,13 @@ func join_game(code: String):
 		return false
 
 	local_player_info["is_host"] = false
+	if _is_ipv4(raw_code):
+		return _connect_to_host(raw_code, port)
 	var ip = _decode_room_code(raw_code)
 	if ip == "":
 		ip = decode_ip(raw_code)
 	if ip != "":
-		return _connect_to_host(ip)
+		return _connect_to_host(ip, port)
 	var normalized_code = raw_code.to_upper()
 	_start_discovery_client(normalized_code)
 	print("NetworkManager: Discovering host for code ", normalized_code)
@@ -106,6 +118,9 @@ func get_local_ip() -> String:
 
 func get_room_code() -> String:
 	return room_code
+
+func get_detected_host_lan_ip() -> String:
+	return detected_host_lan_ip
 
 func encode_ip(ip: String) -> String:
 	# Simple base64 encode and strip padding for a cleaner "code"
@@ -216,15 +231,28 @@ func _send_discovery_query(target_ip: String, code: String):
 	var packet = (DISCOVERY_PREFIX + code).to_utf8_buffer()
 	discovery_client.put_packet(packet)
 
-func _connect_to_host(ip: String) -> bool:
+func connect_to_host_direct(ip: String = "127.0.0.1", port: int = DEFAULT_PORT) -> bool:
+	_stop_discovery_server()
+	_stop_discovery_client()
+	local_player_info["is_host"] = false
+	return _connect_to_host(ip, port)
+
+func host_test_game() -> bool:
+	return host_game(DEFAULT_TEST_PORT)
+
+func join_test_game(ip: String = "127.0.0.1") -> bool:
+	return connect_to_host_direct(ip, DEFAULT_TEST_PORT)
+
+func _connect_to_host(ip: String, port: int = DEFAULT_PORT) -> bool:
 	multiplayer_peer = ENetMultiplayerPeer.new()
-	var error = multiplayer_peer.create_client(ip, DEFAULT_PORT)
+	var error = multiplayer_peer.create_client(ip, port)
 	if error != OK:
-		print("NetworkManager: Failed to create client! Error: ", error)
+		print("NetworkManager: Failed to create client for %s:%d. Error %d (%s)" % [ip, port, error, _describe_error(error)])
 		return false
 	multiplayer.multiplayer_peer = multiplayer_peer
 	local_player_info["is_host"] = false
-	print("NetworkManager: Connecting to ", ip)
+	# Client side is UDP ENet as well; open outbound UDP 1234 in restrictive environments.
+	print("NetworkManager: Connecting to %s:%d (ENet/UDP)" % [ip, port])
 	return true
 
 func _generate_room_code(ip: String) -> String:
@@ -287,6 +315,21 @@ func _is_preferred_lan_ip(ip: String) -> bool:
 	if ":" in ip or ip.begins_with("127.") or ip.begins_with("169.254."):
 		return false
 	return ip.begins_with("10.") or ip.begins_with("192.168.") or ip.begins_with("172.")
+
+func _collect_lan_ipv4_addresses() -> PackedStringArray:
+	var ips: PackedStringArray = []
+	for ip in IP.get_local_addresses():
+		if _is_ipv4(ip) and not ip.begins_with("127.") and not ip.begins_with("169.254."):
+			ips.append(ip)
+	if ips.is_empty():
+		ips.append("127.0.0.1")
+	return ips
+
+func _describe_error(error_code: int) -> String:
+	var readable = error_string(error_code)
+	if readable == "":
+		return "Unknown error"
+	return readable
 
 # --- Callbacks ---
 

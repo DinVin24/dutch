@@ -26,6 +26,7 @@ func _ready():
 	NetworkManager.match_settings_updated.connect(_update_lobby_ui)
 	NetworkManager.game_started.connect(_on_game_started)
 	NetworkManager.server_disconnected.connect(_on_server_disconnected)
+	NetworkManager.host_lan_ip_updated.connect(_on_host_lan_ip_updated)
 
 	var host_btn = $LeftMargin/VBox/SetupPanel/HBoxConnection/HostButton
 	var join_btn = $LeftMargin/VBox/SetupPanel/HBoxConnection/JoinButton
@@ -90,8 +91,7 @@ func _transition_to_lobby(is_host: bool):
 	active_lobby_panel.show()
 
 	if is_host:
-		var code = NetworkManager.get_room_code()
-		room_code_label.text = "Room Code: " + code
+		_refresh_host_room_label()
 		copy_code_button.show()
 		start_button.show()
 		start_hint_label.show()
@@ -133,6 +133,7 @@ func _update_lobby_ui():
 		visibility_option.selected = s.get("cards_visibility", 0)
 
 	if NetworkManager.local_player_info["is_host"]:
+		_refresh_host_room_label()
 		var h = _human_player_count()
 		var can_start = h >= 2
 		start_button.disabled = not can_start
@@ -174,6 +175,15 @@ func _on_server_disconnected():
 	setup_panel.show()
 	active_lobby_panel.hide()
 	NetworkManager.leave_game()
+
+func _on_host_lan_ip_updated(_ip: String):
+	if active_lobby_panel.visible and NetworkManager.local_player_info["is_host"]:
+		_refresh_host_room_label()
+
+func _refresh_host_room_label():
+	var code = NetworkManager.get_room_code()
+	var host_ip = NetworkManager.get_detected_host_lan_ip()
+	room_code_label.text = "Room Code: %s | Host IP: %s" % [code, host_ip]
 
 func _on_copy_code_pressed():
 	_play_click()
