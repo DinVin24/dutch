@@ -372,11 +372,12 @@ func _create_beer_placeholders():
 			# We recursively look for any MeshInstance3D inside the imported GLB
 			_apply_emission_to_meshes(beer, beer_emission)
 			
-			# Simple Row of 3
-			var grid_x = (b - 1.0) * beer_spacing
-			
-			# Stationed on the RIGHT of the cards
-			beer.position = Vector3(grid_x + 1.8, beer_y_offset, -1.8) 
+			# Keep all beers on the RIGHT side, slightly in front of the hand.
+			# This avoids mirrored/left placement in multiplayer seat rotations.
+			var right_x_base := 1.8
+			var front_z := 1.35
+			var right_offset := b * beer_spacing
+			beer.position = Vector3(right_x_base + right_offset, beer_y_offset, front_z)
 			pos_node.add_child(beer)
 			player_beers_nodes[i].append(beer)
 
