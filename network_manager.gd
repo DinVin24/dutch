@@ -72,8 +72,10 @@ func host_game(port: int = DEFAULT_PORT):
 		if error == ERR_ALREADY_IN_USE:
 			print("NetworkManager: Failed to start server on UDP %d -> address/port already in use (ERR_ALREADY_IN_USE)." % port)
 			print("NetworkManager: Next checks: close duplicate host process or choose another UDP port.")
+			_emit_lobby_error("Host failed: UDP %d already in use. Close other host instances or pick another port." % port)
 		else:
 			print("NetworkManager: Failed to create server on UDP %d. Error %d (%s)" % [port, error, _describe_error(error)])
+			_emit_lobby_error("Host failed on UDP %d (%s)." % [port, _describe_error(error)])
 		return false
 	
 	multiplayer.multiplayer_peer = multiplayer_peer
