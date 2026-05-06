@@ -15,6 +15,7 @@ signal players_updated
 signal game_started
 signal match_settings_updated
 signal host_lan_ip_updated(ip: String)
+signal lobby_error(message: String)
 
 var multiplayer_peer: ENetMultiplayerPeer = null
 var room_code: String = ""
@@ -235,6 +236,7 @@ func _poll_discovery_client():
 		return
 	if discovery_deadline_ms > 0 and Time.get_ticks_msec() > discovery_deadline_ms:
 		print("NetworkManager: Lobby discovery timeout for code ", pending_join_code)
+		_emit_lobby_error("Host discovery timed out for code %s. Check both PCs are on the same LAN and allow UDP %d." % [pending_join_code, DISCOVERY_PORT])
 		_stop_discovery_client()
 
 func _send_discovery_query(target_ip: String, code: String):
@@ -256,6 +258,11 @@ func host_test_game() -> bool:
 func join_test_game(ip: String = "127.0.0.1") -> bool:
 	return connect_to_host_direct(ip, DEFAULT_TEST_PORT)
 
+func _emit_lobby_error(message: String) -> void:
+	if message.strip_edges() == "":
+		return
+	lobby_error.emit(message)
+
 func _connect_to_host(ip: String, port: int = DEFAULT_PORT) -> bool:
 	multiplayer_peer = ENetMultiplayerPeer.new()
 	_last_connect_target_ip = ip
@@ -264,6 +271,7 @@ func _connect_to_host(ip: String, port: int = DEFAULT_PORT) -> bool:
 	var error = multiplayer_peer.create_client(ip, port)
 	if error != OK:
 		print("NetworkManager: Failed to create client for %s:%d. Error %d (%s)" % [ip, port, error, _describe_error(error)])
+		_emit_lobby_error("Client create failed for %s:%d (%s)." % [ip, port, _describe_error(error)])
 		return false
 	multiplayer.multiplayer_peer = multiplayer_peer
 	local_player_info["is_host"] = false
@@ -403,6 +411,7 @@ func _on_connected_fail():
 	print("NetworkManager: Failed to connect to server target=%s:%d local_ips=[%s] elapsed_ms=%d profile=%s" % [_last_connect_target_ip, _last_connect_target_port, addresses, elapsed_ms, fail_profile["label"]])
 	print("NetworkManager: Likely cause: %s" % fail_profile["cause"])
 	print("NetworkManager: Next checks: %s" % fail_profile["next_checks"])
+	_emit_lobby_error("Connect failed. %s %s" % [fail_profile["cause"], fail_profile["next_checks"]])
 	if multiplayer_peer != null and multiplayer_peer.has_method("get_connection_status"):
 		print("NetworkManager: Connection status code at fail: %s" % str(multiplayer_peer.get_connection_status()))
 	_last_connect_started_ms = 0
