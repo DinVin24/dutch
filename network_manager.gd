@@ -28,6 +28,38 @@ var _last_connect_target_ip: String = ""
 var _last_connect_target_port: int = DEFAULT_PORT
 var _last_connect_started_ms: int = 0
 
+# Multiplayer logging. Keep on by default for easier debugging.
+const MP_LOG_ENABLED := true
+
+func _mp_local_peer_id() -> int:
+	# 1 is host on the server side; clients are assigned unique ids after connect.
+	if multiplayer != null:
+		var pid := multiplayer.get_unique_id()
+		if pid != 0:
+			return pid
+	return -1
+
+func _mp_is_host() -> bool:
+	return bool(local_player_info.get("is_host", false))
+
+func _mp_log(category: String, message: String, fields: Dictionary = {}) -> void:
+	if not MP_LOG_ENABLED:
+		return
+	var ts := Time.get_datetime_string_from_system(true)
+	var base := {
+		"peer": _mp_local_peer_id(),
+		"is_host": _mp_is_host(),
+		"players": players.size(),
+		"room": room_code
+	}
+	for k in fields.keys():
+		base[k] = fields[k]
+	print("[MP %s] %s | %s | %s" % [ts, category, message, str(base)])
+
+# Public wrapper for UI callers.
+func mp_log(category: String, message: String, fields: Dictionary = {}) -> void:
+	_mp_log(category, message, fields)
+
 # Local player info
 var local_player_info = {
 	"name": "Player",
@@ -52,29 +84,32 @@ func _ready():
 	multiplayer.connection_failed.connect(_on_connected_fail)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
 	set_process(true)
+	_mp_log("lifecycle", "ready", {
+		"has_peer": multiplayer.multiplayer_peer != null
+	})
 
 func set_local_player_name(new_name: String):
 	local_player_info["name"] = new_name
 
 func host_game(port: int = DEFAULT_PORT):
 	_stop_discovery_client()
+	_mp_log("host_game", "start", {"port": port})
 	multiplayer_peer = ENetMultiplayerPeer.new()
 	# Explicitly request bind on all interfaces for LAN accessibility.
 	if multiplayer_peer.has_method("set_bind_ip"):
 		multiplayer_peer.set_bind_ip("0.0.0.0")
-		print("NetworkManager: Server bind_ip forced to 0.0.0.0")
+		_mp_log("host_game", "bind_ip forced", {"bind_ip": "0.0.0.0"})
 	else:
-		print("NetworkManager: ENet peer has no set_bind_ip(); relying on Godot default all-interface bind")
+		_mp_log("host_game", "bind_ip api missing; using default bind", {})
 	# ENet server sockets use UDP and bind on all interfaces by default in Godot.
 	# For LAN tests on Windows, allow inbound UDP on this port in Windows Firewall.
 	var error = multiplayer_peer.create_server(port, MAX_PLAYERS)
 	if error != OK:
 		if error == ERR_ALREADY_IN_USE:
-			print("NetworkManager: Failed to start server on UDP %d -> address/port already in use (ERR_ALREADY_IN_USE)." % port)
-			print("NetworkManager: Next checks: close duplicate host process or choose another UDP port.")
+			_mp_log("host_game", "fail: already in use", {"port": port, "error": error, "error_str": _describe_error(error)})
 			_emit_lobby_error("Host failed: UDP %d already in use. Close other host instances or pick another port." % port)
 		else:
-			print("NetworkManager: Failed to create server on UDP %d. Error %d (%s)" % [port, error, _describe_error(error)])
+			_mp_log("host_game", "fail: create_server", {"port": port, "error": error, "error_str": _describe_error(error)})
 			_emit_lobby_error("Host failed on UDP %d (%s)." % [port, _describe_error(error)])
 		return false
 	
@@ -86,10 +121,11 @@ func host_game(port: int = DEFAULT_PORT):
 	players[1] = local_player_info
 	_start_discovery_server()
 	players_updated.emit()
-	print("NetworkManager: Server started on UDP %d (all interfaces)." % port)
-	print("NetworkManager: Host LAN IPv4 candidate: %s" % detected_host_lan_ip)
-	print("NetworkManager: Local IPv4 addresses: %s" % ", ".join(_collect_lan_ipv4_addresses()))
-	print("NetworkManager: Server started with room code ", room_code)
+	_mp_log("host_game", "started", {
+		"port": port,
+		"host_ip": detected_host_lan_ip,
+		"local_ips": ", ".join(_collect_lan_ipv4_addresses())
+	})
 	return true
 
 func join_game(code: String, port: int = DEFAULT_PORT):
@@ -97,8 +133,9 @@ func join_game(code: String, port: int = DEFAULT_PORT):
 	_stop_discovery_client()
 	var raw_code = code.strip_edges()
 	if raw_code == "":
-		print("NetworkManager: Invalid code!")
+		_mp_log("join_game", "invalid: empty code", {})
 		return false
+	_mp_log("join_game", "start", {"code": raw_code, "port": port})
 
 	local_player_info["is_host"] = false
 	if _is_ipv4(raw_code):
@@ -110,10 +147,14 @@ func join_game(code: String, port: int = DEFAULT_PORT):
 		return _connect_to_host(ip, port)
 	var normalized_code = raw_code.to_upper()
 	_start_discovery_client(normalized_code)
-	print("NetworkManager: Discovering host for code ", normalized_code)
+	_mp_log("discovery", "start", {"code": normalized_code, "timeout_sec": DISCOVERY_TIMEOUT_SEC, "port": DISCOVERY_PORT})
 	return true
 
 func leave_game():
+	_mp_log("leave_game", "start", {
+		"had_peer": multiplayer.multiplayer_peer != null,
+		"was_host": _mp_is_host()
+	})
 	multiplayer.multiplayer_peer = null
 	multiplayer_peer = null
 	room_code = ""
@@ -121,6 +162,7 @@ func leave_game():
 	local_player_info["is_host"] = false
 	_stop_discovery_server()
 	_stop_discovery_client()
+	_mp_log("leave_game", "done", {})
 
 func get_local_ip() -> String:
 	var ips = IP.get_local_addresses()
@@ -166,8 +208,10 @@ func _start_discovery_server():
 	discovery_server = PacketPeerUDP.new()
 	var err = discovery_server.bind(DISCOVERY_PORT, "*")
 	if err != OK:
-		print("NetworkManager: Discovery server bind failed: ", err)
+		_mp_log("discovery_server", "bind failed", {"port": DISCOVERY_PORT, "error": err, "error_str": _describe_error(err)})
 		discovery_server = null
+	else:
+		_mp_log("discovery_server", "bound", {"port": DISCOVERY_PORT})
 
 func _stop_discovery_server():
 	if discovery_server != null:
@@ -180,7 +224,7 @@ func _start_discovery_client(code: String):
 	discovery_client.set_broadcast_enabled(true)
 	var bind_err = discovery_client.bind(0, "*")
 	if bind_err != OK:
-		print("NetworkManager: Discovery client bind failed: ", bind_err)
+		_mp_log("discovery_client", "bind failed", {"error": bind_err, "error_str": _describe_error(bind_err)})
 		_stop_discovery_client()
 		return
 	_send_discovery_query("255.255.255.255", code)
@@ -191,6 +235,7 @@ func _start_discovery_client(code: String):
 			octets[3] = "255"
 			_send_discovery_query(".".join(octets), code)
 	discovery_deadline_ms = Time.get_ticks_msec() + int(DISCOVERY_TIMEOUT_SEC * 1000.0)
+	_mp_log("discovery_client", "bound+queried", {"code": code})
 
 func _stop_discovery_client():
 	if discovery_client != null:
@@ -215,6 +260,7 @@ func _poll_discovery_server():
 		discovery_server.set_dest_address(requester_ip, requester_port)
 		var response = "%s%s|%s" % [DISCOVERY_RESPONSE_PREFIX, room_code, get_local_ip()]
 		discovery_server.put_packet(response.to_utf8_buffer())
+		_mp_log("discovery_server", "responded", {"to_ip": requester_ip, "to_port": requester_port, "code": code})
 
 func _poll_discovery_client():
 	if discovery_client == null:
@@ -233,11 +279,12 @@ func _poll_discovery_client():
 		var discovered_ip = parts[1]
 		if not _is_ipv4(discovered_ip):
 			continue
+		_mp_log("discovery_client", "response", {"code": pending_join_code, "discovered_ip": discovered_ip})
 		_stop_discovery_client()
 		_connect_to_host(discovered_ip)
 		return
 	if discovery_deadline_ms > 0 and Time.get_ticks_msec() > discovery_deadline_ms:
-		print("NetworkManager: Lobby discovery timeout for code ", pending_join_code)
+		_mp_log("discovery_client", "timeout", {"code": pending_join_code, "timeout_sec": DISCOVERY_TIMEOUT_SEC})
 		_emit_lobby_error("Host discovery timed out for code %s. Check both PCs are on the same LAN and allow UDP %d." % [pending_join_code, DISCOVERY_PORT])
 		_stop_discovery_client()
 
@@ -270,15 +317,16 @@ func _connect_to_host(ip: String, port: int = DEFAULT_PORT) -> bool:
 	_last_connect_target_ip = ip
 	_last_connect_target_port = port
 	_last_connect_started_ms = Time.get_ticks_msec()
+	_mp_log("connect", "start", {"ip": ip, "port": port})
 	var error = multiplayer_peer.create_client(ip, port)
 	if error != OK:
-		print("NetworkManager: Failed to create client for %s:%d. Error %d (%s)" % [ip, port, error, _describe_error(error)])
+		_mp_log("connect", "fail: create_client", {"ip": ip, "port": port, "error": error, "error_str": _describe_error(error)})
 		_emit_lobby_error("Client create failed for %s:%d (%s)." % [ip, port, _describe_error(error)])
 		return false
 	multiplayer.multiplayer_peer = multiplayer_peer
 	local_player_info["is_host"] = false
 	# Client side is UDP ENet as well; open outbound UDP 1234 in restrictive environments.
-	print("NetworkManager: Connecting to %s:%d (ENet/UDP)" % [ip, port])
+	_mp_log("connect", "created client peer", {"ip": ip, "port": port})
 	return true
 
 func _generate_room_code(ip: String) -> String:
@@ -379,28 +427,31 @@ func _classify_connect_failure(elapsed_ms: int) -> Dictionary:
 # --- Callbacks ---
 
 func _on_player_connected(id: int):
-	print("NetworkManager: Peer connected -> id=%d" % id)
-	print("NetworkManager: Player ", id, " connected.")
+	_mp_log("peer_connected", "peer connected", {"id": id})
 	# Host sends its own info to the new player (host is always peer 1)
+	_mp_log("rpc", "send register_player (host->new)", {"to": id, "explicit_id": 1})
 	_register_player.rpc_id(id, local_player_info, 1)
 	# Host also tells the new player about all already-connected players
 	for existing_id in players:
 		if existing_id != 1: # host already sent above
+			_mp_log("rpc", "send register_player (existing->new)", {"to": id, "explicit_id": existing_id})
 			_register_player.rpc_id(id, players[existing_id], existing_id)
 	# Host syncs current match settings to the new player
+	_mp_log("rpc", "send sync_match_settings (host->new)", {"to": id, "settings": match_settings})
 	sync_match_settings.rpc_id(id, match_settings)
 
 func _on_player_disconnected(id: int):
-	print("NetworkManager: Player ", id, " disconnected.")
+	_mp_log("peer_disconnected", "peer disconnected", {"id": id})
 	players.erase(id)
 	player_disconnected.emit(id)
 	players_updated.emit()
 
 func _on_connected_ok():
-	print("NetworkManager: Successfully connected to server.")
+	_mp_log("connected_ok", "connected to server", {"target_ip": _last_connect_target_ip, "target_port": _last_connect_target_port})
 	var id = multiplayer.get_unique_id()
 	players[id] = local_player_info
 	# Send our info to the host so it can register us (no explicit_id needed — host uses sender_id)
+	_mp_log("rpc", "send register_player (client->host)", {"to": 1, "explicit_id": id, "name": local_player_info.get("name", "")})
 	_register_player.rpc_id(1, local_player_info, id)
 	players_updated.emit()
 
@@ -410,17 +461,23 @@ func _on_connected_fail():
 		elapsed_ms = Time.get_ticks_msec() - _last_connect_started_ms
 	var fail_profile = _classify_connect_failure(elapsed_ms)
 	var addresses = ", ".join(_collect_lan_ipv4_addresses())
-	print("NetworkManager: Failed to connect to server target=%s:%d local_ips=[%s] elapsed_ms=%d profile=%s" % [_last_connect_target_ip, _last_connect_target_port, addresses, elapsed_ms, fail_profile["label"]])
-	print("NetworkManager: Likely cause: %s" % fail_profile["cause"])
-	print("NetworkManager: Next checks: %s" % fail_profile["next_checks"])
+	_mp_log("connected_fail", "failed to connect", {
+		"target_ip": _last_connect_target_ip,
+		"target_port": _last_connect_target_port,
+		"local_ips": addresses,
+		"elapsed_ms": elapsed_ms,
+		"profile": fail_profile["label"],
+		"cause": fail_profile["cause"],
+		"next": fail_profile["next_checks"]
+	})
 	_emit_lobby_error("Connect failed. %s %s" % [fail_profile["cause"], fail_profile["next_checks"]])
 	if multiplayer_peer != null and multiplayer_peer.has_method("get_connection_status"):
-		print("NetworkManager: Connection status code at fail: %s" % str(multiplayer_peer.get_connection_status()))
+		_mp_log("connected_fail", "connection status", {"status": str(multiplayer_peer.get_connection_status())})
 	_last_connect_started_ms = 0
 	multiplayer.multiplayer_peer = null
 
 func _on_server_disconnected():
-	print("NetworkManager: Server disconnected.")
+	_mp_log("server_disconnected", "server disconnected", {})
 	players.clear()
 	multiplayer.multiplayer_peer = null
 	server_disconnected.emit()
@@ -439,20 +496,27 @@ func _register_player(info: Dictionary, explicit_id: int = -1):
 	players[sender_id] = info
 	player_connected.emit(sender_id, info)
 	players_updated.emit()
-	print("NetworkManager: Registered player ", sender_id, " (", info["name"], ")")
+	_mp_log("rpc.register_player", "registered player", {
+		"sender_id": sender_id,
+		"name": info.get("name", ""),
+		"info": info
+	})
 @rpc("any_peer", "call_local", "reliable")
 func sync_match_settings(settings: Dictionary):
 	# Only accept settings from the host (peer id 1)
 	var sender = multiplayer.get_remote_sender_id()
 	if sender != 0 and sender != 1:
+		_mp_log("rpc.sync_match_settings", "rejected non-host sender", {"sender_id": sender})
 		return
+	var prev := match_settings.duplicate(true)
 	match_settings = settings
 	match_settings_updated.emit()
-	print("NetworkManager: Match settings synced.")
+	_mp_log("rpc.sync_match_settings", "applied settings", {"sender_id": sender, "prev": prev, "next": match_settings})
 
 @rpc("authority", "call_local", "reliable")
 func start_match(total_players: int, deck_seed: int):
-	print("NetworkManager: Starting match (players=", total_players, ", seed=", deck_seed, ")")
+	var sender := multiplayer.get_remote_sender_id()
+	_mp_log("rpc.start_match", "starting match", {"sender_id": sender, "total_players": total_players, "seed": deck_seed})
 	GameManager.pending_mp_player_count = clampi(total_players, 2, 4)
 	GameManager.pending_match_seed = deck_seed
 	game_started.emit()
