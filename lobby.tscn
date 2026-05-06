@@ -91,7 +91,7 @@ alignment = 0
 
 [node name="OrLabel" type="Label" parent="LeftMargin/VBox/SetupPanel/HBoxConnection"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.55, 0.55, 0.65, 1)
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 text = "//"
 
 [node name="CodeEdit" type="LineEdit" parent="LeftMargin/VBox/SetupPanel/HBoxConnection"]
@@ -216,7 +216,7 @@ flat = true
 
 [node name="StartHintLabel" type="Label" parent="LeftMargin/VBox/ActiveLobbyPanel"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.55, 0.55, 0.7, 1)
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 14
 text = "Host needs at least 2 human players to start."
 
@@ -232,7 +232,7 @@ alignment = 0
 [node name="BackButton" type="Button" parent="LeftMargin/VBox"]
 layout_mode = 2
 theme_override_colors/font_hover_color = Color(1, 0, 1, 1)
-theme_override_colors/font_color = Color(0.55, 0.55, 0.65, 1)
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 24
 text = "[ BACK_TO_MENU ]"
 flat = true
