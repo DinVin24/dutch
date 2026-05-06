@@ -73,6 +73,9 @@ text = "USERNAME"
 custom_minimum_size = Vector2(220, 0)
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/caret_color = Color(1, 1, 1, 1)
+theme_override_colors/placeholder_color = Color(0.8, 0.8, 0.9, 1)
 text = "Player"
 
 [node name="HBoxConnection" type="HBoxContainer" parent="LeftMargin/VBox/SetupPanel"]
@@ -97,6 +100,9 @@ text = "//"
 [node name="CodeEdit" type="LineEdit" parent="LeftMargin/VBox/SetupPanel/HBoxConnection"]
 custom_minimum_size = Vector2(160, 0)
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/caret_color = Color(1, 1, 1, 1)
+theme_override_colors/placeholder_color = Color(0.8, 0.8, 0.9, 1)
 placeholder_text = "ROOM_CODE"
 
 [node name="JoinButton" type="Button" parent="LeftMargin/VBox/SetupPanel/HBoxConnection"]
@@ -135,6 +141,7 @@ text = "> CONNECTED"
 custom_minimum_size = Vector2(0, 120)
 layout_mode = 2
 size_flags_vertical = 3
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="Settings" type="VBoxContainer" parent="LeftMargin/VBox/ActiveLobbyPanel/HBoxContainer"]
 layout_mode = 2
@@ -173,6 +180,7 @@ layout_mode = 2
 min_value = 1.0
 max_value = 5.0
 value = 3.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="HBoxVisibility" type="HBoxContainer" parent="LeftMargin/VBox/ActiveLobbyPanel/HBoxContainer/Settings"]
 layout_mode = 2
@@ -194,6 +202,7 @@ popup/item_1/text = "All Cards Up"
 popup/item_1/id = 1
 popup/item_2/text = "All Cards Down"
 popup/item_2/id = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="HBoxRoomCode" type="HBoxContainer" parent="LeftMargin/VBox/ActiveLobbyPanel"]
 layout_mode = 2
