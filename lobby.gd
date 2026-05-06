@@ -4,6 +4,7 @@ extends Control
 @onready var active_lobby_panel = $LeftMargin/VBox/ActiveLobbyPanel
 @onready var name_edit = $LeftMargin/VBox/SetupPanel/HBoxName/NameEdit
 @onready var code_edit = $LeftMargin/VBox/SetupPanel/HBoxConnection/CodeEdit
+@onready var status_label = $LeftMargin/VBox/SetupPanel/StatusLabel
 @onready var item_list = $LeftMargin/VBox/ActiveLobbyPanel/HBoxContainer/PlayersList/ItemList
 @onready var room_code_label = $LeftMargin/VBox/ActiveLobbyPanel/HBoxRoomCode/RoomCodeLabel
 @onready var copy_code_button = $LeftMargin/VBox/ActiveLobbyPanel/HBoxRoomCode/CopyCodeButton
@@ -27,6 +28,7 @@ func _ready():
 	NetworkManager.game_started.connect(_on_game_started)
 	NetworkManager.server_disconnected.connect(_on_server_disconnected)
 	NetworkManager.host_lan_ip_updated.connect(_on_host_lan_ip_updated)
+	NetworkManager.lobby_error.connect(_on_lobby_error)
 
 	var host_btn = $LeftMargin/VBox/SetupPanel/HBoxConnection/HostButton
 	var join_btn = $LeftMargin/VBox/SetupPanel/HBoxConnection/JoinButton
@@ -47,6 +49,17 @@ func _ready():
 	_register_arcade_button($LeftMargin/VBox/BackButton, "[ BACK_TO_MENU ]", "[ BACK_TO_MENU ]")
 	_register_arcade_button(start_button, "> START_MATCH <", "> START_MATCH <")
 	_register_arcade_button(copy_code_button, "COPY_CODE", "COPY_CODE")
+
+	_clear_status()
+
+func _clear_status() -> void:
+	status_label.text = ""
+
+func _set_status(message: String) -> void:
+	status_label.text = message
+
+func _on_lobby_error(message: String) -> void:
+	_set_status(message)
 
 func _register_arcade_button(btn: Button, original: String, hover: String):
 	_btn_original[btn] = original
@@ -71,7 +84,10 @@ func _play_click():
 func _on_host_pressed():
 	_play_click()
 	if name_edit.text.strip_edges() == "":
+		_set_status("Enter a username.")
+		name_edit.grab_focus()
 		return
+	_clear_status()
 	NetworkManager.set_local_player_name(name_edit.text)
 	if NetworkManager.host_game():
 		_transition_to_lobby(true)
@@ -79,9 +95,14 @@ func _on_host_pressed():
 func _on_join_pressed():
 	_play_click()
 	if name_edit.text.strip_edges() == "":
+		_set_status("Enter a username.")
+		name_edit.grab_focus()
 		return
 	if code_edit.text.strip_edges() == "":
+		_set_status("Enter a room code (or host LAN IP).")
+		code_edit.grab_focus()
 		return
+	_clear_status()
 	NetworkManager.set_local_player_name(name_edit.text)
 	if NetworkManager.join_game(code_edit.text):
 		_transition_to_lobby(false)
@@ -89,6 +110,7 @@ func _on_join_pressed():
 func _transition_to_lobby(is_host: bool):
 	setup_panel.hide()
 	active_lobby_panel.show()
+	_clear_status()
 
 	if is_host:
 		_refresh_host_room_label()

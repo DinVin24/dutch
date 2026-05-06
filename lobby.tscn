@@ -115,6 +115,12 @@ text = "JOIN_SESSION"
 flat = true
 alignment = 0
 
+[node name="StatusLabel" type="Label" parent="LeftMargin/VBox/SetupPanel"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 14
+text = ""
+
 [node name="ActiveLobbyPanel" type="VBoxContainer" parent="LeftMargin/VBox"]
 visible = false
 layout_mode = 2
