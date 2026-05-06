@@ -441,49 +441,34 @@ func _apply_emission_to_meshes(node: Node, energy: float):
 					child.set_surface_override_material(surface, mat)
 		_apply_emission_to_meshes(child, energy)
 
-func _create_chicken_placeholder():
-	var chicken = CSGSphere3D.new()
-	chicken.radius = 0.4
-	# Move lower and slightly closer to center of the table so camera sees it
-	chicken.position = Vector3(4.0, 1.2, -3.5)
-	
-	var mat = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.9, 0.9, 0.8) # Pale chicken
-	mat.emission_enabled = true
-	mat.emission = Color(0.9, 0.9, 0.5)
-	mat.emission_energy_multiplier = 0.5
-	chicken.material = mat
-	add_child(chicken)
-	_chicken_node = chicken
-	
-	# Add beak
-	var beak = CSGBox3D.new()
-	beak.size = Vector3(0.2, 0.1, 0.3)
-	beak.position = Vector3(0, 0, 0.45)
-	var beak_mat = StandardMaterial3D.new()
-	beak_mat.albedo_color = Color(1.0, 0.5, 0.0)
-	beak.material = beak_mat
-	chicken.add_child(beak)
-	
-	# Add red comb
-	var comb = CSGBox3D.new()
-	comb.size = Vector3(0.1, 0.2, 0.3)
-	comb.position = Vector3(0, 0.4, 0.1)
-	var comb_mat = StandardMaterial3D.new()
-	comb_mat.albedo_color = Color(1.0, 0.1, 0.1)
-	comb.material = comb_mat
-	chicken.add_child(comb)
-	
-	var area = Area3D.new()
-	var col = CollisionShape3D.new()
-	var shape = SphereShape3D.new()
-	shape.radius = 0.6
-	col.shape = shape
-	area.add_child(col)
-	chicken.add_child(area)
-	
-	area.input_event.connect(_on_chicken_clicked)
-	GameManager.ability_unlocked.connect(_on_ability_unlocked)
+	func _create_chicken_placeholder():
+		# Load the chick model and apply chicken texture
+		var chick_scene = preload("res://assets/models/chick.glb")
+		var chick = chick_scene.instantiate()
+		# Apply chicken texture
+		var tex = load("res://assets/models/chicken.bmp")
+		if tex:
+			var mat = StandardMaterial3D.new()
+			mat.albedo_texture = tex
+			# Apply material to all mesh instances in the chick model
+			for child in chick.get_children():
+				if child is MeshInstance3D:
+					child.material_override = mat
+		# Position the chick floating above the table, standing upright
+		chick.position = Vector3(4.0, 1.5, -3.5)  # Adjust Y to float, keep same X/Z as placeholder
+		add_child(chick)
+		_chicken_node = chick
+
+		# Add interaction area for clicks
+		var area = Area3D.new()
+		var col = CollisionShape3D.new()
+		var shape = SphereShape3D.new()
+		shape.radius = 0.6
+		col.shape = shape
+		area.add_child(col)
+		chick.add_child(area)
+		area.input_event.connect(_on_chicken_clicked)
+		GameManager.ability_unlocked.connect(_on_ability_unlocked)
 
 func _on_ability_unlocked(p_idx: int, ab: String):
 	_drop_egg_for(p_idx, ab)
