@@ -84,6 +84,7 @@ func _play_click():
 
 func _on_host_pressed():
 	_play_click()
+	NetworkManager.mp_log("ui.lobby", "host pressed", {"name": name_edit.text.strip_edges()})
 	if name_edit.text.strip_edges() == "":
 		_set_status("Enter a username.")
 		name_edit.grab_focus()
@@ -91,10 +92,12 @@ func _on_host_pressed():
 	_clear_status()
 	NetworkManager.set_local_player_name(name_edit.text)
 	if NetworkManager.host_game():
+		NetworkManager.mp_log("ui.lobby", "host_game ok -> transition", {})
 		_transition_to_lobby(true)
 
 func _on_join_pressed():
 	_play_click()
+	NetworkManager.mp_log("ui.lobby", "join pressed", {"name": name_edit.text.strip_edges(), "code": code_edit.text.strip_edges()})
 	if name_edit.text.strip_edges() == "":
 		_set_status("Enter a username.")
 		name_edit.grab_focus()
@@ -106,6 +109,7 @@ func _on_join_pressed():
 	_clear_status()
 	NetworkManager.set_local_player_name(name_edit.text)
 	if NetworkManager.join_game(code_edit.text):
+		NetworkManager.mp_log("ui.lobby", "join_game started -> transition", {})
 		_transition_to_lobby(false)
 
 func _transition_to_lobby(is_host: bool):
@@ -173,6 +177,7 @@ func _on_settings_changed(_val = null):
 			"beers": int(beers_spinbox.value),
 			"cards_visibility": visibility_option.selected
 		}
+		NetworkManager.mp_log("ui.lobby", "host settings changed", {"settings": new_settings})
 		NetworkManager.sync_match_settings.rpc(new_settings)
 
 func _on_start_pressed():
@@ -182,6 +187,7 @@ func _on_start_pressed():
 	if h < 2:
 		return
 	_play_click()
+	NetworkManager.mp_log("ui.lobby", "start pressed", {"human_players": h, "fill_bots": fill_bots_check.button_pressed})
 	_on_settings_changed()
 	var fill = fill_bots_check.button_pressed
 	var total: int = 4 if fill else h
@@ -189,12 +195,14 @@ func _on_start_pressed():
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	var deck_seed: int = rng.randi()
+	NetworkManager.mp_log("ui.lobby", "start_match rpc", {"total_players": total, "seed": deck_seed})
 	NetworkManager.start_match.rpc(total, deck_seed)
 
 func _on_game_started():
 	get_tree().change_scene_to_file("res://game_board_3d.tscn")
 
 func _on_server_disconnected():
+	NetworkManager.mp_log("ui.lobby", "server_disconnected signal", {})
 	setup_panel.show()
 	active_lobby_panel.hide()
 	_clear_status()
@@ -213,6 +221,7 @@ func _refresh_host_room_label():
 func _on_copy_code_pressed():
 	_play_click()
 	var code = NetworkManager.get_room_code()
+	NetworkManager.mp_log("ui.lobby", "copy room code", {"code": code})
 	DisplayServer.clipboard_set(code)
 	copy_code_button.text = "> COPIED <"
 	await get_tree().create_timer(2.0).timeout
@@ -221,5 +230,6 @@ func _on_copy_code_pressed():
 func _on_back_pressed():
 	_play_click()
 	_clear_status()
+	NetworkManager.mp_log("ui.lobby", "back pressed", {})
 	NetworkManager.leave_game()
 	get_tree().change_scene_to_file("res://main_menu.tscn")
