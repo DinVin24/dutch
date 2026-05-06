@@ -51,6 +51,7 @@ func _ready():
 	_register_arcade_button(copy_code_button, "COPY_CODE", "COPY_CODE")
 
 	_clear_status()
+	name_edit.grab_focus()
 
 func _clear_status() -> void:
 	status_label.text = ""
@@ -196,6 +197,8 @@ func _on_game_started():
 func _on_server_disconnected():
 	setup_panel.show()
 	active_lobby_panel.hide()
+	_clear_status()
+	name_edit.grab_focus()
 	NetworkManager.leave_game()
 
 func _on_host_lan_ip_updated(_ip: String):
@@ -217,5 +220,6 @@ func _on_copy_code_pressed():
 
 func _on_back_pressed():
 	_play_click()
+	_clear_status()
 	NetworkManager.leave_game()
 	get_tree().change_scene_to_file("res://main_menu.tscn")
