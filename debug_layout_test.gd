@@ -61,7 +61,7 @@ func _apply_window_layout() -> void:
 	var screen_pos := DisplayServer.screen_get_position(screen_index)
 	var screen_size := DisplayServer.screen_get_size(screen_index)
 	var x := screen_pos.x if _role == TestRole.HOST else screen_pos.x + screen_size.x - target_size.x
-	var y := screen_pos.y + int(maxi(0, (screen_size.y - target_size.y) / 2))
+	var y := screen_pos.y + maxi(0, int((screen_size.y - target_size.y) / 2))
 	DisplayServer.window_set_position(Vector2i(x, y))
 
 func _bootstrap_network_role() -> void:

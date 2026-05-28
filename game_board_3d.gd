@@ -68,7 +68,7 @@ var camera_rot_y: float = 0.0
 
 var player_beers_nodes: Array = [[], [], [], []]
 var money_labels: Array = []
-var _chicken_node: CSGSphere3D = null
+var _chicken_node: Node3D = null
 var _chicken_zoom_active: bool = false
 
 @onready var camera = $Camera3D
@@ -441,34 +441,38 @@ func _apply_emission_to_meshes(node: Node, energy: float):
 					child.set_surface_override_material(surface, mat)
 		_apply_emission_to_meshes(child, energy)
 
-	func _create_chicken_placeholder():
-		# Load the chick model and apply chicken texture
-		var chick_scene = preload("res://assets/models/chick.glb")
-		var chick = chick_scene.instantiate()
-		# Apply chicken texture
-		var tex = load("res://assets/models/chicken.bmp")
-		if tex:
-			var mat = StandardMaterial3D.new()
-			mat.albedo_texture = tex
-			# Apply material to all mesh instances in the chick model
-			for child in chick.get_children():
-				if child is MeshInstance3D:
-					child.material_override = mat
-		# Position the chick floating above the table, standing upright
-		chick.position = Vector3(4.0, 1.5, -3.5)  # Adjust Y to float, keep same X/Z as placeholder
-		add_child(chick)
-		_chicken_node = chick
+func _create_chicken_placeholder():
+	var chicken = preload("res://assets/models/chick.glb").instantiate()
+	chicken.position = Vector3(4.0, 1.2, -3.5)
+	# Scale down the model (GLBs can be very large)
+	chicken.scale = Vector3(0.05, 0.05, 0.05)
+	# Rotate 180 on Y to face player
+	chicken.rotation_degrees = Vector3(90, 180, 0)
+	add_child(chicken)
+	_chicken_node = chicken	
+	
+	# Apply texture
+	var tex = load("res://assets/models/chicken.bmp")
+	if tex:
+		var mat = StandardMaterial3D.new()
+		mat.albedo_texture = tex
+		# Recursively apply to all meshes in the GLB
+		var meshes = chicken.find_children("*", "MeshInstance3D", true, false)
+		for m in meshes:
+			for i in range(m.mesh.get_surface_count()):
+				m.set_surface_override_material(i, mat)
 
-		# Add interaction area for clicks
-		var area = Area3D.new()
-		var col = CollisionShape3D.new()
-		var shape = SphereShape3D.new()
-		shape.radius = 0.6
-		col.shape = shape
-		area.add_child(col)
-		chick.add_child(area)
-		area.input_event.connect(_on_chicken_clicked)
-		GameManager.ability_unlocked.connect(_on_ability_unlocked)
+	var area = Area3D.new()
+	var col = CollisionShape3D.new()
+	var shape = SphereShape3D.new()
+	# Compensate for chicken scaling to keep a clickable area of ~0.6m radius
+	shape.radius = 12.0 
+	col.shape = shape
+	area.add_child(col)
+	chicken.add_child(area)
+	
+	area.input_event.connect(_on_chicken_clicked)
+	GameManager.ability_unlocked.connect(_on_ability_unlocked)
 
 func _on_ability_unlocked(p_idx: int, ab: String):
 	_drop_egg_for(p_idx, ab)
@@ -499,7 +503,7 @@ func _drop_egg_for(p_idx: int, ab: String):
 		# Camera cinematic zoom - GUARD against re-entry
 		if not _chicken_zoom_active:
 			_chicken_zoom_active = true
-			var target_pos = _chicken_node.global_position + Vector3(0, 0.8, 2.0)
+			var target_pos = _chicken_node.global_position + Vector3(0, 1.5, 2.5)
 			var cam_tween = create_tween()
 			var restore_cam_local = _effective_camera_base_local()
 			var original_fov = camera.fov
