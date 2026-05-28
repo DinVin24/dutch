@@ -288,7 +288,7 @@ func _await_resolution() -> void:
 # --- UTILITIES ---
 
 func assert_state(expected: int):
-	var states = ["INIT", "DEAL", "PEEK", "START", "RESOLVE", "QUEEN", "JACK", "END_CHOICE", "JUMP_IN", "CHECK", "CONFIRM", "OVER"]
+	var states = ["INIT", "DEAL", "PEEK", "START", "RESOLVE", "QUEEN", "JACK", "END_CHOICE", "JUMP_IN", "CHECK", "CONFIRM", "PLAY_ABILITY", "OVER"]
 	if gm.current_state != expected:
 		var got = states[gm.current_state] if gm.current_state < states.size() else "ERR"
 		var exp = states[expected] if expected < states.size() else "ERR"

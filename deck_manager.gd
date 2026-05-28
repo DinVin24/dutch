@@ -39,6 +39,16 @@ func create_deck():
 func shuffle_deck():
 	deck.shuffle()
 
+func shuffle_deck_seeded(seed_value: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value as int
+	var n := deck.size()
+	for i in range(n - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp = deck[i]
+		deck[i] = deck[j]
+		deck[j] = tmp
+
 func draw_card() -> CardData:
 	if deck.is_empty():
 		if discard_pile.size() > 1:

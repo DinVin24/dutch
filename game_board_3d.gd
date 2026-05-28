@@ -3,6 +3,7 @@ extends Node3D
 
 @onready var deck_area = $DeckArea
 @onready var discard_area = $DiscardArea
+@onready var player_positions_root = $PlayerPositions
 @onready var player_pos_nodes = {
 	0: $PlayerPositions/Bottom,
 	1: $PlayerPositions/Left,
@@ -20,6 +21,7 @@ var jump_in_btn: Button
 var call_dutch_btn: Button
 var confirm_dutch_btn: Button
 var forfeit_dutch_btn: Button
+var play_again_btn: Button
 var discard_indicator: MeshInstance3D
 
 var player_hands: Array = [[], [], [], []]
@@ -67,7 +69,7 @@ var camera_rot_y: float = 0.0
 
 var player_beers_nodes: Array = [[], [], [], []]
 var money_labels: Array = []
-var _chicken_node: CSGSphere3D = null
+var _chicken_node: Node3D = null
 var _chicken_zoom_active: bool = false
 
 @onready var camera = $Camera3D
@@ -76,11 +78,23 @@ var _shake_intensity: float = 0.0
 var _shake_timer: float = 0.0
 var _base_camera_pos: Vector3
 var _base_camera_rotation: Vector3
+## Extra shift on top of scene default camera position (e.g. multiplayer seat framing).
+var _mp_camera_offset: Vector3 = Vector3.ZERO
 
 # Targeting state
 var _is_waiting_for_target: bool = false
 var _is_preparing_ability: bool = false # Interaction guard for reveals
 var _pending_ability: Dictionary = {} # {id, token, activator}
+var _last_sync_diag := {
+	"state": -1,
+	"cur": -1,
+	"deck": -1,
+	"discard": -1,
+	"pending": false,
+	"dutch_i": -1,
+	"abilities": [[], [], [], []],
+	"beers": [3, 3, 3, 3]
+}
 
 func _ready():
 	if Engine.is_editor_hint():
@@ -113,6 +127,8 @@ func _ready():
 	GameManager.ability_played.connect(_on_ability_played)
 	GameManager.polarity_shifted.connect(_on_polarity_shifted)
 	GameManager.pending_card_consumed.connect(_on_pending_card_consumed)
+	GameManager.multiplayer_sync_applied.connect(_on_multiplayer_sync_applied)
+	NetworkManager.play_again_votes_updated.connect(_on_play_again_votes_updated)
 	
 	_create_hud_ui()
 	_create_discard_indicator()
@@ -146,6 +162,8 @@ func _ready():
 
 	print("Game Board 3D: Starting game...")
 	GameManager.initialize_game(4)
+	_configure_visible_player_seats(GameManager.num_players)
+	_apply_local_player_seat_rotation()
 	trigger_glitch(0.4, 0.8) # Intro glitch
 
 	# Tutorial Mode: Inject Chippy's overlay into the UI layer
@@ -153,6 +171,149 @@ func _ready():
 		var tut_scene = preload("res://tutorial_overlay.tscn")
 		var tut = tut_scene.instantiate()
 		$GameUI.add_child(tut)
+
+func _send_action(action: String, args: Dictionary = {}):
+	if GameManager.is_multiplayer:
+		GameManager.request_action.rpc_id(1, action, args)
+	else:
+		GameManager.request_action(action, args)
+
+func _human_ui_idx() -> int:
+	return GameManager.local_player_idx if GameManager.is_multiplayer else 0
+
+func _effective_camera_base_local() -> Vector3:
+	return _base_camera_pos + _mp_camera_offset
+
+## Rotates the four seats around the table so the local peer's hand sits at the bottom (camera-near),
+## matching physical \"your cards in front of you\" in multiplayer. Single-player / hotseat: no rotation.
+func _apply_local_player_seat_rotation() -> void:
+	if not is_instance_valid(player_positions_root):
+		return
+	if GameManager.is_multiplayer:
+		player_positions_root.rotation.y = GameManager.local_player_idx * (TAU / 4.0)
+		# Same +Z dolly in board space for every seat so the local hand stays fully in frame after seat rotation.
+		const MP_CAMERA_DOLLY_Z := 1.55
+		_mp_camera_offset = Vector3(0, 0, MP_CAMERA_DOLLY_Z)
+	else:
+		player_positions_root.rotation.y = 0.0
+		_mp_camera_offset = Vector3.ZERO
+	if is_instance_valid(camera):
+		camera.position = _effective_camera_base_local()
+
+func _configure_visible_player_seats(n: int) -> void:
+	for seat in range(4):
+		if player_pos_nodes.has(seat):
+			player_pos_nodes[seat].visible = seat < clampi(n, 1, 4)
+
+func _on_multiplayer_sync_applied() -> void:
+	var new_state: int = int(GameManager.current_state)
+	var new_cur: int = GameManager.current_player_index
+	var new_deck: int = GameManager.deck_manager.deck.size()
+	var new_discard: int = GameManager.deck_manager.discard_pile.size()
+	var new_pending: bool = GameManager.drawn_card_data != null
+	var new_dutch_i: int = GameManager.dutch_caller_index
+	var state_changed: bool = _last_sync_diag["state"] != new_state or _last_sync_diag["cur"] != new_cur
+	var deck_changed: bool = _last_sync_diag["deck"] != new_deck or _last_sync_diag["discard"] != new_discard
+	var pending_changed: bool = _last_sync_diag["pending"] != new_pending
+
+	if pending_changed and not new_pending and is_instance_valid(pending_card):
+		pending_card.queue_free()
+		pending_card = null
+	_apply_local_player_seat_rotation()
+	_configure_visible_player_seats(GameManager.num_players)
+	
+	# Snapshot abilities BEFORE _update_hand_visuals so we diff correctly
+	var prev_abilities: Array = (_last_sync_diag["abilities"] as Array).duplicate(true)
+	
+	for i in range(GameManager.num_players):
+		_update_hand_visuals(i)
+	for j in range(GameManager.num_players, 4):
+		for c in player_hands[j].duplicate():
+			if is_instance_valid(c):
+				c.queue_free()
+		player_hands[j].clear()
+	if deck_changed:
+		_update_deck_visual()
+		_update_discard_visual()
+	if GameManager.drawn_card_data != null \
+			and GameManager.current_state == GameManager.GameState.TURN_RESOLVE_DRAWN \
+			and GameManager.current_player_index == GameManager.local_player_idx \
+			and pending_card == null:
+		var d = GameManager.drawn_card_data
+		pending_card = card_scene.instantiate()
+		pending_card.name = "PendingCard"
+		add_child(pending_card)
+		d.is_face_up = true
+		pending_card.setup(d)
+		pending_card.card_clicked.connect(_on_card_clicked)
+		pending_card.position = deck_area.position + Vector3(0, 0.6, 0.5)
+		pending_card.rotation_degrees = Vector3(90, 0, 0)
+		pending_card.set_interactive(true)
+	
+	# --- Bug 5: Detect Dutch call and show feedback on client ---
+	if new_dutch_i != -1 and _last_sync_diag["dutch_i"] == -1:
+		_on_dutch_called(new_dutch_i)
+	
+	# --- Bug 3: Refresh local player money label from synced data ---
+	var local_idx := GameManager.local_player_idx
+	if local_idx >= 0 and local_idx < GameManager.players_info.size():
+		if money_labels.size() > 0:
+			money_labels[0].text = "$" + str(GameManager.players_info[local_idx].money)
+	
+	# --- Bug fix: Synchronize beers and play drinking effect if decreased ---
+	var prev_beers: Array = _last_sync_diag.get("beers", [3, 3, 3, 3])
+	for pi in range(GameManager.num_players):
+		var cur_beers = GameManager.players_info[pi].beers
+		var old_b = prev_beers[pi] if pi < prev_beers.size() else 3
+		if old_b != -1 and cur_beers < old_b:
+			_on_player_drank_beer(pi, cur_beers)
+		else:
+			# Just silently update visibility
+			if pi < player_beers_nodes.size():
+				var beers_array = player_beers_nodes[pi]
+				for k in range(beers_array.size()):
+					beers_array[k].visible = (k < cur_beers)
+	
+	# --- Bug 4: Detect ability changes and fire local visual feedback ---
+	# Only diff if we have a prior snapshot (skip the very first sync to avoid spurious events)
+	if not prev_abilities.is_empty() and prev_abilities.any(func(a): return a is Array):
+		for pi in range(GameManager.num_players):
+			var new_abs: Array = GameManager.players_info[pi].abilities
+			var old_abs: Array = prev_abilities[pi] if pi < prev_abilities.size() else []
+			# Ability appeared in the new list — player gained it
+			for ab in new_abs:
+				if not ab in old_abs:
+					_on_ability_unlocked(pi, ab)
+			# Ability disappeared from the list — player used it
+			for ab in old_abs:
+				if not ab in new_abs:
+					_on_ability_played(pi, ab)
+	
+	if state_changed:
+		_on_game_state_changed(GameManager.current_state)
+	_last_sync_diag["state"] = new_state
+	_last_sync_diag["cur"] = new_cur
+	_last_sync_diag["deck"] = new_deck
+	_last_sync_diag["discard"] = new_discard
+	_last_sync_diag["pending"] = new_pending
+	_last_sync_diag["dutch_i"] = new_dutch_i
+	# Snapshot abilities for next sync comparison
+	var abilities_snapshot: Array = []
+	for pi in range(4):
+		if pi < GameManager.players_info.size():
+			abilities_snapshot.append(GameManager.players_info[pi].abilities.duplicate())
+		else:
+			abilities_snapshot.append([])
+	_last_sync_diag["abilities"] = abilities_snapshot
+	
+	# Snapshot beers for next sync comparison
+	var beers_snapshot: Array = []
+	for pi in range(4):
+		if pi < GameManager.players_info.size():
+			beers_snapshot.append(GameManager.players_info[pi].beers)
+		else:
+			beers_snapshot.append(3)
+	_last_sync_diag["beers"] = beers_snapshot
 
 func _create_hud_ui():
 	# Action Buttons Container: Moved to bottom-right to avoid overlapping hand cards
@@ -303,9 +464,12 @@ func _create_beer_placeholders():
 			# We recursively look for any MeshInstance3D inside the imported GLB
 			_apply_emission_to_meshes(beer, beer_emission)
 			
-			# Column of 3 on the LEFT, centered with cards (z=0)
-			var grid_z = (b - 1.0) * beer_spacing
-			beer.position = Vector3(-4.0, beer_y_offset, grid_z) 
+			# Keep all beers on the RIGHT side, slightly in front of the hand.
+			# This avoids mirrored/left placement in multiplayer seat rotations.
+			var right_x_base := 1.8
+			var front_z := 1.35
+			var right_offset := b * beer_spacing
+			beer.position = Vector3(right_x_base + right_offset, beer_y_offset, front_z)
 			pos_node.add_child(beer)
 			player_beers_nodes[i].append(beer)
 
@@ -338,49 +502,39 @@ func _apply_emission_to_meshes(node: Node, energy: float):
 					# Reset to realistic matte-plastic values (not wax, not void)
 					mat.roughness = 0.8
 					mat.metallic = 0.0
-					mat.specular = 0.5
+					# Godot 4 uses metallic_specular instead of legacy specular.
+					mat.metallic_specular = 0.5
 					
 					# Force the material to be unique per beer instance
 					child.set_surface_override_material(surface, mat)
 		_apply_emission_to_meshes(child, energy)
 
 func _create_chicken_placeholder():
-	var chicken = CSGSphere3D.new()
-	chicken.radius = 0.4
-	# Raise chicken up
-	chicken.position = Vector3(0, 2.0, 0)
-	
-	var mat = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.9, 0.9, 0.8) # Pale chicken
-	mat.emission_enabled = true
-	mat.emission = Color(0.9, 0.9, 0.5)
-	mat.emission_energy_multiplier = 0.5
-	chicken.material = mat
+	var chicken = preload("res://assets/models/chick.glb").instantiate()
+	chicken.position = Vector3(4.0, 1.2, -3.5)
+	# Scale down the model (GLBs can be very large)
+	chicken.scale = Vector3(0.05, 0.05, 0.05)
+	# Rotate 180 on Y to face player
+	chicken.rotation_degrees = Vector3(90, 180, 0)
 	add_child(chicken)
-	_chicken_node = chicken
+	_chicken_node = chicken	
 	
-	# Add beak
-	var beak = CSGBox3D.new()
-	beak.size = Vector3(0.2, 0.1, 0.3)
-	beak.position = Vector3(0, 0, 0.45)
-	var beak_mat = StandardMaterial3D.new()
-	beak_mat.albedo_color = Color(1.0, 0.5, 0.0)
-	beak.material = beak_mat
-	chicken.add_child(beak)
-	
-	# Add red comb
-	var comb = CSGBox3D.new()
-	comb.size = Vector3(0.1, 0.2, 0.3)
-	comb.position = Vector3(0, 0.4, 0.1)
-	var comb_mat = StandardMaterial3D.new()
-	comb_mat.albedo_color = Color(1.0, 0.1, 0.1)
-	comb.material = comb_mat
-	chicken.add_child(comb)
-	
+	# Apply texture
+	var tex = load("res://assets/models/chicken.bmp")
+	if tex:
+		var mat = StandardMaterial3D.new()
+		mat.albedo_texture = tex
+		# Recursively apply to all meshes in the GLB
+		var meshes = chicken.find_children("*", "MeshInstance3D", true, false)
+		for m in meshes:
+			for i in range(m.mesh.get_surface_count()):
+				m.set_surface_override_material(i, mat)
+
 	var area = Area3D.new()
 	var col = CollisionShape3D.new()
 	var shape = SphereShape3D.new()
-	shape.radius = 0.6
+	# Compensate for chicken scaling to keep a clickable area of ~0.6m radius
+	shape.radius = 12.0 
 	col.shape = shape
 	area.add_child(col)
 	chicken.add_child(area)
@@ -393,19 +547,18 @@ func _on_ability_unlocked(p_idx: int, ab: String):
 
 func _on_chicken_clicked(_camera, event, _position, _normal, _shape_idx):
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		if GameManager.current_player_index == 0:
-			_try_buy_ability(0)
+		if GameManager.current_player_index == GameManager.local_player_idx:
+			_try_buy_ability(GameManager.local_player_idx)
 
 func _try_buy_ability(p_idx: int):
 	if GameManager.players_info[p_idx].abilities.size() >= 8:
 		_show_message("Inventory Full! (Max 8)")
 		return
 		
-	if not GameManager.buy_ability(p_idx):
-		_show_message("Chicken wants $50 for an egg!")
+	_send_action("buy_ability")
 
 func _drop_egg_for(p_idx: int, ab: String):
-	if p_idx == 0:
+	if p_idx == _human_ui_idx():
 		_show_message("You got: " + ab.capitalize() + "!")
 	else:
 		_show_message(GameManager.players_info[p_idx].name + " got an egg!")
@@ -418,9 +571,9 @@ func _drop_egg_for(p_idx: int, ab: String):
 		# Camera cinematic zoom - GUARD against re-entry
 		if not _chicken_zoom_active:
 			_chicken_zoom_active = true
-			var target_pos = _chicken_node.global_position + Vector3(0, 0.8, 2.0)
+			var target_pos = _chicken_node.global_position + Vector3(0, 1.5, 2.5)
 			var cam_tween = create_tween()
-			var old_base = _base_camera_pos
+			var restore_cam_local = _effective_camera_base_local()
 			var original_fov = camera.fov
 			var original_rot = camera.rotation_degrees
 			
@@ -428,11 +581,11 @@ func _drop_egg_for(p_idx: int, ab: String):
 			cam_tween.parallel().tween_property(camera, "rotation_degrees", Vector3(-20, 0, 0), 0.3).set_trans(Tween.TRANS_CUBIC)
 			cam_tween.parallel().tween_property(camera, "fov", 45.0, 0.3).set_trans(Tween.TRANS_CUBIC)
 			cam_tween.tween_interval(0.8)
-			cam_tween.tween_property(camera, "global_position", old_base, 0.4).set_trans(Tween.TRANS_QUAD)
+			cam_tween.tween_property(camera, "position", restore_cam_local, 0.4).set_trans(Tween.TRANS_QUAD)
 			cam_tween.parallel().tween_property(camera, "rotation_degrees", original_rot, 0.4).set_trans(Tween.TRANS_QUAD)
 			cam_tween.parallel().tween_property(camera, "fov", original_fov, 0.4).set_trans(Tween.TRANS_QUAD)
 			cam_tween.tween_callback(func():
-				_base_camera_pos = old_base
+				camera.position = restore_cam_local
 				_chicken_zoom_active = false
 			)
 	# authoritative inventory is now managed in GameManager.buy_ability
@@ -514,7 +667,7 @@ func _on_ability_token_clicked(token):
 		else:
 			# Non-targeting or self-targeting
 			var target = p_idx # Default to self for things like refuel/trim_off
-			GameManager.play_ability(p_idx, token.ability_id, target)
+			_send_action("play_ability", {"ability_id": token.ability_id, "target_idx": target})
 			# Visual cleanup now handled by _on_ability_played signal for all players
 	else:
 		_show_message("Not your turn to play abilities!")
@@ -565,19 +718,17 @@ func _on_player_area_input(_camera, event, _position, _normal, _shape_idx, playe
 
 		print("[DEBUG] Requesting play_ability: ", ab_id, " by P", activator, " on P", player_idx)
 		
-		if GameManager.play_ability(activator, ab_id, player_idx):
-			_is_waiting_for_target = false
-			_set_targeting_areas_enabled(false)
-			_clear_all_highlights()
-			_update_turn_lights(activator) # Reset lights to activator's turn
-			_hide_message()
-			
-			# Visual cleanup: token itself is already removed by play_ability signal callback
-			# but we clear the pending data here
-			_pending_ability.clear()
-			_update_ability_visuals(activator)
-		else:
-			print("[DEBUG] play_ability REJECTED by GameManager")
+		_send_action("play_ability", {"ability_id": ab_id, "target_idx": player_idx})
+		_is_waiting_for_target = false
+		_set_targeting_areas_enabled(false)
+		_clear_all_highlights()
+		_update_turn_lights(activator) # Reset lights to activator's turn
+		_hide_message()
+		
+		# Visual cleanup: token itself is already removed by play_ability signal callback
+		# but we clear the pending data here
+		_pending_ability.clear()
+		_update_ability_visuals(activator)
 
 func _on_player_drank_beer(player_idx, remaining):
 	if player_idx < 0 or player_idx >= 4: return
@@ -590,7 +741,7 @@ func _on_player_eliminated(player_idx):
 	_show_message(GameManager.players_info[player_idx].name + " PASSED OUT!")
 
 func _on_player_gained_money(player_idx, _amount, total):
-	if player_idx == 0 and money_labels.size() > 0:
+	if player_idx == _human_ui_idx() and money_labels.size() > 0:
 		money_labels[0].text = "$" + str(total)
 
 func _on_ability_played(player_idx, ability_id):
@@ -608,7 +759,7 @@ func _on_ability_played(player_idx, ability_id):
 	if token_node:
 		# If it's a bot (p_idx != 0), we want to reveal the card for 2s too
 		# if it's not already face up (the human reveal handles p_idx=0)
-		if player_idx != 0:
+		if player_idx != _human_ui_idx():
 			token_node.animate_flip(true)
 			await get_tree().create_timer(2.0, false).timeout
 		
@@ -624,7 +775,7 @@ func _on_turn_started(player_idx):
 	turn_label.text = "> " + p_info.name.to_upper() + "'S TURN"
 	_animate_glitch_text(turn_label)
 	_update_turn_lights(player_idx)
-	if player_idx != 0:
+	if player_idx != _human_ui_idx():
 		_show_message(p_info.name + " is thinking...")
 
 func _update_turn_lights(_current_player: int, _all_on: bool = false):
@@ -672,7 +823,7 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 
 	_update_deck_visual()
 
-	if player_idx != 0:
+	if player_idx != _human_ui_idx():
 		_show_message(GameManager.players_info[player_idx].name + " is drawing...")
 		return
 
@@ -695,7 +846,7 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 
 func _on_card_discarded(player_idx, card_data):
 	if jump_in_btn:
-		jump_in_btn.visible = GameManager.should_human_show_jump_in_button(0)
+		jump_in_btn.visible = GameManager.should_human_show_jump_in_button(_human_ui_idx())
 	
 	print("GameBoard3D: Card Discarded. Player: ", player_idx, " Data: ", card_data.rank, " of ", card_data.suit)
 	
@@ -770,26 +921,26 @@ func _show_message(text: String):
 	label.show()
 
 func _on_end_turn_pressed():
-	if GameManager.can_player_end_turn(0):
-		GameManager.end_turn()
-	elif GameManager.can_player_cancel_jump_in(0):
-		GameManager.cancel_jump_in()
+	if GameManager.can_player_end_turn(GameManager.local_player_idx):
+		_send_action("end_turn")
+	elif GameManager.can_player_cancel_jump_in(GameManager.local_player_idx):
+		_send_action("cancel_jump_in")
 
 func _on_jump_in_pressed():
-	if GameManager.can_player_start_jump_in(0):
-		GameManager.start_jump_in(0)
+	if GameManager.can_player_start_jump_in(GameManager.local_player_idx):
+		_send_action("start_jump_in")
 
 func _on_call_dutch_pressed():
-	if GameManager.can_player_call_dutch(0):
-		GameManager.call_dutch(0)
+	if GameManager.can_player_call_dutch(GameManager.local_player_idx):
+		_send_action("call_dutch")
 
 func _on_confirm_dutch_pressed():
-	if GameManager.can_player_confirm_dutch(0):
-		GameManager.confirm_dutch()
+	if GameManager.can_player_confirm_dutch(GameManager.local_player_idx):
+		_send_action("confirm_dutch")
 
 func _on_cancel_dutch_pressed():
-	if GameManager.can_player_cancel_dutch(0):
-		GameManager.cancel_dutch()
+	if GameManager.can_player_cancel_dutch(GameManager.local_player_idx):
+		_send_action("cancel_dutch")
 
 func _on_game_state_changed(new_state):
 	_hide_message()
@@ -800,7 +951,7 @@ func _on_game_state_changed(new_state):
 	confirm_dutch_btn.hide()
 	forfeit_dutch_btn.hide()
 	_refresh_human_interactivity()
-	jump_in_btn.visible = GameManager.should_human_show_jump_in_button(0)
+	jump_in_btn.visible = GameManager.should_human_show_jump_in_button(_human_ui_idx())
 	if new_state == GameManager.GameState.TURN_START_DRAW or \
 	   new_state == GameManager.GameState.TURN_END_CHOICE:
 		_clear_all_highlights()
@@ -808,14 +959,16 @@ func _on_game_state_changed(new_state):
 	match new_state:
 		GameManager.GameState.DEAL_CARDS:
 			turn_label.text = "> DEALING CARDS"
-			_handle_initial_deal()
+			# Clients receive the dealt state via sync from the host — never deal locally.
+			if not GameManager.is_multiplayer or multiplayer.is_server():
+				_handle_initial_deal()
 		GameManager.GameState.INITIAL_PEEK:
 			turn_label.text = "> PEEKING PHASE"
 			_start_peek_phase()
 			_update_turn_lights(-1, true)
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
 			print("GameBoard3D: UI - Showing TURN_RESOLVE_DRAWN")
-			if GameManager.can_player_discard_drawn_card(0):
+			if GameManager.can_player_discard_drawn_card(_human_ui_idx()):
 				_show_message("Click a card in your hand to swap, or the drawn card to discard.")
 				_highlight_selectable_cards(false)
 			else:
@@ -823,38 +976,43 @@ func _on_game_state_changed(new_state):
 				_show_message(player_name + " is deciding...")
 		GameManager.GameState.TURN_END_CHOICE:
 			print("GameBoard3D: UI - Showing TURN_END_CHOICE")
-			if GameManager.can_player_end_turn(0):
+			if GameManager.can_player_end_turn(_human_ui_idx()):
 				end_turn_btn.show()
-			if GameManager.can_player_call_dutch(0):
+			if GameManager.can_player_call_dutch(_human_ui_idx()):
 				call_dutch_btn.show()
 		GameManager.GameState.TURN_JUMP_IN_SELECTION:
 			print("GameBoard3D: UI - Showing TURN_JUMP_IN_SELECTION")
 			var ji_idx = GameManager.jump_in_player_idx
 			var ji_name = GameManager.players_info[ji_idx].name if ji_idx >= 0 else "Someone"
 			_show_message(ji_name + ": pick a matching card, or end turn to cancel.")
-			if GameManager.can_player_cancel_jump_in(0):
+			if GameManager.can_player_cancel_jump_in(_human_ui_idx()):
 				end_turn_btn.show()
-				_highlight_selectable_cards(false)
+			_highlight_selectable_cards(false)
 		GameManager.GameState.TURN_CONFIRM_DUTCH:
 			print("GameBoard3D: UI - Showing TURN_CONFIRM_DUTCH")
-			if GameManager.can_player_confirm_dutch(0):
+			if GameManager.can_player_confirm_dutch(_human_ui_idx()):
 				_show_message("You called Dutch! Confirm or Forfeit?")
 				confirm_dutch_btn.show()
 				forfeit_dutch_btn.show()
 		GameManager.GameState.TURN_PEEK_ABILITY:
-			if GameManager.active_ability_player == 0:
+			if GameManager.active_ability_player == _human_ui_idx():
 				_show_message("Select ANY card to peek at.")
 				_highlight_selectable_cards(true)
 			_update_turn_lights(-1, true)
 		GameManager.GameState.TURN_SWAP_ABILITY:
-			if GameManager.active_ability_player == 0:
+			if GameManager.active_ability_player == _human_ui_idx():
 				_show_message("Select TWO cards to swap.")
 				_highlight_selectable_cards(true)
 			_update_turn_lights(-1, true)
 			swap_sources.clear()
+		GameManager.GameState.GAME_OVER:
+			# Bug 6: On multiplayer client, _handle_game_over() never runs here.
+			# Detect GAME_OVER from the sync and calculate/show scores from local synced data.
+			if GameManager.is_multiplayer and not multiplayer.is_server():
+				_on_scores_ready(GameManager._calculate_scores())
 
-	$DeckArea/Area3D.input_ray_pickable = GameManager.can_player_draw(0)
-	$DiscardArea/Area3D.input_ray_pickable = GameManager.can_player_discard_drawn_card(0)
+	$DeckArea/Area3D.input_ray_pickable = GameManager.can_player_draw(_human_ui_idx())
+	$DiscardArea/Area3D.input_ray_pickable = GameManager.can_player_discard_drawn_card(_human_ui_idx())
 
 func _set_all_cards_interactive(enabled: bool):
 	for i in range(4):
@@ -864,7 +1022,7 @@ func _refresh_human_interactivity() -> void:
 	_set_all_cards_interactive(false)
 	if is_instance_valid(pending_card):
 		pending_card.set_interactive(
-			GameManager.can_player_discard_drawn_card(0) or GameManager.can_player_select_jump_in_card(0, 0, -2)
+			GameManager.can_player_discard_drawn_card(_human_ui_idx()) or GameManager.can_player_select_jump_in_card(_human_ui_idx(), _human_ui_idx(), -2)
 		)
 	for p_idx in range(player_hands.size()):
 		for c_idx in range(player_hands[p_idx].size()):
@@ -883,7 +1041,7 @@ func _highlight_selectable_cards(is_target_phase: bool = false):
 	
 	# Handle pending card highlighting
 	if is_instance_valid(pending_card) and (
-		GameManager.can_player_discard_drawn_card(0) or GameManager.can_player_select_jump_in_card(0, 0, -2)
+		GameManager.can_player_discard_drawn_card(_human_ui_idx()) or GameManager.can_player_select_jump_in_card(_human_ui_idx(), _human_ui_idx(), -2)
 	):
 		pending_card.set_highlight(true)
 		pending_card.set_interactive(true)
@@ -892,7 +1050,7 @@ func _highlight_selectable_cards(is_target_phase: bool = false):
 		# During regular play, we usually only care about human's hand (p_idx=0)
 		# EXCEPT for swap abilities (which allow cross-player selection)
 		var is_swap_state = GameManager.current_state == GameManager.GameState.TURN_SWAP_ABILITY
-		if not is_target_phase and not is_swap_state and p_idx != 0:
+		if not is_target_phase and not is_swap_state and p_idx != _human_ui_idx():
 			continue
 			
 		for c_idx in range(player_hands[p_idx].size()):
@@ -936,9 +1094,9 @@ func _on_hand_updated(player_idx):
 	_update_hand_visuals(player_idx)
 	# Easy mode: handle card visibility persistence
 	if GameManager.easy_mode:
-		if player_idx == 0:
-			# Keep all of player 0's cards face-up
-			for card in player_hands[0]:
+		if player_idx == _human_ui_idx():
+			# Keep all of local human's cards face-up
+			for card in player_hands[_human_ui_idx()]:
 				if is_instance_valid(card) and not card.data.is_face_up:
 					card.data.is_face_up = true
 					card.animate_flip(true)
@@ -983,15 +1141,27 @@ func _update_hand_visuals(player_idx: int):
 	var current_nodes = player_hands[player_idx]
 
 	# STRICT SYNC: Reconstruct player_hands[player_idx] to match hand_data exactly by index.
-	# We match existing nodes to data objects by reference to preserve their visual state.
+	# In multiplayer, every sync creates new CardData objects so reference equality fails.
+	# We fall back to rank+suit value matching so existing nodes are reused across syncs,
+	# preserving their visual state (is_being_peeked, is_flipping, animation progress).
 	var new_node_list = []
 	var pool = current_nodes.duplicate()
 	
 	for data in hand_data:
 		var found_node = null
 		for node in pool:
-			if is_instance_valid(node) and node.data == data:
+			if not is_instance_valid(node):
+				continue
+			# Primary: reference match (singleplayer / host)
+			if node.data == data:
 				found_node = node
+				pool.erase(node)
+				break
+			# Fallback: value match by rank+suit (multiplayer client — data is rebuilt each sync)
+			if node.data != null and node.data.rank == data.rank and node.data.suit == data.suit:
+				found_node = node
+				# Update the node's data reference so future reference checks work
+				node.data = data
 				pool.erase(node)
 				break
 		
@@ -1002,12 +1172,12 @@ func _update_hand_visuals(player_idx: int):
 			player_pos_nodes[player_idx].add_child(card_node)
 			card_node.card_clicked.connect(_on_card_clicked)
 			new_node_list.append(card_node)
-			
-	# Cleanup orphans
+		
+	# Cleanup orphans — spare nodes that are mid-animation (discarding or being peeked)
 	for node in pool:
 		if is_instance_valid(node):
-			if node.is_discarding:
-				print("GameBoard3D: Sparing node from cleanup (is_discarding=true)")
+			if node.is_discarding or node.is_being_peeked:
+				print("GameBoard3D: Sparing node from cleanup (is_discarding/is_being_peeked)")
 				continue
 			node.queue_free()
 			
@@ -1041,7 +1211,11 @@ func _update_hand_visuals(player_idx: int):
 					area.mouse_exited.connect(_on_card_hover_exit.bind(card_node))
 					card_node.set_meta("hover_connected", true)
 			
-			card_node.setup(hand_data[i])
+			# Don't call setup() while the card is mid-peek or mid-flip:
+			# setup() reads CardData.is_face_up which is always false for private hand cards,
+			# and would instantly snap the card back down, cancelling the peek animation.
+			if not card_node.is_being_peeked and not card_node.is_flipping:
+				card_node.setup(hand_data[i])
 			
 			# CALCULATE POSITION with spread logic
 			var offset_x = (i - (total_cards - 1) / 2.0) * spacing
@@ -1062,12 +1236,16 @@ func _update_hand_visuals(player_idx: int):
 			if card_node == _hovered_card_node:
 				target_pos.y += 0.3 
 			
-			var tween = create_tween().set_parallel(true)
-			tween.tween_property(card_node, "position", target_pos, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-			
 			var target_rot_y = 180.0 if (player_idx == 0 or player_idx == 2) else 0.0
 			var target_basis = Basis.from_euler(Vector3(deg_to_rad(90), deg_to_rad(target_rot_y), 0))
-			tween.tween_property(card_node, "quaternion", target_basis.get_rotation_quaternion(), 0.25)
+			var target_quat = target_basis.get_rotation_quaternion()
+			var pos_close: bool = card_node.position.distance_to(target_pos) <= 0.02
+			var rot_close: bool = card_node.quaternion.dot(target_quat) >= 0.999
+			if pos_close and rot_close:
+				continue
+			var tween = create_tween().set_parallel(true)
+			tween.tween_property(card_node, "position", target_pos, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tween.tween_property(card_node, "quaternion", target_quat, 0.25)
 
 func _handle_initial_deal():
 	print("GameBoard3D: _handle_initial_deal started")
@@ -1099,14 +1277,17 @@ func _handle_initial_deal():
 
 	if GameManager.easy_mode:
 		# Transition through INITIAL_PEEK (required by FSM), then skip it immediately.
-		# Flip all player 0 cards face-up before the state completes.
-		for card in player_hands[0]:
+		# Flip all local human cards face-up before the state completes.
+		for card in player_hands[_human_ui_idx()]:
 			if is_instance_valid(card):
 				card.data.is_face_up = true
 				card.animate_flip(true)
 		GameManager.change_state(GameManager.GameState.INITIAL_PEEK)
 		# Skip the peek immediately — bypasses the click-to-peek flow
-		GameManager.complete_initial_peek()
+		if GameManager.is_multiplayer:
+			_send_action("initial_peek_done")
+		else:
+			GameManager.complete_initial_peek()
 	else:
 		GameManager.change_state(GameManager.GameState.INITIAL_PEEK)
 
@@ -1115,7 +1296,7 @@ func _start_peek_phase():
 	peeked_cards.clear()
 	_show_message("Select TWO cards to peek at.")
 	# In 3D, we can highlight them by raising them slightly
-	for c3d in player_pos_nodes[0].get_children():
+	for c3d in player_pos_nodes[_human_ui_idx()].get_children():
 		if c3d is Card3D:
 			c3d.set_highlight(true)
 
@@ -1142,18 +1323,19 @@ func _on_card_clicked(node, data):
 			print("[BOARD DEBUG] Clicked something while waiting for target, but couldn't resolve player index.")
 			
 	# JUMP-IN SHORTCUT: If user clicks their card and can jump in, start it implicitly
-	if p_idx == 0 and GameManager.can_player_start_jump_in(0) and GameManager.current_state != GameManager.GameState.TURN_JUMP_IN_SELECTION:
+	if p_idx == GameManager.local_player_idx and GameManager.can_player_start_jump_in(GameManager.local_player_idx) and GameManager.current_state != GameManager.GameState.TURN_JUMP_IN_SELECTION:
 		print("[BOARD DEBUG] Implicit Jump-In started by card click.")
-		GameManager.start_jump_in(0)
+		_send_action("start_jump_in")
 		# Flow now falls through to the TURN_JUMP_IN_SELECTION case below because start_jump_in updated the state.
 
 	match GameManager.current_state:
 		GameManager.GameState.INITIAL_PEEK:
-			if node.get_parent() == player_pos_nodes[0] and not data.is_face_up:
+			if node.get_parent() == player_pos_nodes[GameManager.local_player_idx] and not data.is_face_up:
 				if peeked_cards.size() >= 2: return # Strict limit
 				if node in peeked_cards: return
 				node.is_being_peeked = true
-				node.animate_flip(true)
+				# Keep peek local-only; do not mutate authoritative CardData face-up state.
+				node.animate_flip(true, -1.0, false)
 				peeked_cards.append(node)
 				if peeked_cards.size() >= 2:
 					await get_tree().create_timer(2.0, false).timeout
@@ -1161,45 +1343,48 @@ func _on_card_clicked(node, data):
 					for c in peeked_cards:
 						if is_instance_valid(c):
 							c.is_being_peeked = false
-							c.animate_flip(false, 0.05)
+							c.animate_flip(false, 0.05, false)
 							c.set_interactive(false)
 					peeked_cards.clear()
-					GameManager.complete_initial_peek()
+					if GameManager.is_multiplayer:
+						_send_action("initial_peek_done")
+					else:
+						GameManager.complete_initial_peek()
 		
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
-			if p_idx == 0:
-				GameManager.player_swap_drawn_card(player_hands[0].find(node))
+			if p_idx == GameManager.local_player_idx:
+				_send_action("swap_drawn", {"card_idx": player_hands[GameManager.local_player_idx].find(node)})
 			elif is_pending:
-				if GameManager.can_player_discard_drawn_card(0):
-					GameManager.player_discard_drawn_card()
+				if GameManager.can_player_discard_drawn_card(GameManager.local_player_idx):
+					_send_action("discard_drawn")
 		
 		GameManager.GameState.TURN_JUMP_IN_SELECTION:
-			var c_idx = -2 if is_pending else player_hands[0].find(node)
+			# Bug 2: Only allow selecting cards from the LOCAL player's own hand
+			if not is_pending and p_idx != GameManager.local_player_idx:
+				return
+			var c_idx = -2 if is_pending else player_hands[GameManager.local_player_idx].find(node)
 			if c_idx != -1 or is_pending:
 				# VISUAL FEEDBACK: keep ONLY the clicked card highlighted while validating
 				_clear_all_highlights()
 				node.set_highlight(true)
 				node.set_interactive(false) # Prevent clicking again during 'await'
 				
-				if await GameManager.validate_jump_in(c_idx):
-					print("[JUMP-IN] SUCCESS")
-					# card_discarded signal will take over from here
-				else:
-					print("[JUMP-IN] FAILED")
-					# highlights will be reset by game_state_changed or manual reset
+				_send_action("validate_jump_in", {"card_idx": c_idx})
+				print("[JUMP-IN] VALIDATION SENT")
 
 		GameManager.GameState.TURN_PEEK_ABILITY:
 			if is_pending or not GameManager.can_human_interact_with_hand_card(p_idx, -2 if is_pending else player_hands[p_idx].find(node), data.is_face_up):
 				return
 			_set_all_cards_interactive(false)
 			node.is_being_peeked = true
-			node.animate_flip(true)
+			# Queen peek is temporary information; never replicate it via CardData.
+			node.animate_flip(true, -1.0, false)
 			await get_tree().create_timer(3.5, false).timeout
 			_clear_all_highlights()
 			node.is_being_peeked = false
-			node.animate_flip(false)
+			node.animate_flip(false, -1.0, false)
 			_refresh_human_interactivity()
-			GameManager.complete_peek_ability()
+			_send_action("complete_peek_ability")
 
 		GameManager.GameState.TURN_SWAP_ABILITY:
 			var c_idx = -2 if is_pending else (player_hands[p_idx].find(node) if p_idx != -1 else -1)
@@ -1211,7 +1396,7 @@ func _on_card_clicked(node, data):
 			if swap_sources.size() == 2:
 				var s1 = swap_sources[0]
 				var s2 = swap_sources[1]
-				GameManager.complete_swap_ability(s1.player, s1.index, s2.player, s2.index)
+				_send_action("complete_swap_ability", {"p1": s1.player, "c1": s1.index, "p2": s2.player, "c2": s2.index})
 				swap_sources.clear()
 				_clear_all_highlights()
 
@@ -1227,12 +1412,12 @@ func _on_discard_input_event(_camera, event, _position, _normal, _shape_idx):
 		_on_discard_clicked()
 
 func _on_deck_clicked():
-	if GameManager.can_player_draw(0):
-		GameManager.player_draw_card()
+	if GameManager.can_player_draw(GameManager.local_player_idx):
+		_send_action("draw_card")
 
 func _on_discard_clicked():
-	if GameManager.can_player_discard_drawn_card(0):
-		GameManager.player_discard_drawn_card()
+	if GameManager.can_player_discard_drawn_card(GameManager.local_player_idx):
+		_send_action("discard_drawn")
 
 func _on_scores_ready(results):
 	var overlay = CanvasLayer.new()
@@ -1283,10 +1468,17 @@ func _on_scores_ready(results):
 	btn_h.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_child(btn_h)
 
-	var play_again = Button.new()
-	play_again.text = "Play Again"
-	play_again.pressed.connect(func(): get_tree().reload_current_scene())
-	btn_h.add_child(play_again)
+	play_again_btn = Button.new()
+	play_again_btn.text = "Play Again"
+	play_again_btn.pressed.connect(func():
+		if GameManager.is_multiplayer:
+			play_again_btn.disabled = true
+			play_again_btn.text = "Voted!"
+			NetworkManager.vote_play_again.rpc()
+		else:
+			get_tree().reload_current_scene()
+	)
+	btn_h.add_child(play_again_btn)
 
 	var main_menu = Button.new()
 	main_menu.text = "Main Menu"
@@ -1370,7 +1562,7 @@ func _handle_game_keyboard_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _keyboard_navigate_hand(direction: int) -> void:
-	var hand = player_hands[0]
+	var hand = player_hands[_human_ui_idx()]
 	if hand.is_empty(): return
 
 	# Deselect previous card (fire hover_exit to restore visual state)
@@ -1390,7 +1582,7 @@ func _keyboard_navigate_hand(direction: int) -> void:
 
 func _keyboard_confirm_card() -> void:
 	if _keyboard_selected_card_idx < 0: return
-	var hand = player_hands[0]
+	var hand = player_hands[_human_ui_idx()]
 	if _keyboard_selected_card_idx >= hand.size(): return
 	var card = hand[_keyboard_selected_card_idx]
 	if is_instance_valid(card) and card.data != null:
@@ -1451,14 +1643,18 @@ func _on_jump_in_failed(player_idx, card_idx, _card_data):
 
 	if card_node is Card3D:
 		print("GameBoard3D: Atomic reveal for card index ", card_idx)
+		# Bug 1: Mark as being peeked so _update_visuals() and _process() don't snap it back
+		card_node.is_being_peeked = true
 		# Flip UP with barrel roll
 		card_node.animate_flip(true)
 		
 		# Wait for reveal duration
 		await get_tree().create_timer(1.5, false).timeout
 		
+		# Release peek lock before flipping back
+		card_node.is_being_peeked = false
 		# Flip BACK — but not in Easy Mode for the human player (cards stay visible)
-		if not (GameManager.easy_mode and player_idx == 0):
+		if not (GameManager.easy_mode and player_idx == _human_ui_idx()):
 			card_node.animate_flip(false)
 		
 		trigger_glitch(0.3, 0.4)
@@ -1478,9 +1674,9 @@ func _process(delta: float) -> void:
 			randf_range(-1, 1) * _shake_intensity,
 			0
 		)
-		camera.position = _base_camera_pos + offset
+		camera.position = _effective_camera_base_local() + offset
 		if _shake_timer <= 0:
-			camera.position = _base_camera_pos
+			camera.position = _effective_camera_base_local()
 
 	if noclip_enabled and not DevConsole.window.visible:
 		_handle_noclip_movement(delta)
@@ -1565,8 +1761,7 @@ func _on_all_cards_revealed():
 func _on_dutch_called(player_idx: int):
 	var player_name = GameManager.players_info[player_idx].name
 	_show_message(player_name + " called DUTCH!")
-	trigger_glitch(0.5, 0.6)
-	shake(0.4, 0.5)
+	_show_dutch_alert(player_name)
 
 	# Turn on all lights for the drama
 	_update_turn_lights(-1, true)
@@ -1602,3 +1797,78 @@ func _on_pending_card_consumed():
 		print("GameBoard3D: Clearing pending card node.")
 		pending_card.queue_free()
 	pending_card = null
+
+func _on_play_again_votes_updated(voted: int, total: int) -> void:
+	if is_instance_valid(play_again_btn):
+		play_again_btn.text = "Play Again (%d/%d)" % [voted, total]
+
+func _show_dutch_alert(caller_name: String):
+	var old_alert = $GameUI/MainHUD.get_node_or_null("DutchAlert")
+	if old_alert:
+		old_alert.queue_free()
+		
+	var center = CenterContainer.new()
+	center.name = "DutchAlert"
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$GameUI/MainHUD.add_child(center)
+	
+	var panel = PanelContainer.new()
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.0, 0.05, 0.85)
+	style.border_width_left = 6
+	style.border_width_right = 6
+	style.border_width_top = 6
+	style.border_width_bottom = 6
+	style.border_color = Color(1.0, 0.0, 0.8)
+	style.corner_radius_top_left = 12
+	style.corner_radius_top_right = 12
+	style.corner_radius_bottom_left = 12
+	style.corner_radius_bottom_right = 12
+	style.shadow_color = Color(1.0, 0.0, 0.8, 0.3)
+	style.shadow_size = 20
+	style.content_margin_left = 40
+	style.content_margin_right = 40
+	style.content_margin_top = 25
+	style.content_margin_bottom = 25
+	panel.add_theme_stylebox_override("panel", style)
+	center.add_child(panel)
+	
+	var vbox = VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 5)
+	panel.add_child(vbox)
+	
+	var alert_title = Label.new()
+	alert_title.text = "⚠️ WARNING ⚠️"
+	alert_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	alert_title.add_theme_font_size_override("font_size", 28)
+	alert_title.add_theme_color_override("font_color", Color(1.0, 0.9, 0.0))
+	vbox.add_child(alert_title)
+	
+	var label = Label.new()
+	label.text = caller_name.to_upper() + " CALLED DUTCH!"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 42)
+	label.add_theme_color_override("font_color", Color(1.0, 0.0, 0.8))
+	label.add_theme_color_override("font_shadow_color", Color(1.0, 0.0, 0.8, 0.5))
+	label.add_theme_constant_override("shadow_offset_x", 0)
+	label.add_theme_constant_override("shadow_offset_y", 3)
+	vbox.add_child(label)
+	
+	shake(0.4, 0.5)
+	trigger_glitch(0.5, 0.6)
+	
+	center.scale = Vector2(0.5, 0.5)
+	center.resized.connect(func():
+		center.pivot_offset = center.size / 2.0
+	)
+	
+	var tween = create_tween().set_parallel(true)
+	tween.tween_property(center, "scale", Vector2.ONE, 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(center, "modulate:a", 1.0, 0.4).from(0.0)
+	
+	var fade_tween = create_tween()
+	fade_tween.tween_interval(3.5)
+	fade_tween.tween_property(center, "modulate:a", 0.0, 0.6)
+	fade_tween.tween_callback(center.queue_free)
