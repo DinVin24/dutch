@@ -891,7 +891,9 @@ func _on_game_state_changed(new_state):
 	match new_state:
 		GameManager.GameState.DEAL_CARDS:
 			turn_label.text = "> DEALING CARDS"
-			_handle_initial_deal()
+			# Clients receive the dealt state via sync from the host — never deal locally.
+			if not GameManager.is_multiplayer or multiplayer.is_server():
+				_handle_initial_deal()
 		GameManager.GameState.INITIAL_PEEK:
 			turn_label.text = "> PEEKING PHASE"
 			_start_peek_phase()
@@ -1066,15 +1068,27 @@ func _update_hand_visuals(player_idx: int):
 	var current_nodes = player_hands[player_idx]
 
 	# STRICT SYNC: Reconstruct player_hands[player_idx] to match hand_data exactly by index.
-	# We match existing nodes to data objects by reference to preserve their visual state.
+	# In multiplayer, every sync creates new CardData objects so reference equality fails.
+	# We fall back to rank+suit value matching so existing nodes are reused across syncs,
+	# preserving their visual state (is_being_peeked, is_flipping, animation progress).
 	var new_node_list = []
 	var pool = current_nodes.duplicate()
 	
 	for data in hand_data:
 		var found_node = null
 		for node in pool:
-			if is_instance_valid(node) and node.data == data:
+			if not is_instance_valid(node):
+				continue
+			# Primary: reference match (singleplayer / host)
+			if node.data == data:
 				found_node = node
+				pool.erase(node)
+				break
+			# Fallback: value match by rank+suit (multiplayer client — data is rebuilt each sync)
+			if node.data != null and node.data.rank == data.rank and node.data.suit == data.suit:
+				found_node = node
+				# Update the node's data reference so future reference checks work
+				node.data = data
 				pool.erase(node)
 				break
 		
@@ -1085,12 +1099,12 @@ func _update_hand_visuals(player_idx: int):
 			player_pos_nodes[player_idx].add_child(card_node)
 			card_node.card_clicked.connect(_on_card_clicked)
 			new_node_list.append(card_node)
-			
-	# Cleanup orphans
+		
+	# Cleanup orphans — spare nodes that are mid-animation (discarding or being peeked)
 	for node in pool:
 		if is_instance_valid(node):
-			if node.is_discarding:
-				print("GameBoard3D: Sparing node from cleanup (is_discarding=true)")
+			if node.is_discarding or node.is_being_peeked:
+				print("GameBoard3D: Sparing node from cleanup (is_discarding/is_being_peeked)")
 				continue
 			node.queue_free()
 			
@@ -1124,7 +1138,11 @@ func _update_hand_visuals(player_idx: int):
 					area.mouse_exited.connect(_on_card_hover_exit.bind(card_node))
 					card_node.set_meta("hover_connected", true)
 			
-			card_node.setup(hand_data[i])
+			# Don't call setup() while the card is mid-peek or mid-flip:
+			# setup() reads CardData.is_face_up which is always false for private hand cards,
+			# and would instantly snap the card back down, cancelling the peek animation.
+			if not card_node.is_being_peeked and not card_node.is_flipping:
+				card_node.setup(hand_data[i])
 			
 			# CALCULATE POSITION with spread logic
 			var offset_x = (i - (total_cards - 1) / 2.0) * spacing

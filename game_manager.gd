@@ -237,7 +237,9 @@ func initialize_game(p_count: int = 4):
 	}
 	jump_in_resume_state = GameState.INITIALIZING
 	drawn_card_data = null
-	is_multiplayer = multiplayer.multiplayer_peer != null and multiplayer.multiplayer_peer is ENetMultiplayerPeer and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
+	is_multiplayer = multiplayer.multiplayer_peer != null \
+		and not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer) \
+		and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
 	
 	var networked_players = []
 	if is_multiplayer:

@@ -218,6 +218,16 @@ func _process(delta: float):
 	if is_flipping:
 		# Let the flip tween own the visuals transform
 		return
+
+	# While the card is being peeked, the Visuals node is owned by the peek animation.
+	# _process must not override the quaternion or it will instantly snap the card face-down
+	# (because data.is_face_up is intentionally kept false during a local-only peek).
+	if is_being_peeked:
+		# Still sync the multiplier anchor position
+		var peek_anchor = get_node_or_null("MultiplierAnchor")
+		if peek_anchor:
+			peek_anchor.global_position = global_position + Vector3(0, 0.4, 0)
+		return
 		
 	# Base rotation for face-up/down
 	var base_rot_y = deg_to_rad(180.0 if data and data.is_face_up else 0.0)
