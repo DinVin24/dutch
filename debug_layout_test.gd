@@ -68,21 +68,22 @@ func _bootstrap_network_role() -> void:
 	# Ensure Multiplayer peers are only auto-started in explicit test mode.
 	if _role == TestRole.HOST:
 		NetworkManager.set_local_player_name("TestHost")
-		var started: bool = bool(NetworkManager.host_game(_test_port))
+		var started: bool = bool(NetworkManager.host_game())
 		if started:
-			print("DebugLayoutTest: Host started on UDP port ", _test_port)
-			print("DebugLayoutTest: Host LAN IPv4 candidate: ", NetworkManager.get_detected_host_lan_ip())
+			print("DebugLayoutTest: Host started via WebRTC")
+			print("DebugLayoutTest: Host Room Code: ", NetworkManager.get_room_code())
 		else:
 			push_warning("DebugLayoutTest: Failed to start host on port %d" % _test_port)
 		return
 
 	NetworkManager.set_local_player_name("TestClient")
-	var target_host := _resolve_connect_target()
-	var connected: bool = bool(NetworkManager.connect_to_host_direct(target_host, _test_port))
+	# NOTE: For auto-join to work in WebRTC tests, the host must share the room code somehow.
+	# For now, we stub it out with a placeholder to fix syntax errors.
+	var connected: bool = bool(NetworkManager.join_game("TEST"))
 	if connected:
-		print("DebugLayoutTest: Client connecting to %s:%d" % [target_host, _test_port])
+		print("DebugLayoutTest: Client attempting to join via WebRTC")
 	else:
-		push_warning("DebugLayoutTest: Failed to connect client to %s:%d" % [target_host, _test_port])
+		push_warning("DebugLayoutTest: Failed to connect client")
 
 func _capture_after_handshake_delay() -> void:
 	await get_tree().create_timer(HANDSHAKE_WAIT_SECONDS).timeout
