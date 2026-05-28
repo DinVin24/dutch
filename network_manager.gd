@@ -1,7 +1,7 @@
 extends Node
 
 const MAX_PLAYERS = 4
-const SIGNALING_SERVER_URL = "ws://127.0.0.1:8915"
+const SIGNALING_SERVER_URL = "wss://dutch-signaling.onrender.com"
 
 signal player_connected(id: int, info: Dictionary)
 signal player_disconnected(id: int)
@@ -225,7 +225,7 @@ func _initialize_webrtc_client(my_id: int, existing_peers: Array):
 func _create_peer_connection(peer_id: int):
 	var peer = WebRTCPeerConnection.new()
 	peer.initialize({
-		"iceServers": [ { "urls": ["stun:stun.l.google.com:19302"] } ]
+		"iceServers": [ {"urls": ["stun:stun.l.google.com:19302"]}]
 	})
 	peer.session_description_created.connect(self._on_session_description_created.bind(peer_id))
 	peer.ice_candidate_created.connect(self._on_ice_candidate_created.bind(peer_id))
