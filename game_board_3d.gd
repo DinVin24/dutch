@@ -130,6 +130,41 @@ func _ready():
 	GameManager.multiplayer_sync_applied.connect(_on_multiplayer_sync_applied)
 	NetworkManager.play_again_votes_updated.connect(_on_play_again_votes_updated)
 	
+	# Dynamic Tavern Ambient & Spotlight Lighting
+	var center_light = OmniLight3D.new()
+	center_light.name = "TavernCenterLight"
+	center_light.position = Vector3(0, 3.5, 0)
+	center_light.light_color = Color(1.0, 0.85, 0.65)
+	center_light.light_energy = 2.0
+	center_light.shadow_enabled = true
+	center_light.omni_range = 10.0
+	add_child(center_light)
+
+	# Dynamic Player Turn Lights
+	# P0 bottom, P1 left, P2 top, P3 right
+	var light_positions = {
+		0: Vector3(0, 2.0, 3.0),
+		1: Vector3(-4.5, 2.0, 0),
+		2: Vector3(0, 2.0, -3.0),
+		3: Vector3(4.5, 2.0, 0)
+	}
+	var light_colors = {
+		0: Color(0.2, 0.6, 1.0), # Neon Blue for local player
+		1: Color(1.0, 0.2, 0.2), # Cyber Red for bot/peer 1
+		2: Color(0.2, 1.0, 0.4), # Lime Green for bot/peer 2
+		3: Color(1.0, 0.8, 0.2)  # Amber Gold for bot/peer 3
+	}
+	for i in range(4):
+		var pl = OmniLight3D.new()
+		pl.name = "PlayerTurnLight_" + str(i)
+		pl.position = light_positions[i]
+		pl.light_color = light_colors[i]
+		pl.light_energy = 0.0 # Start off!
+		pl.omni_range = 6.0
+		pl.shadow_enabled = true
+		add_child(pl)
+		player_lights[i] = pl
+
 	_create_hud_ui()
 	_create_discard_indicator()
 	_create_beer_placeholders()
@@ -564,6 +599,7 @@ func _drop_egg_for(p_idx: int, ab: String):
 		_show_message(GameManager.players_info[p_idx].name + " got an egg!")
 	
 	if is_instance_valid(_chicken_node):
+		spawn_particles("ability_buy", _chicken_node.global_position)
 		var tween = create_tween()
 		tween.tween_property(_chicken_node, "position:y", 2.0, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tween.tween_property(_chicken_node, "position:y", 1.2, 0.2).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
@@ -734,6 +770,9 @@ func _on_player_drank_beer(player_idx, remaining):
 	if player_idx < 0 or player_idx >= 4: return
 	var beers_array = player_beers_nodes[player_idx]
 	for i in range(beers_array.size()):
+		var is_drinking = beers_array[i].visible and (i >= remaining)
+		if is_drinking:
+			spawn_particles("beer_drink", beers_array[i].global_position + Vector3(0, 0.2, 0))
 		beers_array[i].visible = (i < remaining)
 	shake(0.2, 0.3)
 
@@ -757,6 +796,7 @@ func _on_ability_played(player_idx, ability_id):
 			break
 	
 	if token_node:
+		spawn_particles("ability_use", token_node.global_position)
 		# If it's a bot (p_idx != 0), we want to reveal the card for 2s too
 		# if it's not already face up (the human reveal handles p_idx=0)
 		if player_idx != _human_ui_idx():
@@ -778,10 +818,20 @@ func _on_turn_started(player_idx):
 	if player_idx != _human_ui_idx():
 		_show_message(p_info.name + " is thinking...")
 
-func _update_turn_lights(_current_player: int, _all_on: bool = false):
-	# Lights removed as per 'Full Bright' request
-	return
-
+func _update_turn_lights(current_player: int, all_on: bool = false):
+	for i in range(4):
+		var pl = player_lights.get(i)
+		if is_instance_valid(pl):
+			var target_energy = 0.0
+			if all_on:
+				target_energy = 1.2
+			elif i == current_player:
+				target_energy = 2.5 # High energy active glow
+			else:
+				target_energy = 0.15 # Softer background neon ambience
+			
+			var tween = create_tween()
+			tween.tween_property(pl, "light_energy", target_energy, 0.35).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 func _setup_table_noise():
 	var table_mesh = $Table as MeshInstance3D
 	if not table_mesh: return
@@ -838,6 +888,7 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	pending_card.position = deck_area.position + Vector3(0, 0.6, 0.5)
 	pending_card.rotation_degrees = Vector3(90, 0, 0) # Start face down on the table
 	pending_card.set_interactive(true)
+	spawn_particles("default", deck_area.global_position)
 
 	# Reveal animations
 	await get_tree().create_timer(0.1, false).timeout
@@ -894,6 +945,7 @@ func _on_card_discarded(player_idx, card_data):
 			_update_discard_visual()
 			_update_deck_visual()
 			shake(0.05, 0.2)
+			spawn_particles("default", target_global_pos)
 			if is_instance_valid(card_to_discard):
 				card_to_discard.queue_free()
 		)
@@ -1112,10 +1164,8 @@ func _on_card_hover_enter(card_node: Node3D):
 	if not is_instance_valid(card_node): return
 	_hovered_card_node = card_node as Card3D
 	
-	# Lift effect
-	var tween = create_tween().set_parallel(true)
-	tween.tween_property(card_node, "scale", Vector3(1.15, 1.15, 1.15), 0.1).set_trans(Tween.TRANS_QUAD)
-	tween.tween_property(card_node, "position:y", card_node.position.y + 0.3, 0.1).set_trans(Tween.TRANS_QUAD)
+	if card_node.has_method("set_hovered"):
+		card_node.set_hovered(true)
 	
 	# Trigger layout refresh for neighbor spreading
 	for i in range(4):
@@ -1125,10 +1175,11 @@ func _on_card_hover_enter(card_node: Node3D):
 
 func _on_card_hover_exit(card_node: Node3D):
 	if not is_instance_valid(card_node): return
-	_hovered_card_node = null
+	if _hovered_card_node == card_node:
+		_hovered_card_node = null
 	
-	var tween = create_tween().set_parallel(true)
-	tween.tween_property(card_node, "scale", Vector3(1.0, 1.0, 1.0), 0.1).set_trans(Tween.TRANS_QUAD)
+	if card_node.has_method("set_hovered"):
+		card_node.set_hovered(false)
 	
 	for i in range(4):
 		if card_node in player_hands[i]:
@@ -1232,9 +1283,9 @@ func _update_hand_visuals(player_idx: int):
 			# Skip if mid-flip or already there (performance)
 			if card_node.is_being_peeked or card_node.is_flipping: continue
 			
-			# Special handling for hovered card Y (keeping the lift while spreading)
+			# Special handling for hovered card Y (lift is handled locally in Card3D)
 			if card_node == _hovered_card_node:
-				target_pos.y += 0.3 
+				pass 
 			
 			var target_rot_y = 180.0 if (player_idx == 0 or player_idx == 2) else 0.0
 			var target_basis = Basis.from_euler(Vector3(deg_to_rad(90), deg_to_rad(target_rot_y), 0))
@@ -1746,6 +1797,11 @@ func _on_jack_swap_resolved(p1: int, c1: int, p2: int, c2: int) -> void:
 	node1.reparent(player_pos_nodes[p2])
 	node2.reparent(player_pos_nodes[p1])
 
+	if is_instance_valid(node1):
+		spawn_particles("default", node1.global_position)
+	if is_instance_valid(node2):
+		spawn_particles("default", node2.global_position)
+
 	_update_hand_visuals(p1)
 	_update_hand_visuals(p2)
 
@@ -1762,6 +1818,7 @@ func _on_dutch_called(player_idx: int):
 	var player_name = GameManager.players_info[player_idx].name
 	_show_message(player_name + " called DUTCH!")
 	_show_dutch_alert(player_name)
+	spawn_particles("dutch", player_pos_nodes[player_idx].global_position)
 
 	# Turn on all lights for the drama
 	_update_turn_lights(-1, true)
@@ -1872,3 +1929,104 @@ func _show_dutch_alert(caller_name: String):
 	fade_tween.tween_interval(3.5)
 	fade_tween.tween_property(center, "modulate:a", 0.0, 0.6)
 	fade_tween.tween_callback(center.queue_free)
+
+func spawn_particles(type: String, global_pos: Vector3):
+	var particles = CPUParticles3D.new()
+	add_child(particles)
+	particles.global_position = global_pos
+	
+	particles.emitting = false
+	particles.one_shot = true
+	particles.explosiveness = 0.8
+	
+	var mesh = QuadMesh.new()
+	mesh.size = Vector2(0.08, 0.08)
+	particles.mesh = mesh
+	
+	var mat = StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.vertex_color_use_as_albedo = true
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	particles.material_override = mat
+	
+	var grad = Gradient.new()
+	particles.color_ramp = grad
+	
+	match type:
+		"card_flip":
+			particles.amount = 25
+			particles.lifetime = 0.4
+			particles.spread = 180.0
+			particles.gravity = Vector3(0, -1.0, 0)
+			particles.initial_velocity_min = 1.5
+			particles.initial_velocity_max = 3.0
+			particles.color = Color(1.0, 0.85, 0.3) # Golden spark
+			grad.set_color(0, Color(1.0, 0.9, 0.4, 1.0))
+			grad.set_color(1, Color(1.0, 0.5, 0.0, 0.0))
+			
+		"beer_drink":
+			particles.amount = 30
+			particles.lifetime = 0.8
+			particles.spread = 45.0
+			particles.direction = Vector3.UP
+			particles.gravity = Vector3(0, 0.5, 0)
+			particles.initial_velocity_min = 0.5
+			particles.initial_velocity_max = 1.5
+			particles.color = Color(0.95, 0.95, 0.9, 0.9) # White foam
+			grad.set_color(0, Color(0.95, 0.9, 0.7, 0.9))
+			grad.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
+			mesh.size = Vector2(0.12, 0.12)
+			
+		"ability_buy":
+			particles.amount = 20
+			particles.lifetime = 0.6
+			particles.spread = 120.0
+			particles.direction = Vector3.UP
+			particles.gravity = Vector3(0, -3.0, 0) # Coins fall down
+			particles.initial_velocity_min = 2.0
+			particles.initial_velocity_max = 4.0
+			particles.color = Color(1.0, 0.9, 0.0) # Gold coins
+			grad.set_color(0, Color(1.0, 0.95, 0.2, 1.0))
+			grad.set_color(1, Color(0.8, 0.5, 0.0, 0.0))
+			
+		"ability_use":
+			particles.amount = 40
+			particles.lifetime = 0.7
+			particles.spread = 180.0
+			particles.gravity = Vector3(0, -0.5, 0)
+			particles.initial_velocity_min = 2.5
+			particles.initial_velocity_max = 4.5
+			particles.color = Color(0.6, 0.1, 1.0) # Violet magical glow
+			grad.set_color(0, Color(0.7, 0.3, 1.0, 1.0))
+			grad.set_color(1, Color(0.2, 0.0, 0.5, 0.0))
+			mesh.size = Vector2(0.1, 0.1)
+			
+		"dutch":
+			particles.amount = 35
+			particles.lifetime = 0.8
+			particles.spread = 180.0
+			particles.gravity = Vector3(0, 0, 0)
+			particles.initial_velocity_min = 3.0
+			particles.initial_velocity_max = 6.0
+			particles.color = Color(1.0, 0.1, 0.1) # Glowing red cyber-sparks
+			grad.set_color(0, Color(1.0, 0.1, 0.2, 1.0))
+			grad.set_color(1, Color(0.1, 0.0, 0.0, 0.0))
+			mesh.size = Vector2(0.14, 0.14)
+			
+		_: # Default card trail spark
+			particles.amount = 15
+			particles.lifetime = 0.5
+			particles.spread = 90.0
+			particles.direction = Vector3.UP
+			particles.gravity = Vector3(0, -0.8, 0)
+			particles.initial_velocity_min = 1.0
+			particles.initial_velocity_max = 2.0
+			particles.color = Color(0.3, 0.8, 1.0) # Cyan-blue
+			grad.set_color(0, Color(0.4, 0.9, 1.0, 1.0))
+			grad.set_color(1, Color(0.0, 0.2, 0.5, 0.0))
+			
+	particles.emitting = true
+	
+	var cleanup_timer = get_tree().create_timer(particles.lifetime + 0.1)
+	cleanup_timer.timeout.connect(particles.queue_free)

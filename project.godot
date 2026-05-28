@@ -17,6 +17,7 @@ config/icon="res://assets/images/icon.svg"
 
 [autoload]
 
+SettingsManager="*res://settings_manager.gd"
 GameManager="*res://game_manager.gd"
 NetworkManager="*res://network_manager.gd"
 DebugLayoutTest="*res://debug_layout_test.gd"

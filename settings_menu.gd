@@ -70,6 +70,7 @@ func _on_sfx_value_changed(value: float) -> void:
 		AudioServer.set_bus_volume_db(bus_idx, linear_to_db(value))
 
 func _on_back_button_pressed() -> void:
+	SettingsManager.save_settings()
 	back_pressed.emit()
 	queue_free()
 
@@ -139,4 +140,5 @@ func _input(event: InputEvent) -> void:
 	_listening_button.text = _get_key_label(_listening_action)
 	_listening_action = ""
 	_listening_button = null
+	SettingsManager.save_settings()
 	get_viewport().set_input_as_handled()

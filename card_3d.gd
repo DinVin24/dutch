@@ -20,6 +20,11 @@ var highlight_tween: Tween = null
 var _wobble_time: float = 0.0
 var _base_visual_pos: Vector3
 
+var is_hovered: bool = false
+var hover_lift: float = 0.0
+var hover_scale: float = 1.0
+var hover_tween: Tween = null
+
 const SPRITE_SHEET_PATH = "res://assets/images/cards/playing_cards.png"
 const CARD_WIDTH = 100
 const CARD_HEIGHT = 140
@@ -92,12 +97,8 @@ func _update_visuals() -> void:
 		$Visuals.rotation_degrees.y = 180.0 if target_is_up else 0.0
 
 	
-	# Selection visuals
-	if is_selected:
-		# Premium glow / lift for selection
-		scale = Vector3(0.95, 0.95, 0.95)
-	else:
-		scale = Vector3(0.85, 0.85, 0.85)
+	# Selection visuals handled in _process() for smooth dynamic animation
+	pass
 
 func _apply_atlas_textures():
 	if _master_texture == null:
@@ -168,6 +169,10 @@ func animate_flip(is_face_up: bool, target_y: float = -1.0, persist_data_state: 
 	is_flipping = true
 	
 	GameManager.play_sfx(GameManager.sfx_card_flip)
+	if is_inside_tree():
+		var board = get_tree().current_scene
+		if board and board.has_method("spawn_particles"):
+			board.spawn_particles("card_flip", global_position)
 	
 	if highlight_tween:
 		highlight_tween.kill()
@@ -217,6 +222,16 @@ func set_highlight(enabled: bool):
 func set_interactive(enabled: bool):
 	$Area3D/CollisionShape3D.disabled = !enabled
 
+func set_hovered(hovered: bool):
+	if is_hovered == hovered: return
+	is_hovered = hovered
+	if hover_tween: hover_tween.kill()
+	hover_tween = create_tween().set_parallel(true)
+	var target_lift = 0.35 if hovered else 0.0
+	var target_scale = 1.15 if hovered else 1.0
+	hover_tween.tween_property(self, "hover_lift", target_lift, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	hover_tween.tween_property(self, "hover_scale", target_scale, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
 func _process(delta: float):
 	if is_flipping:
 		# Let the flip tween own the visuals transform
@@ -236,29 +251,35 @@ func _process(delta: float):
 	var base_rot_y = deg_to_rad(180.0 if data and data.is_face_up else 0.0)
 	var base_q = Quaternion(Vector3.UP, base_rot_y)
 	
+	# Calculate dynamic local scale based on selection and hover
+	var base_scale_val = 0.95 if is_selected else 0.85
+	var final_scale = base_scale_val * hover_scale
+	$Visuals.scale = Vector3.ONE * final_scale
+	
 	# Sync the floating multiplier tag to be 0.4 meters above the card in GLOBAL space
 	var anchor = get_node_or_null("MultiplierAnchor")
 	if anchor:
 		anchor.global_position = global_position + Vector3(0, 0.4, 0)
 
+	var wobble_offset = Vector3.ZERO
+	var wobble_rot = Vector3.ZERO
 	if is_highlighted or is_selected:
 		_wobble_time += delta * 5.0
-		var wobble_offset = Vector3(0, sin(_wobble_time) * 0.02, 0)
-		var wobble_rot = Vector3(
+		wobble_offset = Vector3(0, sin(_wobble_time) * 0.02, 0)
+		wobble_rot = Vector3(
 			deg_to_rad(sin(_wobble_time * 0.8) * 2.0),
 			deg_to_rad(cos(_wobble_time * 1.2) * 2.0),
 			deg_to_rad(sin(_wobble_time * 0.5) * 2.0)
 		)
-		
-		$Visuals.position = _base_visual_pos + wobble_offset
-		# Combine wobble with face-up base rotation
-		$Visuals.quaternion = base_q * Quaternion.from_euler(wobble_rot)
-		
-		# Sync Area3D transform to match Visuals
-		$Area3D.position = $Visuals.position
-		$Area3D.quaternion = $Visuals.quaternion
-	else:
-		$Visuals.position = _base_visual_pos
-		$Visuals.quaternion = base_q
-		$Area3D.position = _base_visual_pos
-		$Area3D.quaternion = base_q
+
+	# Gentle tilt on hover
+	var hover_rot = Vector3.ZERO
+	if is_hovered:
+		hover_rot.x = deg_to_rad(-8.0) # Gentle 8-degree forward tilt towards camera
+
+	$Visuals.position = _base_visual_pos + Vector3(0, hover_lift, 0) + wobble_offset
+	$Visuals.quaternion = base_q * Quaternion.from_euler(wobble_rot + hover_rot)
+	
+	# Sync Area3D transform to match Visuals so clicking still aligns perfectly
+	$Area3D.position = $Visuals.position
+	$Area3D.quaternion = $Visuals.quaternion
