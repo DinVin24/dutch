@@ -83,9 +83,12 @@ func _update_visuals() -> void:
 			
 	_apply_atlas_textures()
 	
-	# Face visibility is handled by local rotation of Visuals
+	# Face visibility is handled by local rotation of Visuals.
+	# Do not override the rotation while mid-flip or while the card is being peeked
+	# (peek is local-only and does not persist data.is_face_up, so the rotation must be
+	# left alone until the peek window closes).
 	var target_is_up = data.is_face_up
-	if not is_flipping:
+	if not is_flipping and not is_being_peeked:
 		$Visuals.rotation_degrees.y = 180.0 if target_is_up else 0.0
 
 	

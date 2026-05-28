@@ -89,7 +89,9 @@ var _last_sync_diag := {
 	"cur": -1,
 	"deck": -1,
 	"discard": -1,
-	"pending": false
+	"pending": false,
+	"dutch_i": -1,
+	"abilities": [[], [], [], []]
 }
 
 func _ready():
@@ -206,6 +208,7 @@ func _on_multiplayer_sync_applied() -> void:
 	var new_deck: int = GameManager.deck_manager.deck.size()
 	var new_discard: int = GameManager.deck_manager.discard_pile.size()
 	var new_pending: bool = GameManager.drawn_card_data != null
+	var new_dutch_i: int = GameManager.dutch_caller_index
 	var state_changed: bool = _last_sync_diag["state"] != new_state or _last_sync_diag["cur"] != new_cur
 	var deck_changed: bool = _last_sync_diag["deck"] != new_deck or _last_sync_diag["discard"] != new_discard
 	var pending_changed: bool = _last_sync_diag["pending"] != new_pending
@@ -215,6 +218,10 @@ func _on_multiplayer_sync_applied() -> void:
 		pending_card = null
 	_apply_local_player_seat_rotation()
 	_configure_visible_player_seats(GameManager.num_players)
+	
+	# Snapshot abilities BEFORE _update_hand_visuals so we diff correctly
+	var prev_abilities: Array = (_last_sync_diag["abilities"] as Array).duplicate(true)
+	
 	for i in range(GameManager.num_players):
 		_update_hand_visuals(i)
 	for j in range(GameManager.num_players, 4):
@@ -239,6 +246,32 @@ func _on_multiplayer_sync_applied() -> void:
 		pending_card.position = deck_area.position + Vector3(0, 0.6, 0.5)
 		pending_card.rotation_degrees = Vector3(90, 0, 0)
 		pending_card.set_interactive(true)
+	
+	# --- Bug 5: Detect Dutch call and show feedback on client ---
+	if new_dutch_i != -1 and _last_sync_diag["dutch_i"] == -1:
+		_on_dutch_called(new_dutch_i)
+	
+	# --- Bug 3: Refresh local player money label from synced data ---
+	var local_idx := GameManager.local_player_idx
+	if local_idx >= 0 and local_idx < GameManager.players_info.size():
+		if money_labels.size() > 0:
+			money_labels[0].text = "$" + str(GameManager.players_info[local_idx].money)
+	
+	# --- Bug 4: Detect ability changes and fire local visual feedback ---
+	# Only diff if we have a prior snapshot (skip the very first sync to avoid spurious events)
+	if not prev_abilities.is_empty() and prev_abilities.any(func(a): return a is Array):
+		for pi in range(GameManager.num_players):
+			var new_abs: Array = GameManager.players_info[pi].abilities
+			var old_abs: Array = prev_abilities[pi] if pi < prev_abilities.size() else []
+			# Ability appeared in the new list — player gained it
+			for ab in new_abs:
+				if not ab in old_abs:
+					_on_ability_unlocked(pi, ab)
+			# Ability disappeared from the list — player used it
+			for ab in old_abs:
+				if not ab in new_abs:
+					_on_ability_played(pi, ab)
+	
 	if state_changed:
 		_on_game_state_changed(GameManager.current_state)
 	_last_sync_diag["state"] = new_state
@@ -246,6 +279,15 @@ func _on_multiplayer_sync_applied() -> void:
 	_last_sync_diag["deck"] = new_deck
 	_last_sync_diag["discard"] = new_discard
 	_last_sync_diag["pending"] = new_pending
+	_last_sync_diag["dutch_i"] = new_dutch_i
+	# Snapshot abilities for next sync comparison
+	var abilities_snapshot: Array = []
+	for pi in range(4):
+		if pi < GameManager.players_info.size():
+			abilities_snapshot.append(GameManager.players_info[pi].abilities.duplicate())
+		else:
+			abilities_snapshot.append([])
+	_last_sync_diag["abilities"] = abilities_snapshot
 
 func _create_hud_ui():
 	# Action Buttons Container: Moved to bottom-right to avoid overlapping hand cards
@@ -937,6 +979,11 @@ func _on_game_state_changed(new_state):
 				_highlight_selectable_cards(true)
 			_update_turn_lights(-1, true)
 			swap_sources.clear()
+		GameManager.GameState.GAME_OVER:
+			# Bug 6: On multiplayer client, _handle_game_over() never runs here.
+			# Detect GAME_OVER from the sync and calculate/show scores from local synced data.
+			if GameManager.is_multiplayer and not multiplayer.is_server():
+				_on_scores_ready(GameManager._calculate_scores())
 
 	$DeckArea/Area3D.input_ray_pickable = GameManager.can_player_draw(_human_ui_idx())
 	$DiscardArea/Area3D.input_ray_pickable = GameManager.can_player_discard_drawn_card(_human_ui_idx())
@@ -1286,6 +1333,9 @@ func _on_card_clicked(node, data):
 					_send_action("discard_drawn")
 		
 		GameManager.GameState.TURN_JUMP_IN_SELECTION:
+			# Bug 2: Only allow selecting cards from the LOCAL player's own hand
+			if not is_pending and p_idx != GameManager.local_player_idx:
+				return
 			var c_idx = -2 if is_pending else player_hands[GameManager.local_player_idx].find(node)
 			if c_idx != -1 or is_pending:
 				# VISUAL FEEDBACK: keep ONLY the clicked card highlighted while validating
@@ -1394,7 +1444,19 @@ func _on_scores_ready(results):
 
 	var play_again = Button.new()
 	play_again.text = "Play Again"
-	play_again.pressed.connect(func(): get_tree().reload_current_scene())
+	play_again.pressed.connect(func():
+		if GameManager.is_multiplayer:
+			if multiplayer.is_server():
+				# Bug 7: Host triggers a proper rematch RPC so all clients restart together
+				var total := GameManager.num_players
+				var rng := RandomNumberGenerator.new()
+				rng.randomize()
+				NetworkManager.start_match.rpc(total, rng.randi())
+			else:
+				_show_message("Waiting for host to start a new match...")
+		else:
+			get_tree().reload_current_scene()
+	)
 	btn_h.add_child(play_again)
 
 	var main_menu = Button.new()
@@ -1560,12 +1622,16 @@ func _on_jump_in_failed(player_idx, card_idx, _card_data):
 
 	if card_node is Card3D:
 		print("GameBoard3D: Atomic reveal for card index ", card_idx)
+		# Bug 1: Mark as being peeked so _update_visuals() and _process() don't snap it back
+		card_node.is_being_peeked = true
 		# Flip UP with barrel roll
 		card_node.animate_flip(true)
 		
 		# Wait for reveal duration
 		await get_tree().create_timer(1.5, false).timeout
 		
+		# Release peek lock before flipping back
+		card_node.is_being_peeked = false
 		# Flip BACK — but not in Easy Mode for the human player (cards stay visible)
 		if not (GameManager.easy_mode and player_idx == _human_ui_idx()):
 			card_node.animate_flip(false)
