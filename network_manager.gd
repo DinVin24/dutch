@@ -11,7 +11,9 @@ signal game_started
 signal match_settings_updated
 signal host_lan_ip_updated(ip: String)
 signal lobby_error(message: String)
+signal play_again_votes_updated(voted_count: int, total_humans: int)
 
+var play_again_votes: Array = []
 var multiplayer_peer: WebRTCMultiplayerPeer = null
 var rtc_connections: Dictionary = {} # id -> WebRTCPeerConnection
 
@@ -329,4 +331,37 @@ func start_match(total_players: int, deck_seed: int):
 	_mp_log("rpc.start_match", "starting match", {"sender_id": sender, "total_players": total_players, "seed": deck_seed})
 	GameManager.pending_mp_player_count = clampi(total_players, 2, 4)
 	GameManager.pending_match_seed = deck_seed
+	play_again_votes.clear()
 	game_started.emit()
+
+@rpc("any_peer", "call_local", "reliable")
+func vote_play_again() -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id = multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = multiplayer.get_unique_id()
+	
+	if not play_again_votes.has(sender_id):
+		play_again_votes.append(sender_id)
+		_mp_log("vote_play_again", "peer voted", {"peer": sender_id, "votes": play_again_votes})
+		
+		# Check how many humans are in the game
+		var human_count := 0
+		for p in GameManager.players_info:
+			if not p.is_bot:
+				human_count += 1
+		
+		# Notify all clients about the updated vote count
+		update_play_again_status.rpc(play_again_votes.size(), human_count)
+		
+		if play_again_votes.size() >= human_count:
+			play_again_votes.clear()
+			var total := GameManager.num_players
+			var rng := RandomNumberGenerator.new()
+			rng.randomize()
+			start_match.rpc(total, rng.randi())
+
+@rpc("authority", "call_local", "reliable")
+func update_play_again_status(voted_count: int, total_humans: int) -> void:
+	play_again_votes_updated.emit(voted_count, total_humans)

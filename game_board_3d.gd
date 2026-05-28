@@ -21,6 +21,7 @@ var jump_in_btn: Button
 var call_dutch_btn: Button
 var confirm_dutch_btn: Button
 var forfeit_dutch_btn: Button
+var play_again_btn: Button
 var discard_indicator: MeshInstance3D
 
 var player_hands: Array = [[], [], [], []]
@@ -91,7 +92,8 @@ var _last_sync_diag := {
 	"discard": -1,
 	"pending": false,
 	"dutch_i": -1,
-	"abilities": [[], [], [], []]
+	"abilities": [[], [], [], []],
+	"beers": [3, 3, 3, 3]
 }
 
 func _ready():
@@ -126,6 +128,7 @@ func _ready():
 	GameManager.polarity_shifted.connect(_on_polarity_shifted)
 	GameManager.pending_card_consumed.connect(_on_pending_card_consumed)
 	GameManager.multiplayer_sync_applied.connect(_on_multiplayer_sync_applied)
+	NetworkManager.play_again_votes_updated.connect(_on_play_again_votes_updated)
 	
 	_create_hud_ui()
 	_create_discard_indicator()
@@ -257,6 +260,20 @@ func _on_multiplayer_sync_applied() -> void:
 		if money_labels.size() > 0:
 			money_labels[0].text = "$" + str(GameManager.players_info[local_idx].money)
 	
+	# --- Bug fix: Synchronize beers and play drinking effect if decreased ---
+	var prev_beers: Array = _last_sync_diag.get("beers", [3, 3, 3, 3])
+	for pi in range(GameManager.num_players):
+		var cur_beers = GameManager.players_info[pi].beers
+		var old_b = prev_beers[pi] if pi < prev_beers.size() else 3
+		if old_b != -1 and cur_beers < old_b:
+			_on_player_drank_beer(pi, cur_beers)
+		else:
+			# Just silently update visibility
+			if pi < player_beers_nodes.size():
+				var beers_array = player_beers_nodes[pi]
+				for k in range(beers_array.size()):
+					beers_array[k].visible = (k < cur_beers)
+	
 	# --- Bug 4: Detect ability changes and fire local visual feedback ---
 	# Only diff if we have a prior snapshot (skip the very first sync to avoid spurious events)
 	if not prev_abilities.is_empty() and prev_abilities.any(func(a): return a is Array):
@@ -288,6 +305,15 @@ func _on_multiplayer_sync_applied() -> void:
 		else:
 			abilities_snapshot.append([])
 	_last_sync_diag["abilities"] = abilities_snapshot
+	
+	# Snapshot beers for next sync comparison
+	var beers_snapshot: Array = []
+	for pi in range(4):
+		if pi < GameManager.players_info.size():
+			beers_snapshot.append(GameManager.players_info[pi].beers)
+		else:
+			beers_snapshot.append(3)
+	_last_sync_diag["beers"] = beers_snapshot
 
 func _create_hud_ui():
 	# Action Buttons Container: Moved to bottom-right to avoid overlapping hand cards
@@ -1442,22 +1468,17 @@ func _on_scores_ready(results):
 	btn_h.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_child(btn_h)
 
-	var play_again = Button.new()
-	play_again.text = "Play Again"
-	play_again.pressed.connect(func():
+	play_again_btn = Button.new()
+	play_again_btn.text = "Play Again"
+	play_again_btn.pressed.connect(func():
 		if GameManager.is_multiplayer:
-			if multiplayer.is_server():
-				# Bug 7: Host triggers a proper rematch RPC so all clients restart together
-				var total := GameManager.num_players
-				var rng := RandomNumberGenerator.new()
-				rng.randomize()
-				NetworkManager.start_match.rpc(total, rng.randi())
-			else:
-				_show_message("Waiting for host to start a new match...")
+			play_again_btn.disabled = true
+			play_again_btn.text = "Voted!"
+			NetworkManager.vote_play_again.rpc()
 		else:
 			get_tree().reload_current_scene()
 	)
-	btn_h.add_child(play_again)
+	btn_h.add_child(play_again_btn)
 
 	var main_menu = Button.new()
 	main_menu.text = "Main Menu"
@@ -1740,8 +1761,7 @@ func _on_all_cards_revealed():
 func _on_dutch_called(player_idx: int):
 	var player_name = GameManager.players_info[player_idx].name
 	_show_message(player_name + " called DUTCH!")
-	trigger_glitch(0.5, 0.6)
-	shake(0.4, 0.5)
+	_show_dutch_alert(player_name)
 
 	# Turn on all lights for the drama
 	_update_turn_lights(-1, true)
@@ -1777,3 +1797,78 @@ func _on_pending_card_consumed():
 		print("GameBoard3D: Clearing pending card node.")
 		pending_card.queue_free()
 	pending_card = null
+
+func _on_play_again_votes_updated(voted: int, total: int) -> void:
+	if is_instance_valid(play_again_btn):
+		play_again_btn.text = "Play Again (%d/%d)" % [voted, total]
+
+func _show_dutch_alert(caller_name: String):
+	var old_alert = $GameUI/MainHUD.get_node_or_null("DutchAlert")
+	if old_alert:
+		old_alert.queue_free()
+		
+	var center = CenterContainer.new()
+	center.name = "DutchAlert"
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$GameUI/MainHUD.add_child(center)
+	
+	var panel = PanelContainer.new()
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.0, 0.05, 0.85)
+	style.border_width_left = 6
+	style.border_width_right = 6
+	style.border_width_top = 6
+	style.border_width_bottom = 6
+	style.border_color = Color(1.0, 0.0, 0.8)
+	style.corner_radius_top_left = 12
+	style.corner_radius_top_right = 12
+	style.corner_radius_bottom_left = 12
+	style.corner_radius_bottom_right = 12
+	style.shadow_color = Color(1.0, 0.0, 0.8, 0.3)
+	style.shadow_size = 20
+	style.content_margin_left = 40
+	style.content_margin_right = 40
+	style.content_margin_top = 25
+	style.content_margin_bottom = 25
+	panel.add_theme_stylebox_override("panel", style)
+	center.add_child(panel)
+	
+	var vbox = VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 5)
+	panel.add_child(vbox)
+	
+	var alert_title = Label.new()
+	alert_title.text = "⚠️ WARNING ⚠️"
+	alert_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	alert_title.add_theme_font_size_override("font_size", 28)
+	alert_title.add_theme_color_override("font_color", Color(1.0, 0.9, 0.0))
+	vbox.add_child(alert_title)
+	
+	var label = Label.new()
+	label.text = caller_name.to_upper() + " CALLED DUTCH!"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 42)
+	label.add_theme_color_override("font_color", Color(1.0, 0.0, 0.8))
+	label.add_theme_color_override("font_shadow_color", Color(1.0, 0.0, 0.8, 0.5))
+	label.add_theme_constant_override("shadow_offset_x", 0)
+	label.add_theme_constant_override("shadow_offset_y", 3)
+	vbox.add_child(label)
+	
+	shake(0.4, 0.5)
+	trigger_glitch(0.5, 0.6)
+	
+	center.scale = Vector2(0.5, 0.5)
+	center.resized.connect(func():
+		center.pivot_offset = center.size / 2.0
+	)
+	
+	var tween = create_tween().set_parallel(true)
+	tween.tween_property(center, "scale", Vector2.ONE, 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(center, "modulate:a", 1.0, 0.4).from(0.0)
+	
+	var fade_tween = create_tween()
+	fade_tween.tween_interval(3.5)
+	fade_tween.tween_property(center, "modulate:a", 0.0, 0.6)
+	fade_tween.tween_callback(center.queue_free)
