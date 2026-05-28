@@ -349,7 +349,7 @@ func vote_play_again() -> void:
 		# Check how many humans are in the game
 		var human_count := 0
 		for p in GameManager.players_info:
-			if not p.is_bot:
+			if not p.get("is_bot", false):
 				human_count += 1
 		
 		# Notify all clients about the updated vote count

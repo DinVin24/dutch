@@ -1085,6 +1085,7 @@ func buy_ability(p_idx: int) -> bool:
 		play_sfx(sfx_chicken)
 		ability_unlocked.emit(p_idx, ab)
 		print("GM: Player ", p_idx, " bought ability: ", ab, " (Limit Tracking: ", global_ability_counts, ")")
+		_mp_broadcast_state_if_server()
 		return true
 	return false
 
