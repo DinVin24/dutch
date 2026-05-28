@@ -143,7 +143,7 @@ func _process(_delta: float):
 					ws.send_text(JSON.stringify({"type": "host"}))
 				else:
 					ws.send_text(JSON.stringify({"type": "join", "room": room_code}))
-			while ws.get_available_packet_count() > 0:
+			while ws != null and ws.get_available_packet_count() > 0:
 				var msg = ws.get_packet().get_string_from_utf8()
 				_handle_signaling_message(msg)
 		elif state == WebSocketPeer.STATE_CLOSED:
