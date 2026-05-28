@@ -83,9 +83,12 @@ func _update_visuals() -> void:
 			
 	_apply_atlas_textures()
 	
-	# Face visibility is handled by local rotation of Visuals
+	# Face visibility is handled by local rotation of Visuals.
+	# Do not override the rotation while mid-flip or while the card is being peeked
+	# (peek is local-only and does not persist data.is_face_up, so the rotation must be
+	# left alone until the peek window closes).
 	var target_is_up = data.is_face_up
-	if not is_flipping:
+	if not is_flipping and not is_being_peeked:
 		$Visuals.rotation_degrees.y = 180.0 if target_is_up else 0.0
 
 	
@@ -160,7 +163,7 @@ func set_selected(p_selected: bool):
 func flip() -> void:
 	animate_flip(!data.is_face_up)
 
-func animate_flip(is_face_up: bool, target_y: float = -1.0):
+func animate_flip(is_face_up: bool, target_y: float = -1.0, persist_data_state: bool = true):
 	if is_flipping: return
 	is_flipping = true
 	
@@ -189,7 +192,9 @@ func animate_flip(is_face_up: bool, target_y: float = -1.0):
 	
 	tween.finished.connect(func():
 		is_flipping = false
-		data.is_face_up = is_face_up
+		# Peek effects must be visual-only in multiplayer; callers can disable data persistence.
+		if persist_data_state:
+			data.is_face_up = is_face_up
 		_update_visuals()
 		card_flipped.emit(self, data)
 	)
@@ -215,6 +220,16 @@ func set_interactive(enabled: bool):
 func _process(delta: float):
 	if is_flipping:
 		# Let the flip tween own the visuals transform
+		return
+
+	# While the card is being peeked, the Visuals node is owned by the peek animation.
+	# _process must not override the quaternion or it will instantly snap the card face-down
+	# (because data.is_face_up is intentionally kept false during a local-only peek).
+	if is_being_peeked:
+		# Still sync the multiplier anchor position
+		var peek_anchor = get_node_or_null("MultiplierAnchor")
+		if peek_anchor:
+			peek_anchor.global_position = global_position + Vector3(0, 0.4, 0)
 		return
 		
 	# Base rotation for face-up/down

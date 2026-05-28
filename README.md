@@ -48,3 +48,21 @@ Each player starts with **3 Beers**. Certain mistakes force you to "drink":
 ## 🛠️ Developer Setup
 - Run `git config core.hooksPath .githooks` after cloning.
 - See [DESIGN.md](DESIGN.md) for technical architecture and FSM details.
+
+## LAN Test Flow (Godot 4, ENet/UDP)
+- LAN test flow uses ENet over UDP on port `1234`.
+- Host listens on all interfaces; on Windows, allow inbound UDP `1234` for Godot/app in Defender Firewall.
+- `localhost` remains supported for same-machine testing when no connect target is provided.
+
+Host machine:
+- `godot4 --path . -- --host`
+
+Client machine (explicit host IP):
+- `godot4 --path . -- --client --connect-to 192.168.1.42`
+
+Client machine (same machine fallback):
+- `godot4 --path . -- --client`
+
+Auto handshake + commit helper script:
+- Dry run only: `python lan_handshake_autocommit.py --host-ip 127.0.0.1 --dry-run`
+- Run full flow (handshake, `git add .`, commit, push): `python lan_handshake_autocommit.py --host-ip 192.168.1.42`

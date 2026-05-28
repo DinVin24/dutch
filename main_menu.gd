@@ -8,6 +8,14 @@ extends Control
 
 var original_texts = {
 	"Start": "START_FILE",
+	"Multiplayer": "MULTIPLAYER",
+	"Settings": "SYSTEM_CFG",
+	"Exit": "SHUT_DOWN"
+}
+
+var hover_texts = {
+	"Start": "START_FILE",
+	"Multiplayer": "MULTIPLAYER",
 	"Settings": "SYSTEM_CFG",
 	"Exit": "SHUT_DOWN"
 }
@@ -18,13 +26,15 @@ func _ready() -> void:
 
 	# Connect mouse_exited for all buttons
 	start_button.mouse_exited.connect(_on_button_mouse_exited.bind(start_button, "Start"))
+	var mp_btn = $LeftMargin/VBox/Buttons/MultiplayerButton
+	mp_btn.mouse_exited.connect(_on_button_mouse_exited.bind(mp_btn, "Multiplayer"))
 	settings_button.mouse_exited.connect(_on_button_mouse_exited.bind(settings_button, "Settings"))
 	exit_button.mouse_exited.connect(_on_button_mouse_exited.bind(exit_button, "Exit"))
 
 func _on_button_mouse_entered(type: String) -> void:
 	glitch_player.play_glitch_hover()
 	var btn = get_node("LeftMargin/VBox/Buttons/" + type + "Button")
-	btn.text = "> " + original_texts[type]
+	btn.text = "> " + hover_texts[type]
 
 	var tween = create_tween()
 	tween.tween_property(btn, "scale", Vector2(1.1, 1.1), 0.1).set_trans(Tween.TRANS_QUAD)
@@ -38,6 +48,11 @@ func _on_start_button_pressed() -> void:
 	glitch_player.play_glitch_click()
 	# Show difficulty selection instead of immediately loading the game
 	difficulty_prompt.visible = true
+
+func _on_multiplayer_button_pressed() -> void:
+	glitch_player.play_glitch_click()
+	await get_tree().create_timer(0.15).timeout
+	get_tree().change_scene_to_file("res://lobby.tscn")
 
 func _on_normal_pressed() -> void:
 	glitch_player.play_glitch_click()

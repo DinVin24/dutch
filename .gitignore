@@ -22,3 +22,13 @@ yt-dlp
 
 # QA Screenshots
 qa_screenshots/
+
+# Debug artifacts (local runs)
+debug/test_runs/
+
+# Logs
+*.log
+*.log.*
+
+# Godot UID artifacts (local)
+*.uid

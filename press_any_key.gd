@@ -34,7 +34,7 @@ func _ready() -> void:
 	current_player.volume_db = 0
 	next_player.volume_db = -80
 
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
 	# Wave animation
 	var time = Time.get_ticks_msec() / 1000.0
 	prompt_label.position.y = base_y + sin(time * wave_speed) * wave_amplitude

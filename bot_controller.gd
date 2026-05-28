@@ -76,6 +76,7 @@ func _hand_summary(bot_idx: int) -> String:
 # ─── Signal Handlers ─────────────────────────────────────────
 
 func _on_game_state_changed(new_state: int) -> void:
+	if gm.is_multiplayer and not gm.multiplayer.is_server(): return
 	if new_state == GameManager.GameState.INITIAL_PEEK:
 		_execute_initial_peek()
 		return
@@ -86,7 +87,7 @@ func _on_game_state_changed(new_state: int) -> void:
 	else:
 		idx = gm.current_player_index
 		
-	if idx == 0: return  # Human handles their own turns
+	if idx == -1 or not gm.players_info[idx].is_bot: return  # Human handles their own turns
 
 	match new_state:
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
@@ -102,7 +103,8 @@ func _on_game_state_changed(new_state: int) -> void:
 
 ## Rule 2: Mandatory draw at the start of a bot's turn.
 func _on_turn_started(bot_idx: int) -> void:
-	if bot_idx == 0: return
+	if gm.is_multiplayer and not gm.multiplayer.is_server(): return
+	if not gm.players_info[bot_idx].is_bot: return
 	# Proactive buy logic: if I have money, buy an egg!
 	if gm.players_info[bot_idx].money >= 50:
 		await _wait(0.5)
@@ -115,11 +117,14 @@ func _on_turn_started(bot_idx: int) -> void:
 
 ## Rule 1: Constant jump-in monitoring — fires every time any card is discarded.
 func _on_card_discarded(_discarder_idx: int, card_data: CardData) -> void:
+	if gm.is_multiplayer and not gm.multiplayer.is_server(): return
 	_try_jump_ins(card_data)
 
 ## Shift memory indices when a card is removed from someone's hand.
 func _on_memory_shift_required(target_player_idx: int, removed_card_idx: int) -> void:
-	for bot_idx in range(1, gm.num_players):
+	if gm.is_multiplayer and not gm.multiplayer.is_server(): return
+	for bot_idx in range(gm.num_players):
+		if not gm.players_info[bot_idx].is_bot: continue
 		var mem: Dictionary = gm.players_info[bot_idx].bot_memory
 		if not mem.has(target_player_idx) or target_player_idx == -1: continue
 		var p_mem: Dictionary = mem[target_player_idx]
@@ -141,7 +146,8 @@ func _try_jump_ins(card_data: CardData) -> void:
 	if gm.current_state != GameManager.GameState.TURN_END_CHOICE:
 		return
 
-	for bot_idx in range(1, gm.num_players):
+	for bot_idx in range(gm.num_players):
+		if not gm.players_info[bot_idx].is_bot: continue
 		if not gm.can_player_start_jump_in(bot_idx):
 			continue
 		
@@ -171,8 +177,10 @@ func _try_jump_ins(card_data: CardData) -> void:
 
 ## INITIAL PEEK: each bot learns exactly 2 of its 4 dealt cards.
 func _execute_initial_peek() -> void:
-	for bot_idx in range(1, gm.num_players):
+	for bot_idx in range(gm.num_players):
 		var bot_info: Dictionary = gm.players_info[bot_idx]
+		if not bot_info.is_bot: continue
+		
 		# Build a fresh memory structure for all players
 		var mem := {}
 		for p in range(gm.num_players): mem[p] = {}
@@ -417,8 +425,11 @@ func _execute_confirm_dutch(bot_idx: int) -> void:
 
 ## Update all bots' memories when two card slots are swapped (e.g. after Jack).
 func _update_memory_on_swap(_acting_bot: int, p1: int, c1: int, p2: int, c2: int) -> void:
-	for bot_idx in range(1, gm.num_players):
-		var mem: Dictionary = gm.players_info[bot_idx].bot_memory
+	for bot_idx in range(gm.num_players):
+		var bot_info = gm.players_info[bot_idx]
+		if not bot_info.is_bot: continue
+		
+		var mem: Dictionary = bot_info.bot_memory
 		if not mem.has(p1): mem[p1] = {}
 		if not mem.has(p2): mem[p2] = {}
 		var knew_p1: CardData = mem[p1].get(c1, null)
