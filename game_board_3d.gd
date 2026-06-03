@@ -357,17 +357,17 @@ func _on_multiplayer_sync_applied() -> void:
 	_update_draw_arrow_visibility()
 
 func _create_hud_ui():
-	# Action Panel: Style Box Flat with 85% opacity dark background, rounded corners and subtle border
+	# Action Panel: Style Box Flat with 96% opacity dark background, rounded corners and subtle border
 	action_panel = PanelContainer.new()
 	action_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	action_panel.offset_left = 20
 	action_panel.offset_right = 260
-	action_panel.offset_top = -340
+	action_panel.offset_top = -220
 	action_panel.offset_bottom = -20
 	action_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var panel_style = StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.04, 0.04, 0.06, 0.85)
+	panel_style.bg_color = Color(0.04, 0.04, 0.06, 0.96)
 	panel_style.border_width_left = 3
 	panel_style.border_width_right = 3
 	panel_style.border_width_top = 3
@@ -1104,11 +1104,11 @@ func _update_action_panel_style():
 		# Pulsing neon cyan border when it's our turn
 		var pulse = (sin(Time.get_ticks_msec() * 0.005) + 1.0) * 0.5 # 0.0 to 1.0
 		style.border_color = Color(0.0, 1.0, 1.0, 0.45 + pulse * 0.45) # pulse alpha between 0.45 and 0.90
-		style.bg_color = Color(0.04, 0.06, 0.08, 0.85 + pulse * 0.05) # subtle background pulse
+		style.bg_color = Color(0.04, 0.06, 0.08, 0.96 + pulse * 0.04) # subtle background pulse
 	else:
 		# Static dim grey-blue when not our turn
 		style.border_color = Color(0.15, 0.18, 0.22, 0.4)
-		style.bg_color = Color(0.04, 0.04, 0.06, 0.85)
+		style.bg_color = Color(0.04, 0.04, 0.06, 0.96)
 
 func _on_game_state_changed(new_state):
 	_hide_message()
