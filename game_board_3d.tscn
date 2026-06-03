@@ -4,6 +4,7 @@
 [ext_resource type="Shader" uid="uid://chcpger88sefc" path="res://shaders/crt_glitch.gdshader" id="2_shader"]
 [ext_resource type="PackedScene" uid="uid://dwowse5ksiil0" path="res://assets/models/table.glb" id="3_table"]
 [ext_resource type="PackedScene" uid="uid://dmsi4kgr88r2u" path="res://assets/models/background.glb" id="4_background"]
+[ext_resource type="Shader" path="res://shaders/turn_indicator.gdshader" id="5_turn_indicator_shader"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -34,6 +35,36 @@ shader_parameter/curvature = 1.8
 shader_parameter/glitch_intensity = 0.0
 shader_parameter/time = 0.0
 
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_TurnIndicator"]
+shader = ExtResource("5_turn_indicator_shader")
+shader_parameter/active_player_index = -1
+shader_parameter/active_color = Color(0.9, 0.1, 0.1, 0.95)
+shader_parameter/inactive_color = Color(0.08, 0.08, 0.1, 0.4)
+shader_parameter/inner_radius = 0.25
+shader_parameter/outer_radius = 0.85
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_TurnIndicator"]
+material = SubResource("ShaderMaterial_TurnIndicator")
+size = Vector2(2.0, 2.0)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial_ArrowNeon"]
+shading_mode = 2
+albedo_color = Color(0, 1, 1, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_ArrowShaft"]
+material = SubResource("StandardMaterial_ArrowNeon")
+top_radius = 0.04
+bottom_radius = 0.04
+height = 0.4
+radial_segments = 16
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_ArrowHead"]
+material = SubResource("StandardMaterial_ArrowNeon")
+top_radius = 0.0
+bottom_radius = 0.12
+height = 0.25
+radial_segments = 16
+
 [node name="GameBoard3D" type="Node3D" unique_id=1162522278]
 script = ExtResource("1_script")
 beer_scale = Vector3(4.5, 4.5, 4.5)
@@ -44,11 +75,11 @@ beer_y_offset = 0.75
 environment = SubResource("Environment_1")
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=701076918]
-transform = Transform3D(1, 0, 0, 0, 0.6354183, 0.77216816, 0, -0.77216816, 0.6354183, 0, 6.250472, 6.8501186)
+transform = Transform3D(1, 0, 0, 0, 0.6354183, 0.77216816, 0, -0.77216816, 0.6354183, 0, 7.8, 8.5)
 fov = 60.0
 
 [node name="Table" parent="." unique_id=1261982012 instance=ExtResource("3_table")]
-transform = Transform3D(20.680212, 0, 0, 0, 3.0000007, 0, 0, 0, 24.131344, 0, -1.6886296, 0)
+transform = Transform3D(24.131344, 0, 0, 0, 3.0000007, 0, 0, 0, 24.131344, 0, -1.6886296, 0)
 
 [node name="Background" parent="." unique_id=2000000000 instance=ExtResource("4_background")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
@@ -61,6 +92,18 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0.1, 0)
 [node name="CollisionShape3D" type="CollisionShape3D" parent="DeckArea/Area3D" unique_id=213724805]
 shape = SubResource("BoxShape3D_Deck")
 
+[node name="DrawIndicatorArrow" type="Node3D" parent="DeckArea"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
+visible = false
+
+[node name="Shaft" type="MeshInstance3D" parent="DeckArea/DrawIndicatorArrow"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 0)
+mesh = SubResource("CylinderMesh_ArrowShaft")
+
+[node name="Head" type="MeshInstance3D" parent="DeckArea/DrawIndicatorArrow"]
+transform = Transform3D(1, 0, 0, 0, -1, 8.74228e-08, 0, -8.74228e-08, -1, 0, -0.125, 0)
+mesh = SubResource("CylinderMesh_ArrowHead")
+
 [node name="DiscardArea" type="Node3D" parent="." unique_id=453331196]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0.1, 0)
 
@@ -71,17 +114,21 @@ shape = SubResource("BoxShape3D_Deck")
 
 [node name="PlayerPositions" type="Node3D" parent="." unique_id=556924132]
 
+[node name="TurnIndicatorCircle" type="MeshInstance3D" parent="PlayerPositions" unique_id=987654321]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.102, 0)
+mesh = SubResource("PlaneMesh_TurnIndicator")
+
 [node name="Bottom" type="Node3D" parent="PlayerPositions" unique_id=1640482197]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 6.0)
 
 [node name="Top" type="Node3D" parent="PlayerPositions" unique_id=1531237525]
-transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 0, 0.1, -4)
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 0, 0.1, -6.0)
 
 [node name="Left" type="Node3D" parent="PlayerPositions" unique_id=346409451]
-transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -5.5, 0.1, 0)
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -6.0, 0.1, 0)
 
 [node name="Right" type="Node3D" parent="PlayerPositions" unique_id=1342769357]
-transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 5.5, 0.1, 0)
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 6.0, 0.1, 0)
 
 [node name="GameUI" type="CanvasLayer" parent="." unique_id=322047825]
 

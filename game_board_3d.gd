@@ -13,9 +13,13 @@ extends Node3D
 @onready var turn_label = $GameUI/MainHUD/TopLeft/TurnLabel
 @onready var top_center = $GameUI/MainHUD/TopCenter
 @onready var crt_overlay = $PostProcessing/CRT_Overlay
+@onready var turn_indicator_circle = $PlayerPositions/TurnIndicatorCircle
+@onready var draw_arrow = $DeckArea/DrawIndicatorArrow
 var player_lights = {}
+var _bell_stream: AudioStreamWAV = null
 
 var bot_controller: BotController = null
+var action_panel: PanelContainer
 var end_turn_btn: Button
 var jump_in_btn: Button
 var call_dutch_btn: Button
@@ -102,6 +106,7 @@ func _ready():
 		return
 
 	player_hands = [[], [], [], []]
+	_bell_stream = _generate_bell_stream()
 	print("Game Board 3D: Ready. Connecting signals...")
 	GameManager.stop_menu_music()
 	GameManager.play_game_music()
@@ -349,19 +354,47 @@ func _on_multiplayer_sync_applied() -> void:
 		else:
 			beers_snapshot.append(3)
 	_last_sync_diag["beers"] = beers_snapshot
+	_update_draw_arrow_visibility()
 
 func _create_hud_ui():
-	# Action Buttons Container: Moved to bottom-right to avoid overlapping hand cards
+	# Action Panel: Style Box Flat with 20% opacity dark background, rounded corners and subtle border
+	action_panel = PanelContainer.new()
+	action_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	action_panel.offset_left = 20
+	action_panel.offset_right = 260
+	action_panel.offset_top = -220
+	action_panel.offset_bottom = -20
+	action_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.04, 0.04, 0.06, 0.20)
+	panel_style.border_width_left = 3
+	panel_style.border_width_right = 3
+	panel_style.border_width_top = 3
+	panel_style.border_width_bottom = 3
+	panel_style.border_color = Color(0.15, 0.18, 0.22, 0.4)
+	panel_style.corner_radius_top_left = 10
+	panel_style.corner_radius_top_right = 10
+	panel_style.corner_radius_bottom_left = 10
+	panel_style.corner_radius_bottom_right = 10
+	
+	# Content margins to pad the buttons inside
+	panel_style.content_margin_left = 15
+	panel_style.content_margin_right = 15
+	panel_style.content_margin_top = 15
+	panel_style.content_margin_bottom = 15
+	
+	action_panel.add_theme_stylebox_override("panel", panel_style)
+	$GameUI/MainHUD.add_child(action_panel)
+
+	# Action Buttons Container: Nested inside the Action Panel
 	var action_container = VBoxContainer.new()
-	action_container.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	action_container.offset_left = 30
-	action_container.offset_right = 230
-	action_container.offset_top = -400
-	action_container.offset_bottom = -30
 	action_container.alignment = BoxContainer.ALIGNMENT_END
 	action_container.add_theme_constant_override("separation", 15)
-	$GameUI/MainHUD.add_child(action_container)
+	action_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	action_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	action_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	action_panel.add_child(action_container)
 
 	# Standard HUD buttons
 	end_turn_btn = _create_button(action_container, "> END_TURN <", Color(0.0, 1.0, 1.0))
@@ -407,13 +440,23 @@ func _create_button(parent: Node, text: String, color: Color) -> Button:
 	hover_style.border_width_left = 4
 	hover_style.border_color = color.lightened(0.5)
 
+	# Disabled state style: faded border (25% opacity)
+	var disabled_style = StyleBoxFlat.new()
+	disabled_style.bg_color = Color(0, 0, 0, 0)
+	disabled_style.border_width_left = 4
+	disabled_style.border_color = Color(color.r, color.g, color.b, 0.25)
+
 	btn.add_theme_stylebox_override("normal", style)
 	btn.add_theme_stylebox_override("hover", hover_style)
 	btn.add_theme_stylebox_override("pressed", hover_style)
+	btn.add_theme_stylebox_override("disabled", disabled_style)
 	
 	btn.add_theme_color_override("font_color", color)
 	btn.add_theme_color_override("font_hover_color", Color.BLACK)
 	btn.add_theme_color_override("font_pressed_color", Color.BLACK)
+	# Disabled text color: faded font color (25% opacity)
+	btn.add_theme_color_override("font_disabled_color", Color(color.r, color.g, color.b, 0.25))
+	
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	
 	parent.add_child(btn)
@@ -815,8 +858,21 @@ func _on_turn_started(player_idx):
 	turn_label.text = "> " + p_info.name.to_upper() + "'S TURN"
 	_animate_glitch_text(turn_label)
 	_update_turn_lights(player_idx)
-	if player_idx != _human_ui_idx():
+	
+	if is_instance_valid(turn_indicator_circle):
+		var mat = turn_indicator_circle.get_active_material(0)
+		if mat is ShaderMaterial:
+			mat.set_shader_parameter("active_player_index", player_idx)
+			
+	if player_idx == _human_ui_idx():
+		GameManager.play_sfx(_bell_stream)
+	else:
 		_show_message(p_info.name + " is thinking...")
+	_update_draw_arrow_visibility()
+
+func _update_draw_arrow_visibility():
+	if is_instance_valid(draw_arrow):
+		draw_arrow.visible = GameManager.can_player_draw(_human_ui_idx())
 
 func _update_turn_lights(current_player: int, all_on: bool = false):
 	for i in range(4):
@@ -875,7 +931,6 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 
 	if player_idx != _human_ui_idx():
 		_show_message(GameManager.players_info[player_idx].name + " is drawing...")
-		return
 
 	pending_card = card_scene.instantiate()
 	pending_card.name = "PendingCard"
@@ -887,17 +942,16 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	# Move slightly higher and CLOSER TO CAMERA (Z offset) to ensure it's not blocked by DeckArea
 	pending_card.position = deck_area.position + Vector3(0, 0.6, 0.5)
 	pending_card.rotation_degrees = Vector3(90, 0, 0) # Start face down on the table
-	pending_card.set_interactive(true)
+	pending_card.set_interactive(player_idx == _human_ui_idx())
 	spawn_particles("default", deck_area.global_position)
 
 	# Reveal animations
 	await get_tree().create_timer(0.1, false).timeout
-	pending_card.animate_flip(true)
+	pending_card.animate_flip(player_idx == _human_ui_idx())
 	_update_deck_visual() # Refresh deck after drawing
 
 func _on_card_discarded(player_idx, card_data):
-	if jump_in_btn:
-		jump_in_btn.visible = GameManager.should_human_show_jump_in_button(_human_ui_idx())
+	_update_action_buttons_state()
 	
 	print("GameBoard3D: Card Discarded. Player: ", player_idx, " Data: ", card_data.rank, " of ", card_data.suit)
 	
@@ -938,8 +992,8 @@ func _on_card_discarded(player_idx, card_data):
 		
 		var target_global_pos = discard_area.global_position + Vector3(0, 0.05, 0)
 		var tween = create_tween().set_parallel(true)
-		tween.tween_property(card_to_discard, "global_position", target_global_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		tween.tween_property(card_to_discard, "rotation_degrees:x", 90.0, 0.4) # Keep horizontal, let animate_flip roll it
+		tween.tween_property(card_to_discard, "global_position", target_global_pos, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.tween_property(card_to_discard, "rotation_degrees:x", 90.0, 0.45) # Keep horizontal, let animate_flip roll it
 		card_to_discard.animate_flip(true)
 		tween.chain().tween_callback(func():
 			_update_discard_visual()
@@ -994,16 +1048,87 @@ func _on_cancel_dutch_pressed():
 	if GameManager.can_player_cancel_dutch(GameManager.local_player_idx):
 		_send_action("cancel_dutch")
 
+func _update_action_buttons_state():
+	if not is_instance_valid(end_turn_btn) or not is_instance_valid(jump_in_btn) or not is_instance_valid(call_dutch_btn):
+		return
+
+	var local_idx = _human_ui_idx()
+	
+	# Determine if each action is allowed right now
+	var can_end_turn = GameManager.can_player_end_turn(local_idx) or GameManager.can_player_cancel_jump_in(local_idx)
+	var can_jump_in = GameManager.can_player_start_jump_in(local_idx) or GameManager.should_human_show_jump_in_button(local_idx)
+	var can_call_dutch = GameManager.can_player_call_dutch(local_idx)
+
+	# Set button disabled states (disabled = not allowed)
+	end_turn_btn.disabled = not can_end_turn
+	jump_in_btn.disabled = not can_jump_in
+	call_dutch_btn.disabled = not can_call_dutch
+
+	# The three core actions are always visible inside the action panel
+	end_turn_btn.visible = true
+	jump_in_btn.visible = true
+	call_dutch_btn.visible = true
+
+	# Confirm Dutch and Forfeit Dutch are only shown in TURN_CONFIRM_DUTCH state
+	var is_confirm_dutch_state = GameManager.current_state == GameManager.GameState.TURN_CONFIRM_DUTCH
+	var can_confirm = GameManager.can_player_confirm_dutch(local_idx)
+	
+	confirm_dutch_btn.visible = is_confirm_dutch_state
+	confirm_dutch_btn.disabled = not can_confirm
+	
+	forfeit_dutch_btn.visible = is_confirm_dutch_state
+	forfeit_dutch_btn.disabled = not can_confirm
+
+	# Update the action panel's pulsing/glowing style
+	_update_action_panel_style()
+
+func _update_action_panel_style():
+	if not is_instance_valid(action_panel):
+		return
+	
+	var local_idx = _human_ui_idx()
+	# It is the player's turn to act if it's their current player index and state is an active playing state
+	var is_my_turn = (GameManager.current_player_index == local_idx) and not (
+		GameManager.current_state in [
+			GameManager.GameState.INITIALIZING, 
+			GameManager.GameState.DEAL_CARDS, 
+			GameManager.GameState.GAME_OVER
+		]
+	)
+	
+	var style = action_panel.get_theme_stylebox("panel") as StyleBoxFlat
+	if not style:
+		return
+		
+	if is_my_turn:
+		# Static neon cyan border when it's our turn
+		style.border_color = Color(0.0, 1.0, 1.0, 0.85)
+		style.bg_color = Color(0.04, 0.04, 0.06, 0.20)
+	else:
+		# Static dim grey-blue when not our turn
+		style.border_color = Color(0.15, 0.18, 0.22, 0.4)
+		style.bg_color = Color(0.04, 0.04, 0.06, 0.20)
+
 func _on_game_state_changed(new_state):
 	_hide_message()
+	_update_draw_arrow_visibility()
 
-	end_turn_btn.hide()
-	jump_in_btn.hide()
-	call_dutch_btn.hide()
-	confirm_dutch_btn.hide()
-	forfeit_dutch_btn.hide()
+	var is_active_turn_state = new_state in [
+		GameManager.GameState.TURN_START_DRAW,
+		GameManager.GameState.TURN_RESOLVE_DRAWN,
+		GameManager.GameState.TURN_PEEK_ABILITY,
+		GameManager.GameState.TURN_SWAP_ABILITY,
+		GameManager.GameState.TURN_END_CHOICE,
+		GameManager.GameState.TURN_JUMP_IN_SELECTION,
+		GameManager.GameState.TURN_CONFIRM_DUTCH
+	]
+	if not is_active_turn_state and is_instance_valid(turn_indicator_circle):
+		var mat = turn_indicator_circle.get_active_material(0)
+		if mat is ShaderMaterial:
+			mat.set_shader_parameter("active_player_index", -1)
+
+	_update_action_buttons_state()
 	_refresh_human_interactivity()
-	jump_in_btn.visible = GameManager.should_human_show_jump_in_button(_human_ui_idx())
 	if new_state == GameManager.GameState.TURN_START_DRAW or \
 	   new_state == GameManager.GameState.TURN_END_CHOICE:
 		_clear_all_highlights()
@@ -1028,24 +1153,16 @@ func _on_game_state_changed(new_state):
 				_show_message(player_name + " is deciding...")
 		GameManager.GameState.TURN_END_CHOICE:
 			print("GameBoard3D: UI - Showing TURN_END_CHOICE")
-			if GameManager.can_player_end_turn(_human_ui_idx()):
-				end_turn_btn.show()
-			if GameManager.can_player_call_dutch(_human_ui_idx()):
-				call_dutch_btn.show()
 		GameManager.GameState.TURN_JUMP_IN_SELECTION:
 			print("GameBoard3D: UI - Showing TURN_JUMP_IN_SELECTION")
 			var ji_idx = GameManager.jump_in_player_idx
 			var ji_name = GameManager.players_info[ji_idx].name if ji_idx >= 0 else "Someone"
 			_show_message(ji_name + ": pick a matching card, or end turn to cancel.")
-			if GameManager.can_player_cancel_jump_in(_human_ui_idx()):
-				end_turn_btn.show()
 			_highlight_selectable_cards(false)
 		GameManager.GameState.TURN_CONFIRM_DUTCH:
 			print("GameBoard3D: UI - Showing TURN_CONFIRM_DUTCH")
 			if GameManager.can_player_confirm_dutch(_human_ui_idx()):
 				_show_message("You called Dutch! Confirm or Forfeit?")
-				confirm_dutch_btn.show()
-				forfeit_dutch_btn.show()
 		GameManager.GameState.TURN_PEEK_ABILITY:
 			if GameManager.active_ability_player == _human_ui_idx():
 				_show_message("Select ANY card to peek at.")
@@ -1219,10 +1336,33 @@ func _update_hand_visuals(player_idx: int):
 		if found_node:
 			new_node_list.append(found_node)
 		else:
-			var card_node = card_scene.instantiate()
-			player_pos_nodes[player_idx].add_child(card_node)
-			card_node.card_clicked.connect(_on_card_clicked)
-			new_node_list.append(card_node)
+			# Check if we can reuse the pending card
+			if is_instance_valid(pending_card) and (
+				pending_card.data == data or 
+				(pending_card.data != null and pending_card.data.rank == data.rank and pending_card.data.suit == data.suit)
+			):
+				var card_node = pending_card
+				var start_global_pos = card_node.global_position
+				var start_global_rot = card_node.global_rotation
+				
+				card_node.reparent(player_pos_nodes[player_idx], true)
+				card_node.global_position = start_global_pos
+				card_node.global_rotation = start_global_rot
+				
+				# Ensure it is set to face-down in the hand (drawn card is face down in hand)
+				# unless easy mode is enabled
+				var should_be_face_up = GameManager.easy_mode and (player_idx == _human_ui_idx())
+				card_node.data.is_face_up = should_be_face_up
+				
+				card_node.set_interactive(false)
+				card_node.set_meta("is_swapping_in", true)
+				new_node_list.append(card_node)
+				pending_card = null # Consume it!
+			else:
+				var card_node = card_scene.instantiate()
+				player_pos_nodes[player_idx].add_child(card_node)
+				card_node.card_clicked.connect(_on_card_clicked)
+				new_node_list.append(card_node)
 		
 	# Cleanup orphans — spare nodes that are mid-animation (discarding or being peeked)
 	for node in pool:
@@ -1281,7 +1421,7 @@ func _update_hand_visuals(player_idx: int):
 			var target_pos = Vector3(offset_x, 0.05 + i * 0.01, 0)
 			
 			# Skip if mid-flip or already there (performance)
-			if card_node.is_being_peeked or card_node.is_flipping: continue
+			if card_node.is_being_peeked or (card_node.is_flipping and not card_node.has_meta("is_swapping_in")): continue
 			
 			# Special handling for hovered card Y (lift is handled locally in Card3D)
 			if card_node == _hovered_card_node:
@@ -1290,13 +1430,28 @@ func _update_hand_visuals(player_idx: int):
 			var target_rot_y = 180.0 if (player_idx == 0 or player_idx == 2) else 0.0
 			var target_basis = Basis.from_euler(Vector3(deg_to_rad(90), deg_to_rad(target_rot_y), 0))
 			var target_quat = target_basis.get_rotation_quaternion()
+			
+			var delay = 0.0
+			var duration = 0.25
+			if card_node.has_meta("is_swapping_in"):
+				delay = 0.45 # Wait for the discard visual tween (0.4s) to complete first
+				duration = 0.5 # Smooth travel speed
+				card_node.remove_meta("is_swapping_in")
+				
+				# Call animate_flip after the delay so it flips as it moves
+				var should_be_face_up = GameManager.easy_mode and (player_idx == _human_ui_idx())
+				get_tree().create_timer(delay, false).timeout.connect(func():
+					if is_instance_valid(card_node):
+						card_node.animate_flip(should_be_face_up)
+				)
+
 			var pos_close: bool = card_node.position.distance_to(target_pos) <= 0.02
 			var rot_close: bool = card_node.quaternion.dot(target_quat) >= 0.999
-			if pos_close and rot_close:
+			if pos_close and rot_close and delay == 0.0:
 				continue
 			var tween = create_tween().set_parallel(true)
-			tween.tween_property(card_node, "position", target_pos, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-			tween.tween_property(card_node, "quaternion", target_quat, 0.25)
+			tween.tween_property(card_node, "position", target_pos, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT).set_delay(delay)
+			tween.tween_property(card_node, "quaternion", target_quat, duration).set_delay(delay)
 
 func _handle_initial_deal():
 	print("GameBoard3D: _handle_initial_deal started")
@@ -1566,26 +1721,25 @@ func _unhandled_input(event):
 	_handle_game_keyboard_input(event)
 
 func _handle_game_keyboard_input(event: InputEvent) -> void:
-	# ACTION BUTTONS
 	# Q — end turn OR confirm dutch (states are mutually exclusive)
-	if event.is_action("game_end_turn") and end_turn_btn.visible:
+	if event.is_action("game_end_turn") and end_turn_btn.visible and not end_turn_btn.disabled:
 		_on_end_turn_pressed()
 		get_viewport().set_input_as_handled()
 
-	elif event.is_action("game_confirm_dutch") and confirm_dutch_btn.visible:
+	elif event.is_action("game_confirm_dutch") and confirm_dutch_btn.visible and not confirm_dutch_btn.disabled:
 		_on_confirm_dutch_pressed()
 		get_viewport().set_input_as_handled()
 
 	# E — call dutch OR forfeit dutch (states are mutually exclusive)
-	elif event.is_action("game_forfeit_dutch") and forfeit_dutch_btn.visible:
+	elif event.is_action("game_forfeit_dutch") and forfeit_dutch_btn.visible and not forfeit_dutch_btn.disabled:
 		_on_cancel_dutch_pressed()
 		get_viewport().set_input_as_handled()
 
-	elif event.is_action("game_call_dutch") and call_dutch_btn.visible:
+	elif event.is_action("game_call_dutch") and call_dutch_btn.visible and not call_dutch_btn.disabled:
 		_on_call_dutch_pressed()
 		get_viewport().set_input_as_handled()
 
-	elif event.is_action("game_jump_in") and jump_in_btn.visible:
+	elif event.is_action("game_jump_in") and jump_in_btn.visible and not jump_in_btn.disabled:
 		_on_jump_in_pressed()
 		get_viewport().set_input_as_handled()
 
@@ -1717,6 +1871,11 @@ func _on_bot_action(message):
 
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint(): return
+	
+	_update_action_buttons_state()
+	
+	if is_instance_valid(draw_arrow) and draw_arrow.visible:
+		draw_arrow.position.y = 1.2 + sin(Time.get_ticks_msec() * 0.005) * 0.15
 	
 	if _shake_timer > 0:
 		_shake_timer -= delta
@@ -2030,3 +2189,45 @@ func spawn_particles(type: String, global_pos: Vector3):
 	
 	var cleanup_timer = get_tree().create_timer(particles.lifetime + 0.1)
 	cleanup_timer.timeout.connect(particles.queue_free)
+
+func _generate_bell_stream() -> AudioStreamWAV:
+	var stream = AudioStreamWAV.new()
+	stream.mix_rate = 44100
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.stereo = false
+	
+	var mix_rate = 44100.0
+	var duration = 1.2
+	var total_samples = int(mix_rate * duration)
+	var byte_array = PackedByteArray()
+	byte_array.resize(total_samples * 2) # 16-bit = 2 bytes per sample
+	
+	var f0 = 784.0 # G5 note frequency
+	var harmonics = [
+		{"freq": f0, "amp": 0.45, "decay": 2.5},
+		{"freq": f0 * 1.5, "amp": 0.25, "decay": 4.0},
+		{"freq": f0 * 2.0, "amp": 0.2, "decay": 5.0},
+		{"freq": f0 * 2.63, "amp": 0.15, "decay": 6.5},
+		{"freq": f0 * 3.0, "amp": 0.1, "decay": 8.0},
+		{"freq": f0 * 4.0, "amp": 0.05, "decay": 10.0}
+	]
+	
+	for s in range(total_samples):
+		var t = s / mix_rate
+		var sample = 0.0
+		for h in harmonics:
+			sample += h.amp * sin(2.0 * PI * h.freq * t) * exp(-h.decay * t)
+		
+		# Prevent clipping
+		sample = clamp(sample, -1.0, 1.0)
+		
+		# Fade out at the very end
+		if t > duration - 0.15:
+			var fade = (duration - t) / 0.15
+			sample *= fade
+			
+		var val = int(sample * 32767.0)
+		byte_array.encode_s16(s * 2, val)
+		
+	stream.data = byte_array
+	return stream
