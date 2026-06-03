@@ -211,12 +211,6 @@ func _ready():
 		var tut = tut_scene.instantiate()
 		$GameUI.add_child(tut)
 
-func _process(_delta: float) -> void:
-	if Engine.is_editor_hint():
-		return
-	if is_instance_valid(draw_arrow) and draw_arrow.visible:
-		draw_arrow.position.y = 1.2 + sin(Time.get_ticks_msec() * 0.005) * 0.15
-
 func _send_action(action: String, args: Dictionary = {}):
 	if GameManager.is_multiplayer:
 		GameManager.request_action.rpc_id(1, action, args)
@@ -1756,6 +1750,9 @@ func _on_bot_action(message):
 
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint(): return
+	
+	if is_instance_valid(draw_arrow) and draw_arrow.visible:
+		draw_arrow.position.y = 1.2 + sin(Time.get_ticks_msec() * 0.005) * 0.15
 	
 	if _shake_timer > 0:
 		_shake_timer -= delta
