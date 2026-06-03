@@ -909,7 +909,7 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 
 	# Reveal animations
 	await get_tree().create_timer(0.1, false).timeout
-	pending_card.animate_flip(true)
+	pending_card.animate_flip(player_idx == _human_ui_idx())
 	_update_deck_visual() # Refresh deck after drawing
 
 func _on_card_discarded(player_idx, card_data):

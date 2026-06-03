@@ -5,8 +5,6 @@
 [ext_resource type="PackedScene" uid="uid://dwowse5ksiil0" path="res://assets/models/table.glb" id="3_table"]
 [ext_resource type="PackedScene" uid="uid://dmsi4kgr88r2u" path="res://assets/models/background.glb" id="4_background"]
 [ext_resource type="Shader" path="res://shaders/turn_indicator.gdshader" id="5_turn_indicator_shader"]
-[ext_resource type="Texture2D" path="res://assets/images/arrow_down.png" id="6_arrow_texture"]
-[ext_resource type="Shader" path="res://shaders/arrow_glow.gdshader" id="7_arrow_shader"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -49,8 +47,22 @@ shader_parameter/outer_radius = 0.85
 material = SubResource("ShaderMaterial_TurnIndicator")
 size = Vector2(2.0, 2.0)
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_ArrowGlow"]
-shader = ExtResource("7_arrow_shader")
+[sub_resource type="StandardMaterial3D" id="StandardMaterial_ArrowNeon"]
+shading_mode = 2
+albedo_color = Color(0, 1, 1, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_ArrowShaft"]
+material = SubResource("StandardMaterial_ArrowNeon")
+top_radius = 0.04
+bottom_radius = 0.04
+height = 0.4
+radial_segments = 16
+
+[sub_resource type="ConeMesh" id="ConeMesh_ArrowHead"]
+material = SubResource("StandardMaterial_ArrowNeon")
+radius = 0.12
+height = 0.25
+radial_segments = 16
 
 [node name="GameBoard3D" type="Node3D" unique_id=1162522278]
 script = ExtResource("1_script")
@@ -79,13 +91,17 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0.1, 0)
 [node name="CollisionShape3D" type="CollisionShape3D" parent="DeckArea/Area3D" unique_id=213724805]
 shape = SubResource("BoxShape3D_Deck")
 
-[node name="DrawIndicatorArrow" type="Sprite3D" parent="DeckArea"]
+[node name="DrawIndicatorArrow" type="Node3D" parent="DeckArea"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
 visible = false
-billboard = 1
-material_override = SubResource("ShaderMaterial_ArrowGlow")
-texture = ExtResource("6_arrow_texture")
-pixel_size = 0.0018
+
+[node name="Shaft" type="MeshInstance3D" parent="DeckArea/DrawIndicatorArrow"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 0)
+mesh = SubResource("CylinderMesh_ArrowShaft")
+
+[node name="Head" type="MeshInstance3D" parent="DeckArea/DrawIndicatorArrow"]
+transform = Transform3D(1, 0, 0, 0, -1, 8.74228e-08, 0, -8.74228e-08, -1, 0, -0.125, 0)
+mesh = SubResource("ConeMesh_ArrowHead")
 
 [node name="DiscardArea" type="Node3D" parent="." unique_id=453331196]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0.1, 0)
