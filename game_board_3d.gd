@@ -1101,10 +1101,9 @@ func _update_action_panel_style():
 		return
 		
 	if is_my_turn:
-		# Pulsing neon cyan border when it's our turn
-		var pulse = (sin(Time.get_ticks_msec() * 0.005) + 1.0) * 0.5 # 0.0 to 1.0
-		style.border_color = Color(0.0, 1.0, 1.0, 0.45 + pulse * 0.45) # pulse alpha between 0.45 and 0.90
-		style.bg_color = Color(0.04, 0.06, 0.08, 0.20 + pulse * 0.10) # subtle background pulse
+		# Static neon cyan border when it's our turn
+		style.border_color = Color(0.0, 1.0, 1.0, 0.85)
+		style.bg_color = Color(0.04, 0.04, 0.06, 0.20)
 	else:
 		# Static dim grey-blue when not our turn
 		style.border_color = Color(0.15, 0.18, 0.22, 0.4)
