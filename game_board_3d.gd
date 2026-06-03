@@ -893,7 +893,6 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 
 	if player_idx != _human_ui_idx():
 		_show_message(GameManager.players_info[player_idx].name + " is drawing...")
-		return
 
 	pending_card = card_scene.instantiate()
 	pending_card.name = "PendingCard"
@@ -905,7 +904,7 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	# Move slightly higher and CLOSER TO CAMERA (Z offset) to ensure it's not blocked by DeckArea
 	pending_card.position = deck_area.position + Vector3(0, 0.6, 0.5)
 	pending_card.rotation_degrees = Vector3(90, 0, 0) # Start face down on the table
-	pending_card.set_interactive(true)
+	pending_card.set_interactive(player_idx == _human_ui_idx())
 	spawn_particles("default", deck_area.global_position)
 
 	# Reveal animations
@@ -956,8 +955,8 @@ func _on_card_discarded(player_idx, card_data):
 		
 		var target_global_pos = discard_area.global_position + Vector3(0, 0.05, 0)
 		var tween = create_tween().set_parallel(true)
-		tween.tween_property(card_to_discard, "global_position", target_global_pos, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		tween.tween_property(card_to_discard, "rotation_degrees:x", 90.0, 0.4) # Keep horizontal, let animate_flip roll it
+		tween.tween_property(card_to_discard, "global_position", target_global_pos, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.tween_property(card_to_discard, "rotation_degrees:x", 90.0, 0.45) # Keep horizontal, let animate_flip roll it
 		card_to_discard.animate_flip(true)
 		tween.chain().tween_callback(func():
 			_update_discard_visual()
@@ -1252,10 +1251,33 @@ func _update_hand_visuals(player_idx: int):
 		if found_node:
 			new_node_list.append(found_node)
 		else:
-			var card_node = card_scene.instantiate()
-			player_pos_nodes[player_idx].add_child(card_node)
-			card_node.card_clicked.connect(_on_card_clicked)
-			new_node_list.append(card_node)
+			# Check if we can reuse the pending card
+			if is_instance_valid(pending_card) and (
+				pending_card.data == data or 
+				(pending_card.data != null and pending_card.data.rank == data.rank and pending_card.data.suit == data.suit)
+			):
+				var card_node = pending_card
+				var start_global_pos = card_node.global_position
+				var start_global_rot = card_node.global_rotation
+				
+				card_node.reparent(player_pos_nodes[player_idx], true)
+				card_node.global_position = start_global_pos
+				card_node.global_rotation = start_global_rot
+				
+				# Ensure it is set to face-down in the hand (drawn card is face down in hand)
+				# unless easy mode is enabled
+				var should_be_face_up = GameManager.easy_mode and (player_idx == _human_ui_idx())
+				card_node.data.is_face_up = should_be_face_up
+				
+				card_node.set_interactive(false)
+				card_node.set_meta("is_swapping_in", true)
+				new_node_list.append(card_node)
+				pending_card = null # Consume it!
+			else:
+				var card_node = card_scene.instantiate()
+				player_pos_nodes[player_idx].add_child(card_node)
+				card_node.card_clicked.connect(_on_card_clicked)
+				new_node_list.append(card_node)
 		
 	# Cleanup orphans — spare nodes that are mid-animation (discarding or being peeked)
 	for node in pool:
@@ -1314,7 +1336,7 @@ func _update_hand_visuals(player_idx: int):
 			var target_pos = Vector3(offset_x, 0.05 + i * 0.01, 0)
 			
 			# Skip if mid-flip or already there (performance)
-			if card_node.is_being_peeked or card_node.is_flipping: continue
+			if card_node.is_being_peeked or (card_node.is_flipping and not card_node.has_meta("is_swapping_in")): continue
 			
 			# Special handling for hovered card Y (lift is handled locally in Card3D)
 			if card_node == _hovered_card_node:
@@ -1323,13 +1345,28 @@ func _update_hand_visuals(player_idx: int):
 			var target_rot_y = 180.0 if (player_idx == 0 or player_idx == 2) else 0.0
 			var target_basis = Basis.from_euler(Vector3(deg_to_rad(90), deg_to_rad(target_rot_y), 0))
 			var target_quat = target_basis.get_rotation_quaternion()
+			
+			var delay = 0.0
+			var duration = 0.25
+			if card_node.has_meta("is_swapping_in"):
+				delay = 0.45 # Wait for the discard visual tween (0.4s) to complete first
+				duration = 0.5 # Smooth travel speed
+				card_node.remove_meta("is_swapping_in")
+				
+				# Call animate_flip after the delay so it flips as it moves
+				var should_be_face_up = GameManager.easy_mode and (player_idx == _human_ui_idx())
+				get_tree().create_timer(delay, false).timeout.connect(func():
+					if is_instance_valid(card_node):
+						card_node.animate_flip(should_be_face_up)
+				)
+
 			var pos_close: bool = card_node.position.distance_to(target_pos) <= 0.02
 			var rot_close: bool = card_node.quaternion.dot(target_quat) >= 0.999
-			if pos_close and rot_close:
+			if pos_close and rot_close and delay == 0.0:
 				continue
 			var tween = create_tween().set_parallel(true)
-			tween.tween_property(card_node, "position", target_pos, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-			tween.tween_property(card_node, "quaternion", target_quat, 0.25)
+			tween.tween_property(card_node, "position", target_pos, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT).set_delay(delay)
+			tween.tween_property(card_node, "quaternion", target_quat, duration).set_delay(delay)
 
 func _handle_initial_deal():
 	print("GameBoard3D: _handle_initial_deal started")

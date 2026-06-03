@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" uid="uid://dmsi4kgr88r2u" path="res://assets/models/background.glb" id="4_background"]
 [ext_resource type="Shader" path="res://shaders/turn_indicator.gdshader" id="5_turn_indicator_shader"]
 [ext_resource type="Texture2D" path="res://assets/images/arrow_down.png" id="6_arrow_texture"]
+[ext_resource type="Shader" path="res://shaders/arrow_glow.gdshader" id="7_arrow_shader"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -48,6 +49,9 @@ shader_parameter/outer_radius = 0.85
 material = SubResource("ShaderMaterial_TurnIndicator")
 size = Vector2(2.0, 2.0)
 
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ArrowGlow"]
+shader = ExtResource("7_arrow_shader")
+
 [node name="GameBoard3D" type="Node3D" unique_id=1162522278]
 script = ExtResource("1_script")
 beer_scale = Vector3(4.5, 4.5, 4.5)
@@ -79,6 +83,7 @@ shape = SubResource("BoxShape3D_Deck")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
 visible = false
 billboard = 1
+material_override = SubResource("ShaderMaterial_ArrowGlow")
 texture = ExtResource("6_arrow_texture")
 pixel_size = 0.0018
 
