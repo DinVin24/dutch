@@ -4,6 +4,7 @@
 [ext_resource type="Shader" uid="uid://chcpger88sefc" path="res://shaders/crt_glitch.gdshader" id="2_shader"]
 [ext_resource type="PackedScene" uid="uid://dwowse5ksiil0" path="res://assets/models/table.glb" id="3_table"]
 [ext_resource type="PackedScene" uid="uid://dmsi4kgr88r2u" path="res://assets/models/background.glb" id="4_background"]
+[ext_resource type="Shader" path="res://shaders/turn_indicator.gdshader" id="5_turn_indicator_shader"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -33,6 +34,18 @@ shader_parameter/vignette_intensity = 0.3
 shader_parameter/curvature = 1.8
 shader_parameter/glitch_intensity = 0.0
 shader_parameter/time = 0.0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_TurnIndicator"]
+shader = ExtResource("5_turn_indicator_shader")
+shader_parameter/active_player_index = -1
+shader_parameter/active_color = Color(0.9, 0.1, 0.1, 0.95)
+shader_parameter/inactive_color = Color(0.08, 0.08, 0.1, 0.4)
+shader_parameter/inner_radius = 0.25
+shader_parameter/outer_radius = 0.85
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_TurnIndicator"]
+material = SubResource("ShaderMaterial_TurnIndicator")
+size = Vector2(2.0, 2.0)
 
 [node name="GameBoard3D" type="Node3D" unique_id=1162522278]
 script = ExtResource("1_script")
@@ -70,6 +83,10 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0.1, 0)
 shape = SubResource("BoxShape3D_Deck")
 
 [node name="PlayerPositions" type="Node3D" parent="." unique_id=556924132]
+
+[node name="TurnIndicatorCircle" type="MeshInstance3D" parent="PlayerPositions" unique_id=987654321]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 0)
+mesh = SubResource("PlaneMesh_TurnIndicator")
 
 [node name="Bottom" type="Node3D" parent="PlayerPositions" unique_id=1640482197]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 4)

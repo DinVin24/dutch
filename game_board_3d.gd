@@ -13,7 +13,9 @@ extends Node3D
 @onready var turn_label = $GameUI/MainHUD/TopLeft/TurnLabel
 @onready var top_center = $GameUI/MainHUD/TopCenter
 @onready var crt_overlay = $PostProcessing/CRT_Overlay
+@onready var turn_indicator_circle = $PlayerPositions/TurnIndicatorCircle
 var player_lights = {}
+var _bell_stream: AudioStreamWAV = null
 
 var bot_controller: BotController = null
 var end_turn_btn: Button
@@ -102,6 +104,7 @@ func _ready():
 		return
 
 	player_hands = [[], [], [], []]
+	_bell_stream = _generate_bell_stream()
 	print("Game Board 3D: Ready. Connecting signals...")
 	GameManager.stop_menu_music()
 	GameManager.play_game_music()
@@ -815,7 +818,15 @@ func _on_turn_started(player_idx):
 	turn_label.text = "> " + p_info.name.to_upper() + "'S TURN"
 	_animate_glitch_text(turn_label)
 	_update_turn_lights(player_idx)
-	if player_idx != _human_ui_idx():
+	
+	if is_instance_valid(turn_indicator_circle):
+		var mat = turn_indicator_circle.get_active_material(0)
+		if mat is ShaderMaterial:
+			mat.set_shader_parameter("active_player_index", player_idx)
+			
+	if player_idx == _human_ui_idx():
+		GameManager.play_sfx(_bell_stream)
+	else:
 		_show_message(p_info.name + " is thinking...")
 
 func _update_turn_lights(current_player: int, all_on: bool = false):
@@ -996,6 +1007,20 @@ func _on_cancel_dutch_pressed():
 
 func _on_game_state_changed(new_state):
 	_hide_message()
+
+	var is_active_turn_state = new_state in [
+		GameManager.GameState.TURN_START_DRAW,
+		GameManager.GameState.TURN_RESOLVE_DRAWN,
+		GameManager.GameState.TURN_PEEK_ABILITY,
+		GameManager.GameState.TURN_SWAP_ABILITY,
+		GameManager.GameState.TURN_END_CHOICE,
+		GameManager.GameState.TURN_JUMP_IN_SELECTION,
+		GameManager.GameState.TURN_CONFIRM_DUTCH
+	]
+	if not is_active_turn_state and is_instance_valid(turn_indicator_circle):
+		var mat = turn_indicator_circle.get_active_material(0)
+		if mat is ShaderMaterial:
+			mat.set_shader_parameter("active_player_index", -1)
 
 	end_turn_btn.hide()
 	jump_in_btn.hide()
@@ -2030,3 +2055,45 @@ func spawn_particles(type: String, global_pos: Vector3):
 	
 	var cleanup_timer = get_tree().create_timer(particles.lifetime + 0.1)
 	cleanup_timer.timeout.connect(particles.queue_free)
+
+func _generate_bell_stream() -> AudioStreamWAV:
+	var stream = AudioStreamWAV.new()
+	stream.mix_rate = 44100
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.stereo = false
+	
+	var mix_rate = 44100.0
+	var duration = 1.2
+	var total_samples = int(mix_rate * duration)
+	var byte_array = PackedByteArray()
+	byte_array.resize(total_samples * 2) # 16-bit = 2 bytes per sample
+	
+	var f0 = 784.0 # G5 note frequency
+	var harmonics = [
+		{"freq": f0, "amp": 0.45, "decay": 2.5},
+		{"freq": f0 * 1.5, "amp": 0.25, "decay": 4.0},
+		{"freq": f0 * 2.0, "amp": 0.2, "decay": 5.0},
+		{"freq": f0 * 2.63, "amp": 0.15, "decay": 6.5},
+		{"freq": f0 * 3.0, "amp": 0.1, "decay": 8.0},
+		{"freq": f0 * 4.0, "amp": 0.05, "decay": 10.0}
+	]
+	
+	for s in range(total_samples):
+		var t = s / mix_rate
+		var sample = 0.0
+		for h in harmonics:
+			sample += h.amp * sin(2.0 * PI * h.freq * t) * exp(-h.decay * t)
+		
+		# Prevent clipping
+		sample = clamp(sample, -1.0, 1.0)
+		
+		# Fade out at the very end
+		if t > duration - 0.15:
+			var fade = (duration - t) / 0.15
+			sample *= fade
+			
+		var val = int(sample * 32767.0)
+		byte_array.encode_s16(s * 2, val)
+		
+	stream.data = byte_array
+	return stream
