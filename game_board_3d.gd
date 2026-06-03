@@ -19,6 +19,7 @@ var player_lights = {}
 var _bell_stream: AudioStreamWAV = null
 
 var bot_controller: BotController = null
+var action_panel: PanelContainer
 var end_turn_btn: Button
 var jump_in_btn: Button
 var call_dutch_btn: Button
@@ -356,17 +357,44 @@ func _on_multiplayer_sync_applied() -> void:
 	_update_draw_arrow_visibility()
 
 func _create_hud_ui():
-	# Action Buttons Container: Moved to bottom-right to avoid overlapping hand cards
+	# Action Panel: Style Box Flat with 85% opacity dark background, rounded corners and subtle border
+	action_panel = PanelContainer.new()
+	action_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	action_panel.offset_left = 20
+	action_panel.offset_right = 260
+	action_panel.offset_top = -340
+	action_panel.offset_bottom = -20
+	action_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.04, 0.04, 0.06, 0.85)
+	panel_style.border_width_left = 3
+	panel_style.border_width_right = 3
+	panel_style.border_width_top = 3
+	panel_style.border_width_bottom = 3
+	panel_style.border_color = Color(0.15, 0.18, 0.22, 0.4)
+	panel_style.corner_radius_top_left = 10
+	panel_style.corner_radius_top_right = 10
+	panel_style.corner_radius_bottom_left = 10
+	panel_style.corner_radius_bottom_right = 10
+	
+	# Content margins to pad the buttons inside
+	panel_style.content_margin_left = 15
+	panel_style.content_margin_right = 15
+	panel_style.content_margin_top = 15
+	panel_style.content_margin_bottom = 15
+	
+	action_panel.add_theme_stylebox_override("panel", panel_style)
+	$GameUI/MainHUD.add_child(action_panel)
+
+	# Action Buttons Container: Nested inside the Action Panel
 	var action_container = VBoxContainer.new()
-	action_container.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	action_container.offset_left = 30
-	action_container.offset_right = 230
-	action_container.offset_top = -400
-	action_container.offset_bottom = -30
 	action_container.alignment = BoxContainer.ALIGNMENT_END
 	action_container.add_theme_constant_override("separation", 15)
-	$GameUI/MainHUD.add_child(action_container)
+	action_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	action_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	action_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	action_panel.add_child(action_container)
 
 	# Standard HUD buttons
 	end_turn_btn = _create_button(action_container, "> END_TURN <", Color(0.0, 1.0, 1.0))
@@ -412,13 +440,23 @@ func _create_button(parent: Node, text: String, color: Color) -> Button:
 	hover_style.border_width_left = 4
 	hover_style.border_color = color.lightened(0.5)
 
+	# Disabled state style: faded border (25% opacity)
+	var disabled_style = StyleBoxFlat.new()
+	disabled_style.bg_color = Color(0, 0, 0, 0)
+	disabled_style.border_width_left = 4
+	disabled_style.border_color = Color(color.r, color.g, color.b, 0.25)
+
 	btn.add_theme_stylebox_override("normal", style)
 	btn.add_theme_stylebox_override("hover", hover_style)
 	btn.add_theme_stylebox_override("pressed", hover_style)
+	btn.add_theme_stylebox_override("disabled", disabled_style)
 	
 	btn.add_theme_color_override("font_color", color)
 	btn.add_theme_color_override("font_hover_color", Color.BLACK)
 	btn.add_theme_color_override("font_pressed_color", Color.BLACK)
+	# Disabled text color: faded font color (25% opacity)
+	btn.add_theme_color_override("font_disabled_color", Color(color.r, color.g, color.b, 0.25))
+	
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	
 	parent.add_child(btn)
@@ -913,8 +951,7 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	_update_deck_visual() # Refresh deck after drawing
 
 func _on_card_discarded(player_idx, card_data):
-	if jump_in_btn:
-		jump_in_btn.visible = GameManager.should_human_show_jump_in_button(_human_ui_idx())
+	_update_action_buttons_state()
 	
 	print("GameBoard3D: Card Discarded. Player: ", player_idx, " Data: ", card_data.rank, " of ", card_data.suit)
 	
@@ -1011,6 +1048,68 @@ func _on_cancel_dutch_pressed():
 	if GameManager.can_player_cancel_dutch(GameManager.local_player_idx):
 		_send_action("cancel_dutch")
 
+func _update_action_buttons_state():
+	if not is_instance_valid(end_turn_btn) or not is_instance_valid(jump_in_btn) or not is_instance_valid(call_dutch_btn):
+		return
+
+	var local_idx = _human_ui_idx()
+	
+	# Determine if each action is allowed right now
+	var can_end_turn = GameManager.can_player_end_turn(local_idx) or GameManager.can_player_cancel_jump_in(local_idx)
+	var can_jump_in = GameManager.can_player_start_jump_in(local_idx) or GameManager.should_human_show_jump_in_button(local_idx)
+	var can_call_dutch = GameManager.can_player_call_dutch(local_idx)
+
+	# Set button disabled states (disabled = not allowed)
+	end_turn_btn.disabled = not can_end_turn
+	jump_in_btn.disabled = not can_jump_in
+	call_dutch_btn.disabled = not can_call_dutch
+
+	# The three core actions are always visible inside the action panel
+	end_turn_btn.visible = true
+	jump_in_btn.visible = true
+	call_dutch_btn.visible = true
+
+	# Confirm Dutch and Forfeit Dutch are only shown in TURN_CONFIRM_DUTCH state
+	var is_confirm_dutch_state = GameManager.current_state == GameManager.GameState.TURN_CONFIRM_DUTCH
+	var can_confirm = GameManager.can_player_confirm_dutch(local_idx)
+	
+	confirm_dutch_btn.visible = is_confirm_dutch_state
+	confirm_dutch_btn.disabled = not can_confirm
+	
+	forfeit_dutch_btn.visible = is_confirm_dutch_state
+	forfeit_dutch_btn.disabled = not can_confirm
+
+	# Update the action panel's pulsing/glowing style
+	_update_action_panel_style()
+
+func _update_action_panel_style():
+	if not is_instance_valid(action_panel):
+		return
+	
+	var local_idx = _human_ui_idx()
+	# It is the player's turn to act if it's their current player index and state is an active playing state
+	var is_my_turn = (GameManager.current_player_index == local_idx) and not (
+		GameManager.current_state in [
+			GameManager.GameState.INITIALIZING, 
+			GameManager.GameState.DEAL_CARDS, 
+			GameManager.GameState.GAME_OVER
+		]
+	)
+	
+	var style = action_panel.get_theme_stylebox("panel") as StyleBoxFlat
+	if not style:
+		return
+		
+	if is_my_turn:
+		# Pulsing neon cyan border when it's our turn
+		var pulse = (sin(Time.get_ticks_msec() * 0.005) + 1.0) * 0.5 # 0.0 to 1.0
+		style.border_color = Color(0.0, 1.0, 1.0, 0.45 + pulse * 0.45) # pulse alpha between 0.45 and 0.90
+		style.bg_color = Color(0.04, 0.06, 0.08, 0.85 + pulse * 0.05) # subtle background pulse
+	else:
+		# Static dim grey-blue when not our turn
+		style.border_color = Color(0.15, 0.18, 0.22, 0.4)
+		style.bg_color = Color(0.04, 0.04, 0.06, 0.85)
+
 func _on_game_state_changed(new_state):
 	_hide_message()
 	_update_draw_arrow_visibility()
@@ -1029,13 +1128,8 @@ func _on_game_state_changed(new_state):
 		if mat is ShaderMaterial:
 			mat.set_shader_parameter("active_player_index", -1)
 
-	end_turn_btn.hide()
-	jump_in_btn.hide()
-	call_dutch_btn.hide()
-	confirm_dutch_btn.hide()
-	forfeit_dutch_btn.hide()
+	_update_action_buttons_state()
 	_refresh_human_interactivity()
-	jump_in_btn.visible = GameManager.should_human_show_jump_in_button(_human_ui_idx())
 	if new_state == GameManager.GameState.TURN_START_DRAW or \
 	   new_state == GameManager.GameState.TURN_END_CHOICE:
 		_clear_all_highlights()
@@ -1060,24 +1154,16 @@ func _on_game_state_changed(new_state):
 				_show_message(player_name + " is deciding...")
 		GameManager.GameState.TURN_END_CHOICE:
 			print("GameBoard3D: UI - Showing TURN_END_CHOICE")
-			if GameManager.can_player_end_turn(_human_ui_idx()):
-				end_turn_btn.show()
-			if GameManager.can_player_call_dutch(_human_ui_idx()):
-				call_dutch_btn.show()
 		GameManager.GameState.TURN_JUMP_IN_SELECTION:
 			print("GameBoard3D: UI - Showing TURN_JUMP_IN_SELECTION")
 			var ji_idx = GameManager.jump_in_player_idx
 			var ji_name = GameManager.players_info[ji_idx].name if ji_idx >= 0 else "Someone"
 			_show_message(ji_name + ": pick a matching card, or end turn to cancel.")
-			if GameManager.can_player_cancel_jump_in(_human_ui_idx()):
-				end_turn_btn.show()
 			_highlight_selectable_cards(false)
 		GameManager.GameState.TURN_CONFIRM_DUTCH:
 			print("GameBoard3D: UI - Showing TURN_CONFIRM_DUTCH")
 			if GameManager.can_player_confirm_dutch(_human_ui_idx()):
 				_show_message("You called Dutch! Confirm or Forfeit?")
-				confirm_dutch_btn.show()
-				forfeit_dutch_btn.show()
 		GameManager.GameState.TURN_PEEK_ABILITY:
 			if GameManager.active_ability_player == _human_ui_idx():
 				_show_message("Select ANY card to peek at.")
@@ -1636,26 +1722,25 @@ func _unhandled_input(event):
 	_handle_game_keyboard_input(event)
 
 func _handle_game_keyboard_input(event: InputEvent) -> void:
-	# ACTION BUTTONS
 	# Q — end turn OR confirm dutch (states are mutually exclusive)
-	if event.is_action("game_end_turn") and end_turn_btn.visible:
+	if event.is_action("game_end_turn") and end_turn_btn.visible and not end_turn_btn.disabled:
 		_on_end_turn_pressed()
 		get_viewport().set_input_as_handled()
 
-	elif event.is_action("game_confirm_dutch") and confirm_dutch_btn.visible:
+	elif event.is_action("game_confirm_dutch") and confirm_dutch_btn.visible and not confirm_dutch_btn.disabled:
 		_on_confirm_dutch_pressed()
 		get_viewport().set_input_as_handled()
 
 	# E — call dutch OR forfeit dutch (states are mutually exclusive)
-	elif event.is_action("game_forfeit_dutch") and forfeit_dutch_btn.visible:
+	elif event.is_action("game_forfeit_dutch") and forfeit_dutch_btn.visible and not forfeit_dutch_btn.disabled:
 		_on_cancel_dutch_pressed()
 		get_viewport().set_input_as_handled()
 
-	elif event.is_action("game_call_dutch") and call_dutch_btn.visible:
+	elif event.is_action("game_call_dutch") and call_dutch_btn.visible and not call_dutch_btn.disabled:
 		_on_call_dutch_pressed()
 		get_viewport().set_input_as_handled()
 
-	elif event.is_action("game_jump_in") and jump_in_btn.visible:
+	elif event.is_action("game_jump_in") and jump_in_btn.visible and not jump_in_btn.disabled:
 		_on_jump_in_pressed()
 		get_viewport().set_input_as_handled()
 
@@ -1787,6 +1872,8 @@ func _on_bot_action(message):
 
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint(): return
+	
+	_update_action_buttons_state()
 	
 	if is_instance_valid(draw_arrow) and draw_arrow.visible:
 		draw_arrow.position.y = 1.2 + sin(Time.get_ticks_msec() * 0.005) * 0.15
