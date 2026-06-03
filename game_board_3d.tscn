@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://dwowse5ksiil0" path="res://assets/models/table.glb" id="3_table"]
 [ext_resource type="PackedScene" uid="uid://dmsi4kgr88r2u" path="res://assets/models/background.glb" id="4_background"]
 [ext_resource type="Shader" path="res://shaders/turn_indicator.gdshader" id="5_turn_indicator_shader"]
+[ext_resource type="Texture2D" path="res://assets/images/arrow_down.png" id="6_arrow_texture"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -73,6 +74,13 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0.1, 0)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="DeckArea/Area3D" unique_id=213724805]
 shape = SubResource("BoxShape3D_Deck")
+
+[node name="DrawIndicatorArrow" type="Sprite3D" parent="DeckArea"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
+visible = false
+billboard = 1
+texture = ExtResource("6_arrow_texture")
+pixel_size = 0.0018
 
 [node name="DiscardArea" type="Node3D" parent="." unique_id=453331196]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0.1, 0)

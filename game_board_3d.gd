@@ -14,6 +14,7 @@ extends Node3D
 @onready var top_center = $GameUI/MainHUD/TopCenter
 @onready var crt_overlay = $PostProcessing/CRT_Overlay
 @onready var turn_indicator_circle = $PlayerPositions/TurnIndicatorCircle
+@onready var draw_arrow = $DeckArea/DrawIndicatorArrow
 var player_lights = {}
 var _bell_stream: AudioStreamWAV = null
 
@@ -210,6 +211,12 @@ func _ready():
 		var tut = tut_scene.instantiate()
 		$GameUI.add_child(tut)
 
+func _process(_delta: float) -> void:
+	if Engine.is_editor_hint():
+		return
+	if is_instance_valid(draw_arrow) and draw_arrow.visible:
+		draw_arrow.position.y = 1.2 + sin(Time.get_ticks_msec() * 0.005) * 0.15
+
 func _send_action(action: String, args: Dictionary = {}):
 	if GameManager.is_multiplayer:
 		GameManager.request_action.rpc_id(1, action, args)
@@ -352,6 +359,7 @@ func _on_multiplayer_sync_applied() -> void:
 		else:
 			beers_snapshot.append(3)
 	_last_sync_diag["beers"] = beers_snapshot
+	_update_draw_arrow_visibility()
 
 func _create_hud_ui():
 	# Action Buttons Container: Moved to bottom-right to avoid overlapping hand cards
@@ -828,6 +836,11 @@ func _on_turn_started(player_idx):
 		GameManager.play_sfx(_bell_stream)
 	else:
 		_show_message(p_info.name + " is thinking...")
+	_update_draw_arrow_visibility()
+
+func _update_draw_arrow_visibility():
+	if is_instance_valid(draw_arrow):
+		draw_arrow.visible = GameManager.can_player_draw(_human_ui_idx())
 
 func _update_turn_lights(current_player: int, all_on: bool = false):
 	for i in range(4):
@@ -1007,6 +1020,7 @@ func _on_cancel_dutch_pressed():
 
 func _on_game_state_changed(new_state):
 	_hide_message()
+	_update_draw_arrow_visibility()
 
 	var is_active_turn_state = new_state in [
 		GameManager.GameState.TURN_START_DRAW,
