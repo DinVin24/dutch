@@ -81,6 +81,7 @@ var _hovered_hammer_idx_board: int = -1
 var _hovered_hammer_cabinet: Node = null
 var _cabinets: Dictionary = {}
 var _cabinet_prompt_label: Label = null
+var _ability_desc_panel: PanelContainer = null
 var _look_yaw: float = 0.0
 var _look_pitch: float = 0.0
 
@@ -476,6 +477,43 @@ func _create_hud_ui():
 	_cabinet_prompt_label.hide()
 	$GameUI/MainHUD.add_child(_cabinet_prompt_label)
 
+	# Cabinet Ability Description HUD (Bottom-Right corner)
+	_ability_desc_panel = PanelContainer.new()
+	_ability_desc_panel.name = "AbilityDescPanel"
+	_ability_desc_panel.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_ability_desc_panel.offset_left = -350
+	_ability_desc_panel.offset_right = -20
+	_ability_desc_panel.offset_top = -180
+	_ability_desc_panel.offset_bottom = -20
+	_ability_desc_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	
+	var desc_style = StyleBoxFlat.new()
+	desc_style.bg_color = Color(0.04, 0.04, 0.06, 0.75)
+	desc_style.border_width_left = 2
+	desc_style.border_width_right = 2
+	desc_style.border_width_top = 2
+	desc_style.border_width_bottom = 2
+	desc_style.border_color = Color(1.0, 0.75, 0.1, 0.6)
+	desc_style.corner_radius_top_left = 8
+	desc_style.corner_radius_top_right = 8
+	desc_style.corner_radius_bottom_left = 8
+	desc_style.corner_radius_bottom_right = 8
+	desc_style.content_margin_left = 12
+	desc_style.content_margin_right = 12
+	desc_style.content_margin_top = 12
+	desc_style.content_margin_bottom = 12
+	
+	_ability_desc_panel.add_theme_stylebox_override("panel", desc_style)
+	$GameUI/MainHUD.add_child(_ability_desc_panel)
+	
+	var desc_label = Label.new()
+	desc_label.name = "DescLabel"
+	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_label.add_theme_font_size_override("font_size", 18)
+	desc_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95))
+	_ability_desc_panel.add_child(desc_label)
+	_ability_desc_panel.hide()
+
 func _create_button(parent: Node, text: String, color: Color) -> Button:
 	var btn = Button.new()
 	btn.text = text
@@ -791,8 +829,9 @@ func _on_ability_token_clicked(token):
 		_show_message("Not your turn to play abilities!")
 
 ## Called when the player clicks on a hammer in their cabinet drawer.
-## hammer_collider: the Area3D Area3D that was clicked (has "hammer_index" meta).
-func _on_hammer_clicked(hammer_collider: Area3D) -> void:
+func _use_hovered_hammer() -> void:
+	if _hovered_hammer_idx_board < 0 or not is_instance_valid(_hovered_hammer_cabinet):
+		return
 	var p_idx = GameManager.local_player_idx
 	# Only the current player may use abilities
 	if p_idx != GameManager.current_player_index:
@@ -800,7 +839,7 @@ func _on_hammer_clicked(hammer_collider: Area3D) -> void:
 		return
 	if _is_preparing_ability or _is_waiting_for_target:
 		return
-	var h_idx: int = hammer_collider.get_meta("hammer_index", -1)
+	var h_idx: int = _hovered_hammer_idx_board
 	var abilities: Array = GameManager.players_info[p_idx].abilities
 	if h_idx < 0 or h_idx >= abilities.size():
 		_show_message("Invalid ability slot!")
@@ -824,6 +863,14 @@ func _on_hammer_clicked(hammer_collider: Area3D) -> void:
 		_show_message("SELECT TARGET PLAYER (click their cards or zone)")
 	else:
 		_send_action("play_ability", {"ability_id": ability_id, "target_idx": p_idx, "slot_idx": h_idx})
+
+## hammer_collider: the Area3D Area3D that was clicked (has "hammer_index" meta).
+func _on_hammer_clicked(hammer_collider: Area3D) -> void:
+	var h_idx: int = hammer_collider.get_meta("hammer_index", -1)
+	if h_idx >= 0:
+		_hovered_hammer_idx_board = h_idx
+		_hovered_hammer_cabinet = _cabinets.get(GameManager.local_player_idx)
+		_use_hovered_hammer()
 
 func _create_player_targeting_areas():
 	for i in range(4):
@@ -1847,6 +1894,13 @@ func _unhandled_input(event):
 	if DevConsole and DevConsole.window.is_visible():
 		return
 
+	# Cabinet Hammer Interaction (intercept KEY_E if a hammer is hovered)
+	if _hovered_hammer_idx_board != -1 and is_instance_valid(_hovered_hammer_cabinet) and event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_E:
+			_use_hovered_hammer()
+			get_viewport().set_input_as_handled()
+			return
+
 	# Cabinet Drawer Interaction (intercept keypress if hovered)
 	if _hovered_shelf_index != -1 and is_instance_valid(_hovered_cabinet_node) and event.is_pressed() and not event.is_echo():
 		if (event is InputEventKey and event.keycode == KEY_E) or event.is_action("game_call_dutch") or event.is_action("game_forfeit_dutch"):
@@ -2078,12 +2132,23 @@ func _update_cabinet_hover() -> void:
 						_hovered_hammer_idx_board = h_idx
 						_hovered_hammer_cabinet = cab_node
 						cab_node.hover_hammer(h_idx)
+					
+					var abilities = GameManager.players_info[h_player_idx].abilities
+					var ab_id = abilities[h_idx] if h_idx < abilities.size() else ""
+					
 					# Show ability name in prompt
-					if is_instance_valid(_cabinet_prompt_label):
-						var abilities = GameManager.players_info[h_player_idx].abilities
-						var ab_name = abilities[h_idx].capitalize().replace("_", " ") if h_idx < abilities.size() else "?"
-						_cabinet_prompt_label.text = "[CLICK] %s" % ab_name
+					if is_instance_valid(_cabinet_prompt_label) and ab_id != "":
+						var ab_name = ab_id.capitalize().replace("_", " ")
+						_cabinet_prompt_label.text = "[E] / [CLICK] Use %s" % ab_name
 						_cabinet_prompt_label.show()
+						
+					# Show description in the bottom-right corner
+					if is_instance_valid(_ability_desc_panel) and ab_id != "":
+						var desc_label = _ability_desc_panel.get_node_or_null("DescLabel")
+						if desc_label:
+							desc_label.text = _get_ability_desc(ab_id)
+						_ability_desc_panel.show()
+						
 					return  # Hammer handled; skip drawer detection this frame
 	
 	# Not hovering a hammer this frame — unhover if we were before
@@ -2093,6 +2158,8 @@ func _update_cabinet_hover() -> void:
 		_hovered_hammer_cabinet = null
 		if is_instance_valid(_cabinet_prompt_label):
 			_cabinet_prompt_label.hide()
+		if is_instance_valid(_ability_desc_panel):
+			_ability_desc_panel.hide()
 	
 	# --- PASS 2: Drawer detection on layer 8 ---
 	var q_drawer := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
@@ -2140,6 +2207,9 @@ func _update_cabinet_prompt() -> void:
 		_cabinet_prompt_label.hide()
 		return
 		
+	if is_instance_valid(_ability_desc_panel):
+		_ability_desc_panel.hide()
+		
 	var is_open = _hovered_cabinet_node.is_shelf_open(_hovered_shelf_index)
 	var shelf_name = _hovered_cabinet_node.get_shelf_name(_hovered_shelf_index)
 	var action_text = "Close" if is_open else "Open"
@@ -2149,6 +2219,22 @@ func _update_cabinet_prompt() -> void:
 	_cabinet_prompt_label.modulate.a = 0.0
 	var tween = create_tween()
 	tween.tween_property(_cabinet_prompt_label, "modulate:a", 1.0, 0.15)
+
+func _get_ability_desc(ab: String) -> String:
+	match ab:
+		"bottoms_up": return "Bottoms Up:\nForces the target player to drink a beer."
+		"refuel": return "Refuel:\nGives you 1 beer back (up to max 3)."
+		"trim_off": return "Trim Off:\nDiscards the highest value card from your own hand (earns money)."
+		"boulder": return "Boulder:\nTakes the highest value card from the deck and adds it to the target's hand."
+		"reverse": return "Reverse:\nReverses the direction of player turns."
+		"skip": return "Skip:\nSkips the target player's next turn."
+		"perfect_match": return "Perfect Match:\nResets the round, deals Ace, 2, 3, 4 to you, deals 4 cards to everyone else, and restarts peeking."
+		"inflation": return "Inflation:\nMultiplies the point value of all cards in the target's hand by 2.0."
+		"half_off": return "Half Off:\nDivides the point value of all cards in the target's hand by 2.0."
+		"jumpscare": return "Jumpscare:\nDraws a card from the deck and adds it to the target's hand."
+		"shuffle": return "Shuffle:\nShuffles the order of cards in the target's hand."
+		"polarity_shift": return "Polarity Shift:\nFlips the win condition (toggles between Lowest Wins and Highest Wins)."
+	return ""
 
 func shake(intensity: float, duration: float):
 	_shake_intensity = intensity

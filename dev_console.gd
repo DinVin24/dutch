@@ -192,27 +192,10 @@ func _cmd_give(args: Array):
 			player.abilities.append(ab_id)
 		output.append_text("\n[color=cyan]Gave Ability '" + target_name.capitalize() + "' to " + player.name + "[/color]")
 		
-		# Visually spawn the token if we are in the 3D board scene
+		# Update cabinet visuals if we are in the 3D board scene
 		var scene = get_tree().current_scene
-		if scene.has_method("_on_hand_updated"): # Check if it's the board
-			# We can't easily call private board methods, but we can mimic the logic
-			# or just wait for the next turn. Let's try to find if there's a signal.
-			# Actually, the board listens to nothing for abilities additions.
-			# Let's just suggest the user restarts or wait for my next improvement.
-			# BETTER: Manually spawn if we find the node.
-			var pos_node = scene.player_pos_nodes[player.id]
-			var token_scene = load("res://ability_token_3d.gd")
-			if pos_node and token_scene:
-				var token = token_scene.new()
-				pos_node.add_child(token)
-				token.setup(ab_id)
-				token.token_clicked.connect(scene._on_ability_token_clicked)
-				
-				# Drop beautifully from above to notify the player they received it
-				token.position = Vector3(2.8, 0.5, 0.0)
-				
-				if scene.has_method("_update_ability_visuals"):
-					scene._update_ability_visuals(player.id)
+		if scene.has_method("_update_ability_visuals"):
+			scene._update_ability_visuals(player.id)
 	else:
 		# Try to find card
 		var card = _find_and_remove_card_globally(target_name)
