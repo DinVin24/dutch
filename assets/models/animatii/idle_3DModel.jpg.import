@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://mn2xb3e4uwwk"
-path="res://.godot/imported/idle_3DModel.jpg-bd3690f56c4028a3373c10f10b46360f.ctex"
+path.s3tc="res://.godot/imported/idle_3DModel.jpg-bd3690f56c4028a3373c10f10b46360f.s3tc.ctex"
+path.etc2="res://.godot/imported/idle_3DModel.jpg-bd3690f56c4028a3373c10f10b46360f.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "98031ed0c1e7dfb081e7f16522bf7766"
@@ -14,11 +16,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/animatii/idle_3DModel.jpg"
-dest_files=["res://.godot/imported/idle_3DModel.jpg-bd3690f56c4028a3373c10f10b46360f.ctex"]
+dest_files=["res://.godot/imported/idle_3DModel.jpg-bd3690f56c4028a3373c10f10b46360f.s3tc.ctex", "res://.godot/imported/idle_3DModel.jpg-bd3690f56c4028a3373c10f10b46360f.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -40,4 +42,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=1
+detect_3d/compress_to=0
