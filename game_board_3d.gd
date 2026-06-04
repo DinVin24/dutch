@@ -1600,6 +1600,9 @@ func _update_hand_visuals(player_idx: int):
 			var tween = create_tween().set_parallel(true)
 			tween.tween_property(card_node, "position", target_pos, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT).set_delay(delay)
 			tween.tween_property(card_node, "quaternion", target_quat, duration).set_delay(delay)
+			# Shrink back to normal hand size if the card came from the draw pile (1.5x)
+			if card_node.scale != Vector3.ONE:
+				tween.tween_property(card_node, "scale", Vector3.ONE, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT).set_delay(delay)
 
 func _handle_initial_deal():
 	print("GameBoard3D: _handle_initial_deal started")
