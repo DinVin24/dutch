@@ -82,6 +82,7 @@ var _hovered_hammer_cabinet: Node = null
 var _cabinets: Dictionary = {}
 var _cabinet_prompt_label: Label = null
 var _ability_desc_panel: PanelContainer = null
+var player_avatars: Dictionary = {}
 var _look_yaw: float = 0.0
 var _look_pitch: float = 0.0
 
@@ -202,6 +203,8 @@ func _ready():
 	# Lock mouse for central gameplay crosshair raycasting and look-around
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
+	_spawn_player_avatars()
+
 	bot_controller = BotController.new()
 	bot_controller.gm = GameManager
 	add_child(bot_controller)
@@ -269,6 +272,8 @@ func _configure_visible_player_seats(n: int) -> void:
 	for seat in range(4):
 		if player_pos_nodes.has(seat):
 			player_pos_nodes[seat].visible = seat < clampi(n, 1, 4)
+		if player_avatars.has(seat) and is_instance_valid(player_avatars[seat]):
+			player_avatars[seat].visible = seat < clampi(n, 1, 4)
 
 func _on_multiplayer_sync_applied() -> void:
 	var new_state: int = int(GameManager.current_state)
@@ -939,6 +944,7 @@ func _on_player_area_input(_camera, event, _position, _normal, _shape_idx, playe
 		_update_ability_visuals(activator)
 
 func _on_player_drank_beer(player_idx, remaining):
+	play_take_animation(player_idx)
 	if player_idx < 0 or player_idx >= 4: return
 	var beers_array = player_beers_nodes[player_idx]
 	for i in range(beers_array.size()):
@@ -956,6 +962,7 @@ func _on_player_gained_money(player_idx, _amount, total):
 		money_labels[0].text = "$" + str(total)
 
 func _on_ability_played(player_idx, ability_id):
+	play_take_animation(player_idx)
 	var p_name = GameManager.players_info[player_idx].name
 	_show_message(p_name + " used " + ability_id.capitalize() + "!")
 	# Reset any hammer hover state when an ability is consumed
@@ -1041,6 +1048,7 @@ func _get_glitch_string(base: String) -> String:
 	return result
 
 func _on_card_drawn_to_pending(player_idx, card_data):
+	play_take_animation(player_idx)
 	if pending_card: pending_card.queue_free()
 
 	_update_deck_visual()
@@ -1067,6 +1075,7 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	_update_deck_visual() # Refresh deck after drawing
 
 func _on_card_discarded(player_idx, card_data):
+	play_take_animation(player_idx)
 	_update_action_buttons_state()
 	
 	print("GameBoard3D: Card Discarded. Player: ", player_idx, " Data: ", card_data.rank, " of ", card_data.suit)
@@ -1642,6 +1651,7 @@ func _start_peek_phase():
 
 var peeked_cards: Array = []
 func _on_card_clicked(node, data):
+	play_take_animation(_human_ui_idx())
 	if not is_instance_valid(node): return
 	
 	var is_pending: bool = (node == pending_card or node.name == "PendingCard")
@@ -1753,10 +1763,12 @@ func _on_discard_input_event(_camera, event, _position, _normal, _shape_idx):
 
 func _on_deck_clicked():
 	if GameManager.can_player_draw(GameManager.local_player_idx):
+		play_take_animation(GameManager.local_player_idx)
 		_send_action("draw_card")
 
 func _on_discard_clicked():
 	if GameManager.can_player_discard_drawn_card(GameManager.local_player_idx):
+		play_take_animation(GameManager.local_player_idx)
 		_send_action("discard_drawn")
 
 func _on_scores_ready(results):
@@ -1891,6 +1903,7 @@ func _unhandled_input(event):
 			if result16 and result16.collider:
 				var col16 = result16.collider
 				if col16.has_meta("hammer_index"):
+					play_take_animation(_human_ui_idx())
 					_on_hammer_clicked(col16)
 					get_viewport().set_input_as_handled()
 					return
@@ -1908,6 +1921,7 @@ func _unhandled_input(event):
 	# Cabinet Hammer Interaction (intercept KEY_E if a hammer is hovered)
 	if _hovered_hammer_idx_board != -1 and is_instance_valid(_hovered_hammer_cabinet) and event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_E:
+			play_take_animation(_human_ui_idx())
 			_use_hovered_hammer()
 			get_viewport().set_input_as_handled()
 			return
@@ -1915,6 +1929,7 @@ func _unhandled_input(event):
 	# Cabinet Drawer Interaction (intercept keypress if hovered)
 	if _hovered_shelf_index != -1 and is_instance_valid(_hovered_cabinet_node) and event.is_pressed() and not event.is_echo():
 		if (event is InputEventKey and event.keycode == KEY_E) or event.is_action("game_call_dutch") or event.is_action("game_forfeit_dutch"):
+			play_take_animation(_human_ui_idx())
 			_hovered_cabinet_node.toggle_shelf(_hovered_shelf_index)
 			_update_cabinet_prompt()
 			get_viewport().set_input_as_handled()
@@ -2329,6 +2344,7 @@ func _input(event: InputEvent) -> void:
 			_look_pitch = clamp(_look_pitch, deg_to_rad(-50.0), deg_to_rad(50.0))
 
 func _on_jack_swap_resolved(p1: int, c1: int, p2: int, c2: int) -> void:
+	play_take_animation(GameManager.current_player_index)
 	if c1 >= player_hands[p1].size() or c2 >= player_hands[p2].size():
 		return
 	var node1 = player_hands[p1][c1]
@@ -2653,3 +2669,80 @@ func _update_crosshair_raycast() -> void:
 		_hovered_board_card = hit_card
 		if is_instance_valid(_hovered_board_card):
 			_on_card_hover_enter(_hovered_board_card)
+
+func _spawn_player_avatars() -> void:
+	var char_scene = load("res://assets/models/animatii/idle.glb")
+	var take_scene = load("res://assets/models/animatii/take.glb")
+	if not char_scene or not take_scene:
+		push_error("GameBoard3D: Could not load character/take animation model!")
+		return
+
+	var take_inst = take_scene.instantiate()
+	var take_ap: AnimationPlayer = take_inst.get_node("AnimationPlayer")
+	var take_anim = take_ap.get_animation("Armature|mixamo_com|Layer0_001")
+	if not take_anim:
+		push_error("GameBoard3D: Take animation not found in take.glb!")
+		take_inst.queue_free()
+		return
+
+	var chairs = {
+		0: get_node_or_null("Sketchfab_Scene"),  # Bottom (Player 0)
+		1: get_node_or_null("Sketchfab_Scene4"), # Left (Player 1)
+		2: get_node_or_null("Sketchfab_Scene3"), # Top (Player 2)
+		3: get_node_or_null("Sketchfab_Scene2")  # Right (Player 3)
+	}
+
+	var chair_rotations = {
+		0: 270.0,
+		1: 0.0,
+		2: 90.0,
+		3: 180.0
+	}
+
+	for i in range(4):
+		var chair = chairs[i]
+		if not is_instance_valid(chair):
+			continue
+
+		var char_node = char_scene.instantiate()
+		chair.add_child(char_node)
+
+		# Position character on the seat:
+		# Local Y = 0.0095 maps to global Y = -2.051 (perfect seat surface sitting position)
+		# Local Z = 0.0 centers on the seat
+		char_node.position = Vector3(0.0, 0.0095, 0.0)
+		char_node.scale = Vector3(1.0/43.0, 1.0/43.0, 1.0/43.0)
+		char_node.rotation_degrees = Vector3(0.0, chair_rotations[i], 0.0)
+
+		# Set up AnimationPlayer
+		var ap: AnimationPlayer = char_node.get_node("AnimationPlayer")
+		if ap:
+			var lib = ap.get_animation_library("")
+			if lib:
+				# Add the "take" animation
+				lib.add_animation("take", take_anim)
+
+				# Rename original Mixamo animation to "idle" and set to loop
+				var idle_orig = "Armature|mixamo_com|Layer0"
+				if lib.has_animation(idle_orig):
+					var idle_anim = lib.get_animation(idle_orig)
+					idle_anim.loop_mode = Animation.LOOP_LINEAR
+					lib.add_animation("idle", idle_anim)
+					lib.remove_animation(idle_orig)
+
+			# Play the idle animation initially
+			ap.play("idle")
+
+		player_avatars[i] = char_node
+
+	take_inst.queue_free()
+
+func play_take_animation(player_idx: int) -> void:
+	if player_avatars.has(player_idx) and is_instance_valid(player_avatars[player_idx]):
+		var char_node = player_avatars[player_idx]
+		var ap: AnimationPlayer = char_node.get_node("AnimationPlayer")
+		if ap:
+			ap.stop()
+			ap.play("take")
+			ap.queue("idle")
+
