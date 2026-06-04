@@ -176,12 +176,10 @@ func stop_menu_music() -> void:
 	if menu_music_p2.playing: menu_music_p2.stop()
 
 func play_game_music() -> void:
-	stop_menu_music()
-	if is_game_music_active: return
-	is_game_music_active = true
-	if not current_game_player.playing:
-		current_game_player.volume_db = 0.0
-		current_game_player.play()
+	# Use the main-menu track in-game (game_music.wav is disabled)
+	if is_menu_music_active:
+		return # Already playing
+	play_menu_music()
 
 func stop_game_music() -> void:
 	is_game_music_active = false
