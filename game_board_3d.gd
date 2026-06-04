@@ -1905,6 +1905,35 @@ func _process(delta: float) -> void:
 	
 	_update_cabinet_hover()
 	_update_action_buttons_state()
+	
+	if is_instance_valid(draw_arrow) and draw_arrow.visible:
+		draw_arrow.position.y = 1.2 + sin(Time.get_ticks_msec() * 0.005) * 0.15
+	
+	if _shake_timer > 0:
+		_shake_timer -= delta
+		var offset = Vector3(
+			randf_range(-1, 1) * _shake_intensity,
+			randf_range(-1, 1) * _shake_intensity,
+			0
+		)
+		camera.position = _effective_camera_base_local() + offset
+		if _shake_timer <= 0:
+			camera.position = _effective_camera_base_local()
+
+	if noclip_enabled and not DevConsole.window.visible:
+		_handle_noclip_movement(delta)
+	elif not noclip_enabled:
+		var mouse_pos = get_viewport().get_mouse_position()
+		var vp_size = get_viewport().get_visible_rect().size
+		var nx = mouse_pos.x / float(vp_size.x)
+		var target_yaw = 0.0
+		
+		if nx < 0.2:
+			target_yaw = deg_to_rad(12.0) * (0.2 - nx) / 0.2
+		elif nx > 0.8:
+			target_yaw = -deg_to_rad(12.0) * (nx - 0.8) / 0.2
+			
+		camera.rotation.y = lerp_angle(camera.rotation.y, _base_camera_rotation.y + target_yaw, delta * 4.0)
 
 func _update_cabinet_hover() -> void:
 	if not is_instance_valid(camera):
@@ -1958,35 +1987,6 @@ func _update_cabinet_prompt() -> void:
 	_cabinet_prompt_label.modulate.a = 0.0
 	var tween = create_tween()
 	tween.tween_property(_cabinet_prompt_label, "modulate:a", 1.0, 0.15)
-	
-	if is_instance_valid(draw_arrow) and draw_arrow.visible:
-		draw_arrow.position.y = 1.2 + sin(Time.get_ticks_msec() * 0.005) * 0.15
-	
-	if _shake_timer > 0:
-		_shake_timer -= delta
-		var offset = Vector3(
-			randf_range(-1, 1) * _shake_intensity,
-			randf_range(-1, 1) * _shake_intensity,
-			0
-		)
-		camera.position = _effective_camera_base_local() + offset
-		if _shake_timer <= 0:
-			camera.position = _effective_camera_base_local()
-
-	if noclip_enabled and not DevConsole.window.visible:
-		_handle_noclip_movement(delta)
-	elif not noclip_enabled:
-		var mouse_pos = get_viewport().get_mouse_position()
-		var vp_size = get_viewport().get_visible_rect().size
-		var nx = mouse_pos.x / float(vp_size.x)
-		var target_yaw = 0.0
-		
-		if nx < 0.2:
-			target_yaw = deg_to_rad(12.0) * (0.2 - nx) / 0.2
-		elif nx > 0.8:
-			target_yaw = -deg_to_rad(12.0) * (nx - 0.8) / 0.2
-			
-		camera.rotation.y = lerp_angle(camera.rotation.y, _base_camera_rotation.y + target_yaw, delta * 4.0)
 
 func shake(intensity: float, duration: float):
 	_shake_intensity = intensity

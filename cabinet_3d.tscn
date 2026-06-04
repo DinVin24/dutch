@@ -1,4 +1,4 @@
-[gd_scene load_steps=3 format=3 uid="uid://c5p2c8x7a9q2k"]
+[gd_scene format=3 uid="uid://c5p2c8x7baq2k"]
 
 [ext_resource type="Script" path="res://cabinet_3d.gd" id="1_script"]
 [ext_resource type="PackedScene" path="res://assets/models/dulapu_la_proiect.glb" id="2_model"]
