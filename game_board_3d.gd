@@ -1836,8 +1836,7 @@ func _unhandled_input(event):
 
 	# Cabinet Drawer Interaction (intercept keypress if hovered)
 	if _hovered_shelf_index != -1 and is_instance_valid(_hovered_cabinet_node) and event.is_pressed() and not event.is_echo():
-		var dist_ok = _hovered_cabinet_node.global_position.distance_to(camera.global_position) <= 4.5
-		if dist_ok and ((event is InputEventKey and event.keycode == KEY_E) or event.is_action("game_call_dutch") or event.is_action("game_forfeit_dutch")):
+		if (event is InputEventKey and event.keycode == KEY_E) or event.is_action("game_call_dutch") or event.is_action("game_forfeit_dutch"):
 			_hovered_cabinet_node.toggle_shelf(_hovered_shelf_index)
 			_update_cabinet_prompt()
 			get_viewport().set_input_as_handled()
@@ -2058,8 +2057,8 @@ func _update_cabinet_hover() -> void:
 		if collider.has_meta("hammer_index"):
 			var h_idx: int = collider.get_meta("hammer_index")
 			var h_player_idx: int = collider.get_meta("player_index", -1)
-			# Only interact with your own cabinet's hammers and only if close enough
-			if h_player_idx == GameManager.local_player_idx and hit_dist <= 4.5:
+			# Only local player can hover/click their own hammers — no distance limit
+			if h_player_idx == GameManager.local_player_idx:
 				var cab_node = _cabinets.get(h_player_idx)
 				if is_instance_valid(cab_node):
 					if _hovered_hammer_idx_board != h_idx or _hovered_hammer_cabinet != cab_node:
@@ -2077,14 +2076,30 @@ func _update_cabinet_hover() -> void:
 					new_hover_idx = _hovered_shelf_index
 					new_hover_cabinet = _hovered_cabinet_node
 					return
-		elif collider.has_meta("shelf_index") and hit_dist <= 4.5:
-			new_hover_idx = collider.get_meta("shelf_index")
+		
+		elif collider.has_meta("shelf_index"):
+			# Find which cabinet this drawer belongs to
+			var candidate_idx := -1
+			var candidate_cab: Node = null
 			var node = collider
 			while node:
 				if node.has_method("toggle_shelf"):
-					new_hover_cabinet = node
+					candidate_cab = node
 					break
 				node = node.get_parent()
+			candidate_idx = collider.get_meta("shelf_index")
+			
+			# Determine drawer cabinet owner
+			var cab_owner := -1
+			for pi in _cabinets:
+				if _cabinets[pi] == candidate_cab:
+					cab_owner = pi
+					break
+			
+			# Own cabinet: always reachable. Other players: 4.5m max.
+			if cab_owner == GameManager.local_player_idx or hit_dist <= 4.5:
+				new_hover_idx = candidate_idx
+				new_hover_cabinet = candidate_cab
 	
 	# Not hovering a hammer — unhover if we were
 	if _hovered_hammer_idx_board >= 0 and is_instance_valid(_hovered_hammer_cabinet):
