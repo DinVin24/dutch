@@ -126,12 +126,12 @@ func update_hammers(count: int) -> void:
 	# 2, 3: raft2 (middle), left and right
 	# 4, 5: raft3 (bottom), left and right
 	var slots = [
-		{"shelf": 0, "pos": Vector3(-0.09, -0.06, -0.12)}, # top left
-		{"shelf": 0, "pos": Vector3(0.09, -0.06, -0.12)},  # top right
-		{"shelf": 1, "pos": Vector3(-0.09, -0.06, -0.12)}, # middle left
-		{"shelf": 1, "pos": Vector3(0.09, -0.06, -0.12)},  # middle right
-		{"shelf": 2, "pos": Vector3(-0.09, -0.06, -0.12)}, # bottom left
-		{"shelf": 2, "pos": Vector3(0.09, -0.06, -0.12)}   # bottom right
+		{"shelf": 0, "pos": Vector3(-0.07, -0.06, -0.12)}, # top left
+		{"shelf": 0, "pos": Vector3(0.07, -0.06, -0.12)},  # top right
+		{"shelf": 1, "pos": Vector3(-0.07, -0.06, -0.12)}, # middle left
+		{"shelf": 1, "pos": Vector3(0.07, -0.06, -0.12)},  # middle right
+		{"shelf": 2, "pos": Vector3(-0.07, -0.06, -0.12)}, # bottom left
+		{"shelf": 2, "pos": Vector3(0.07, -0.06, -0.12)}   # bottom right
 	]
 	
 	for i in range(target_count):
@@ -151,6 +151,6 @@ func update_hammers(count: int) -> void:
 			hammer.scale = local_s
 			
 			# Match rotation shown in editor manually placed reference
-			hammer.rotation_degrees = Vector3(90.0, -50.1, 0.0)
+			hammer.rotation_degrees = Vector3(90.0, -140.0, 0.0)
 			
 			_hammers.append(hammer)
