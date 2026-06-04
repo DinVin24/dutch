@@ -656,13 +656,12 @@ func _create_crosshair() -> void:
 	dot.custom_minimum_size = Vector2(6, 6)
 	
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.0, 1.0, 1.0) # neon cyan
+	style.bg_color = Color(0.6, 0.6, 0.6, 0.6) # slightly transparent gray
 	style.corner_radius_top_left = 3
 	style.corner_radius_top_right = 3
 	style.corner_radius_bottom_left = 3
 	style.corner_radius_bottom_right = 3
-	style.shadow_color = Color(0.0, 1.0, 1.0, 0.4)
-	style.shadow_size = 4
+	style.shadow_size = 0
 	dot.add_theme_stylebox_override("panel", style)
 	
 	$GameUI/MainHUD.add_child(dot)
@@ -817,6 +816,7 @@ func _create_player_targeting_areas():
 		area.collision_mask = 1
 		
 		area.input_event.connect(_on_player_area_input.bind(i))
+		area.set_meta("player_index", i)
 		print("DEBUG: Created TargetArea for player ", i)
 
 func _set_targeting_areas_enabled(enabled: bool):
@@ -1750,6 +1750,51 @@ func _unhandled_input(event):
 			_on_pause_resumed()
 		get_viewport().set_input_as_handled()
 
+	# --- BOARD CLICK INTERACTION WHEN MOUSE IS CAPTURED ---
+	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not noclip_enabled:
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			var viewport_size := get_viewport().get_visible_rect().size
+			var center := viewport_size / 2.0
+			var ray_origin = camera.project_ray_origin(center)
+			var ray_normal = camera.project_ray_normal(center)
+			
+			var space_state := get_world_3d().direct_space_state
+			var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
+			query.collision_mask = 1
+			query.collide_with_areas = true
+			query.collide_with_bodies = false
+			
+			var result := space_state.intersect_ray(query)
+			if result and result.collider:
+				var col = result.collider
+				var parent = col.get_parent()
+				
+				if parent is Card3D:
+					_on_card_clicked(parent, parent.data)
+					get_viewport().set_input_as_handled()
+					return
+				elif col.get_parent() == $DeckArea:
+					if $DeckArea/Area3D.input_ray_pickable:
+						_on_deck_clicked()
+						get_viewport().set_input_as_handled()
+						return
+				elif col.get_parent() == $DiscardArea:
+					if $DiscardArea/Area3D.input_ray_pickable:
+						_on_discard_clicked()
+						get_viewport().set_input_as_handled()
+						return
+				elif parent == _chicken_node:
+					if GameManager.current_player_index == GameManager.local_player_idx:
+						_try_buy_ability(GameManager.local_player_idx)
+						get_viewport().set_input_as_handled()
+						return
+				elif col.name == "TargetArea" and col.input_ray_pickable:
+					var player_idx = col.get_meta("player_index", -1)
+					if player_idx != -1:
+						_on_player_area_input(null, null, Vector3.ZERO, Vector3.ZERO, 0, player_idx)
+						get_viewport().set_input_as_handled()
+						return
+
 	# DEBUG: Press L to toggle all face-down cards face-up.
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_L:
@@ -1938,6 +1983,7 @@ func _process(delta: float) -> void:
 	if Engine.is_editor_hint(): return
 	
 	_update_cabinet_hover()
+	_update_crosshair_raycast()
 	_update_action_buttons_state()
 	
 	if is_instance_valid(draw_arrow) and draw_arrow.visible:
@@ -2348,3 +2394,39 @@ func _generate_bell_stream() -> AudioStreamWAV:
 		
 	stream.data = byte_array
 	return stream
+
+var _hovered_board_card: Card3D = null
+
+func _update_crosshair_raycast() -> void:
+	if not is_instance_valid(camera) or noclip_enabled or Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		if is_instance_valid(_hovered_board_card):
+			_on_card_hover_exit(_hovered_board_card)
+			_hovered_board_card = null
+		return
+		
+	var viewport_size := get_viewport().get_visible_rect().size
+	var center := viewport_size / 2.0
+	var ray_origin = camera.project_ray_origin(center)
+	var ray_normal = camera.project_ray_normal(center)
+	
+	var space_state := get_world_3d().direct_space_state
+	var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
+	query.collision_mask = 1
+	query.collide_with_areas = true
+	query.collide_with_bodies = false
+	
+	var result := space_state.intersect_ray(query)
+	var hit_card: Card3D = null
+	
+	if result and result.collider:
+		var col = result.collider
+		var parent = col.get_parent()
+		if parent is Card3D:
+			hit_card = parent
+			
+	if hit_card != _hovered_board_card:
+		if is_instance_valid(_hovered_board_card):
+			_on_card_hover_exit(_hovered_board_card)
+		_hovered_board_card = hit_card
+		if is_instance_valid(_hovered_board_card):
+			_on_card_hover_enter(_hovered_board_card)
