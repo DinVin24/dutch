@@ -2693,10 +2693,10 @@ func _spawn_player_avatars() -> void:
 	}
 
 	var chair_rotations = {
-		0: 270.0,
-		1: 0.0,
+		0: -180.0,
+		1: 90.0,
 		2: 90.0,
-		3: 180.0
+		3: 90.0
 	}
 
 	for i in range(4):
@@ -2708,10 +2708,9 @@ func _spawn_player_avatars() -> void:
 		chair.add_child(char_node)
 
 		# Position character on the seat:
-		# Local Y = 0.0095 maps to global Y = -2.051 (perfect seat surface sitting position)
-		# Local Z = 0.0 centers on the seat
-		char_node.position = Vector3(0.0, 0.0095, 0.0)
-		char_node.scale = Vector3(1.0/43.0, 1.0/43.0, 1.0/43.0)
+		# At scale 4.5, local Y = -0.0467 centers hips at global Y = -1.36 (seat height)
+		char_node.position = Vector3(0.0, -0.0467, 0.0)
+		char_node.scale = Vector3(4.5/43.0, 4.5/43.0, 4.5/43.0)
 		char_node.rotation_degrees = Vector3(0.0, chair_rotations[i], 0.0)
 
 		# Set up AnimationPlayer
@@ -2745,4 +2744,3 @@ func play_take_animation(player_idx: int) -> void:
 			ap.stop()
 			ap.play("take")
 			ap.queue("idle")
-
