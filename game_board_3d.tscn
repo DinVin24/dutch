@@ -184,5 +184,26 @@ color = Color(0, 0, 0, 0)
 transform = Transform3D(-1.8795897e-06, 0, 43, 0, 43, 0, -43, 0, -1.8795897e-06, -0.16356874, -2.46139, 8.8513365)
 
 [node name="dulapu_la_proiect" parent="." unique_id=357679735 instance=ExtResource("7_5jmpy")]
-transform = Transform3D(-2.1855695e-07, 0, 5, 0, 4.5188503, 0, -5, 0, -2.1855695e-07, -2.6933734, -2.0051105, 8.529235)
+transform = Transform3D(-2.489695e-07, 0, 4.9602423, 0, 4.042696, 0, -5.695758, 0, -2.1681909e-07, -2.6933734, -2.0051105, 8.529235)
+script = ExtResource("6_cabinet_script")
+
+[node name="Sketchfab_Scene3" parent="." unique_id=1819785665 instance=ExtResource("7_3uego")]
+transform = Transform3D(-1.8795897e-06, 0, -43, 0, 43, 0, 43, 0, -1.8795897e-06, -0.006077051, -2.46139, -9.511496)
+
+[node name="dulapu_la_proiect3" parent="." unique_id=93192859 instance=ExtResource("7_5jmpy")]
+transform = Transform3D(-2.4896949e-07, 0, -4.9602427, 0, 4.042696, 0, 5.695758, 0, -2.168191e-07, 2.430442, -2.0051105, -8.758478)
+script = ExtResource("6_cabinet_script")
+
+[node name="Sketchfab_Scene2" parent="." unique_id=339082664 instance=ExtResource("7_3uego")]
+transform = Transform3D(-43.000004, 0, 3.7591797e-06, 0, 43, 0, -3.7591797e-06, 0, -43.000004, 8.828511, -2.46139, 0.026433706)
+
+[node name="dulapu_la_proiect2" parent="." unique_id=2137540444 instance=ExtResource("7_5jmpy")]
+transform = Transform3D(-5.695759, 0, 4.336382e-07, 0, 4.042696, 0, -4.97939e-07, 0, -4.9602427, 8.663405, -2.0051105, 2.5713112)
+script = ExtResource("6_cabinet_script")
+
+[node name="Sketchfab_Scene4" parent="." unique_id=2134752619 instance=ExtResource("7_3uego")]
+transform = Transform3D(43.000004, 0, 0, 0, 43, 0, 0, 0, 43.000004, -8.836208, -2.46139, -0.010982513)
+
+[node name="dulapu_la_proiect4" parent="." unique_id=1746470796 instance=ExtResource("7_5jmpy")]
+transform = Transform3D(5.695759, 0, 0, 0, 4.042696, 0, 0, 0, 4.960243, -8.709095, -2.0051105, -2.5580406)
 script = ExtResource("6_cabinet_script")

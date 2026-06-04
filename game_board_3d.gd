@@ -76,6 +76,8 @@ var money_labels: Array = []
 var _chicken_node: Node3D = null
 var _chicken_zoom_active: bool = false
 var _hovered_shelf_index: int = -1
+var _hovered_cabinet_node: Node = null
+var _cabinets: Dictionary = {}
 var _cabinet_prompt_label: Label = null
 var _look_yaw: float = 0.0
 var _look_pitch: float = 0.0
@@ -110,6 +112,18 @@ func _ready():
 		return
 
 	player_hands = [[], [], [], []]
+
+	# Map cabinet nodes to player indices dynamically
+	_cabinets = {
+		0: get_node_or_null("dulapu_la_proiect"),
+		1: get_node_or_null("dulapu_la_proiect4"),
+		2: get_node_or_null("dulapu_la_proiect3"),
+		3: get_node_or_null("dulapu_la_proiect2")
+	}
+	for p_idx in _cabinets:
+		var cab = _cabinets[p_idx]
+		if is_instance_valid(cab):
+			cab.set_meta("player_index", p_idx)
 	_bell_stream = _generate_bell_stream()
 	print("Game Board 3D: Ready. Connecting signals...")
 	GameManager.stop_menu_music()
@@ -756,6 +770,11 @@ func _update_ability_visuals(p_idx: int):
 		# Snappy, satisfying placement animation
 		var tween = create_tween()
 		tween.tween_property(t, "position", target_pos, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+	# Update the cabinet hammers for this player to match their active abilities count
+	var cab = _cabinets.get(p_idx)
+	if is_instance_valid(cab):
+		cab.update_hammers(tokens.size())
 	
 func _on_ability_token_clicked(token):
 	var p_idx = -1
@@ -1818,13 +1837,12 @@ func _unhandled_input(event):
 		return
 
 	# Cabinet Drawer Interaction (intercept keypress if hovered)
-	if _hovered_shelf_index != -1 and event.is_pressed() and not event.is_echo():
+	if _hovered_shelf_index != -1 and is_instance_valid(_hovered_cabinet_node) and event.is_pressed() and not event.is_echo():
 		if (event is InputEventKey and event.keycode == KEY_E) or event.is_action("game_call_dutch") or event.is_action("game_forfeit_dutch"):
-			if is_instance_valid($dulapu_la_proiect):
-				$dulapu_la_proiect.toggle_shelf(_hovered_shelf_index)
-				_update_cabinet_prompt()
-				get_viewport().set_input_as_handled()
-				return
+			_hovered_cabinet_node.toggle_shelf(_hovered_shelf_index)
+			_update_cabinet_prompt()
+			get_viewport().set_input_as_handled()
+			return
 
 	# Priority Guard 1: Noclip is active — keys belong to the camera, not the game.
 	if noclip_enabled:
@@ -2032,26 +2050,35 @@ func _update_cabinet_hover() -> void:
 	
 	var result := space_state.intersect_ray(query)
 	var new_hover_idx := -1
+	var new_hover_cabinet: Node = null
 	
 	if result and result.collider:
 		var collider = result.collider
 		if collider.has_meta("shelf_index"):
 			new_hover_idx = collider.get_meta("shelf_index")
+			# Traverse upwards to find the cabinet node
+			var node = collider
+			while node:
+				if node.has_method("toggle_shelf"):
+					new_hover_cabinet = node
+					break
+				node = node.get_parent()
 	
-	if new_hover_idx != _hovered_shelf_index:
+	if new_hover_idx != _hovered_shelf_index or new_hover_cabinet != _hovered_cabinet_node:
 		_hovered_shelf_index = new_hover_idx
+		_hovered_cabinet_node = new_hover_cabinet
 		_update_cabinet_prompt()
 
 func _update_cabinet_prompt() -> void:
 	if not is_instance_valid(_cabinet_prompt_label):
 		return
 		
-	if _hovered_shelf_index == -1 or not is_instance_valid($dulapu_la_proiect):
+	if _hovered_shelf_index == -1 or not is_instance_valid(_hovered_cabinet_node):
 		_cabinet_prompt_label.hide()
 		return
 		
-	var is_open = $dulapu_la_proiect.is_shelf_open(_hovered_shelf_index)
-	var shelf_name = $dulapu_la_proiect.get_shelf_name(_hovered_shelf_index)
+	var is_open = _hovered_cabinet_node.is_shelf_open(_hovered_shelf_index)
+	var shelf_name = _hovered_cabinet_node.get_shelf_name(_hovered_shelf_index)
 	var action_text = "Close" if is_open else "Open"
 	_cabinet_prompt_label.text = "[E] %s %s" % [action_text, shelf_name]
 	

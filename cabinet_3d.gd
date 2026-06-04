@@ -12,6 +12,7 @@ var _initial_z: Array[float] = []
 var _is_open: Array[bool] = [false, false, false]
 # Active Tween for each drawer to prevent animation overlaps
 var _tweens: Array[Tween] = [null, null, null]
+var _hammers: Array[Node3D] = []
 
 func _ready() -> void:
 	# Find the main mesh group inside the instantiated GLB
@@ -100,3 +101,46 @@ func toggle_shelf(index: int) -> void:
 	tween.tween_property(shelf, "position:z", target_z, SLIDE_DURATION)\
 		.set_trans(Tween.TRANS_CUBIC)\
 		.set_ease(Tween.EASE_OUT)
+
+## Spawns/despawns hammer models in the drawers based on the player's active abilities count
+func update_hammers(count: int) -> void:
+	# Clamp count to max 6 slots
+	var target_count = clamp(count, 0, 6)
+	
+	# Clear existing hammers
+	for h in _hammers:
+		if is_instance_valid(h):
+			h.queue_free()
+	_hammers.clear()
+	
+	if _shelves.size() < 3:
+		return
+		
+	var hammer_scene = load("res://assets/models/puteri/medium_poly_hammer.glb")
+	if not hammer_scene:
+		push_error("Cabinet3D: Could not load hammer model!")
+		return
+		
+	# Slots positions inside drawer meshes:
+	# 0, 1: raft1 (top), left and right
+	# 2, 3: raft2 (middle), left and right
+	# 4, 5: raft3 (bottom), left and right
+	var slots = [
+		{"shelf": 0, "pos": Vector3(-0.09, -0.06, -0.212)}, # top left
+		{"shelf": 0, "pos": Vector3(0.09, -0.06, -0.212)},  # top right
+		{"shelf": 1, "pos": Vector3(-0.09, -0.06, -0.212)}, # middle left
+		{"shelf": 1, "pos": Vector3(0.09, -0.06, -0.212)},  # middle right
+		{"shelf": 2, "pos": Vector3(-0.09, -0.06, -0.212)}, # bottom left
+		{"shelf": 2, "pos": Vector3(0.09, -0.06, -0.212)}   # bottom right
+	]
+	
+	for i in range(target_count):
+		var slot = slots[i]
+		var shelf_node = _shelves[slot.shelf]
+		if is_instance_valid(shelf_node):
+			var hammer = hammer_scene.instantiate()
+			shelf_node.add_child(hammer)
+			hammer.position = slot.pos
+			# Scale down the 1-meter hammer model so it fits the drawer bounds
+			hammer.scale = Vector3(0.25, 0.25, 0.25)
+			_hammers.append(hammer)
