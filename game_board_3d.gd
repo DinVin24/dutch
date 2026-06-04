@@ -318,6 +318,7 @@ func _on_multiplayer_sync_applied() -> void:
 		pending_card.card_clicked.connect(_on_card_clicked)
 		pending_card.position = deck_area.position + Vector3(0, 0.6, 0.5)
 		pending_card.rotation_degrees = Vector3(90, 0, 0)
+		pending_card.scale = Vector3(1.5, 1.5, 1.5)
 		pending_card.set_interactive(true)
 	
 	# --- Bug 5: Detect Dutch call and show feedback on client ---
@@ -1069,6 +1070,7 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	# Move slightly higher and CLOSER TO CAMERA (Z offset) to ensure it's not blocked by DeckArea
 	pending_card.position = deck_area.position + Vector3(0, 0.6, 0.5)
 	pending_card.rotation_degrees = Vector3(90, 0, 0) # Start face down on the table
+	pending_card.scale = Vector3(1.5, 1.5, 1.5)
 	pending_card.set_interactive(player_idx == _human_ui_idx())
 	spawn_particles("default", deck_area.global_position)
 
