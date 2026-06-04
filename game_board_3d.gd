@@ -2053,7 +2053,7 @@ func _update_cabinet_hover() -> void:
 	
 	if result and result.collider:
 		var collider = result.collider
-		var hit_dist := ray_origin.distance_to(result.position)
+		var hit_dist: float = ray_origin.distance_to(result.position as Vector3)
 		
 		if collider.has_meta("hammer_index"):
 			var h_idx: int = collider.get_meta("hammer_index")
