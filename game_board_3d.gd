@@ -739,7 +739,7 @@ func _update_ability_visuals(p_idx: int):
 	var ability_count = GameManager.players_info[p_idx].abilities.size()
 	var cab = _cabinets.get(p_idx)
 	if is_instance_valid(cab):
-		cab.update_hammers(ability_count)
+		cab.update_hammers(ability_count, p_idx)
 	
 func _on_ability_token_clicked(token):
 	var p_idx = -1
@@ -1836,7 +1836,8 @@ func _unhandled_input(event):
 
 	# Cabinet Drawer Interaction (intercept keypress if hovered)
 	if _hovered_shelf_index != -1 and is_instance_valid(_hovered_cabinet_node) and event.is_pressed() and not event.is_echo():
-		if (event is InputEventKey and event.keycode == KEY_E) or event.is_action("game_call_dutch") or event.is_action("game_forfeit_dutch"):
+		var dist_ok = _hovered_cabinet_node.global_position.distance_to(camera.global_position) <= 4.5
+		if dist_ok and ((event is InputEventKey and event.keycode == KEY_E) or event.is_action("game_call_dutch") or event.is_action("game_forfeit_dutch")):
 			_hovered_cabinet_node.toggle_shelf(_hovered_shelf_index)
 			_update_cabinet_prompt()
 			get_viewport().set_input_as_handled()
@@ -2042,7 +2043,7 @@ func _update_cabinet_hover() -> void:
 	
 	var space_state := get_world_3d().direct_space_state
 	var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
-	query.collision_mask = 8 # Layer 4 only
+	query.collision_mask = 8
 	query.collide_with_areas = true
 	query.collide_with_bodies = false
 	
@@ -2052,43 +2053,32 @@ func _update_cabinet_hover() -> void:
 	
 	if result and result.collider:
 		var collider = result.collider
+		var hit_dist := ray_origin.distance_to(result.position)
+		
 		if collider.has_meta("hammer_index"):
-			# Hovering a hammer — find the cabinet it belongs to
-			var h_idx = collider.get_meta("hammer_index")
-			var cab_node = collider.get_meta("cabinet_node", null)
-			if not is_instance_valid(cab_node):
-				# Traverse upwards as fallback
-				var node = collider
-				while node:
-					if node.has_method("hover_hammer"):
-						cab_node = node
-						break
-					node = node.get_parent()
-			if is_instance_valid(cab_node):
-				# Only allow hovering hammers in the local player's own cabinet
-				var cab_p_idx = -1
-				for pi in _cabinets:
-					if _cabinets[pi] == cab_node:
-						cab_p_idx = pi
-						break
-				if cab_p_idx == GameManager.local_player_idx:
-					# Unhover old hammer if different
+			var h_idx: int = collider.get_meta("hammer_index")
+			var h_player_idx: int = collider.get_meta("player_index", -1)
+			# Only interact with your own cabinet's hammers and only if close enough
+			if h_player_idx == GameManager.local_player_idx and hit_dist <= 4.5:
+				var cab_node = _cabinets.get(h_player_idx)
+				if is_instance_valid(cab_node):
 					if _hovered_hammer_idx_board != h_idx or _hovered_hammer_cabinet != cab_node:
 						if _hovered_hammer_cabinet != null and is_instance_valid(_hovered_hammer_cabinet):
 							_hovered_hammer_cabinet.unhover_hammer(_hovered_hammer_idx_board)
 						_hovered_hammer_idx_board = h_idx
 						_hovered_hammer_cabinet = cab_node
 						cab_node.hover_hammer(h_idx)
-					# Update prompt
+					# Show ability name in prompt
 					if is_instance_valid(_cabinet_prompt_label):
-						_cabinet_prompt_label.text = "[CLICK] Use Ability Hammer"
+						var abilities = GameManager.players_info[h_player_idx].abilities
+						var ab_name = abilities[h_idx].capitalize().replace("_", " ") if h_idx < abilities.size() else "?"
+						_cabinet_prompt_label.text = "[CLICK] %s" % ab_name
 						_cabinet_prompt_label.show()
-					new_hover_idx = _hovered_shelf_index  # Keep drawer hover state unchanged
+					new_hover_idx = _hovered_shelf_index
 					new_hover_cabinet = _hovered_cabinet_node
-					return  # Don't overwrite drawer hover state
-		elif collider.has_meta("shelf_index"):
+					return
+		elif collider.has_meta("shelf_index") and hit_dist <= 4.5:
 			new_hover_idx = collider.get_meta("shelf_index")
-			# Traverse upwards to find the cabinet node
 			var node = collider
 			while node:
 				if node.has_method("toggle_shelf"):
@@ -2101,7 +2091,9 @@ func _update_cabinet_hover() -> void:
 		_hovered_hammer_cabinet.unhover_hammer(_hovered_hammer_idx_board)
 		_hovered_hammer_idx_board = -1
 		_hovered_hammer_cabinet = null
-
+		if is_instance_valid(_cabinet_prompt_label):
+			_cabinet_prompt_label.hide()
+	
 	if new_hover_idx != _hovered_shelf_index or new_hover_cabinet != _hovered_cabinet_node:
 		_hovered_shelf_index = new_hover_idx
 		_hovered_cabinet_node = new_hover_cabinet
