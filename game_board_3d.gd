@@ -405,18 +405,16 @@ func _create_hud_ui():
 	action_panel.add_child(action_container)
 
 	# Standard HUD buttons with keyboard shortcut indicators
-	end_turn_btn = _create_button(action_container, "", Color(0.0, 1.0, 1.0))
-	jump_in_btn = _create_button(action_container, "", Color(0.0, 1.0, 1.0))
-	call_dutch_btn = _create_button(action_container, "", Color(1.0, 0.0, 0.8))
-	confirm_dutch_btn = _create_button(action_container, "", Color(0.0, 1.0, 1.0))
-	forfeit_dutch_btn = _create_button(action_container, "", Color(1.0, 0.0, 0.8))
+	end_turn_btn = _create_button(action_container, "> END_TURN (1) <", Color(0.0, 1.0, 1.0))
+	jump_in_btn = _create_button(action_container, "> JUMP_IN (2) <", Color(0.0, 1.0, 1.0))
+	call_dutch_btn = _create_button(action_container, "> CALL_DUTCH (3) <", Color(1.0, 0.0, 0.8))
+	confirm_dutch_btn = _create_button(action_container, "> CONFIRM_DUTCH (1) <", Color(0.0, 1.0, 1.0))
+	forfeit_dutch_btn = _create_button(action_container, "> FORFEIT_DUTCH (4) <", Color(1.0, 0.0, 0.8))
 	end_turn_btn.pressed.connect(_on_end_turn_pressed)
 	jump_in_btn.pressed.connect(_on_jump_in_pressed)
 	call_dutch_btn.pressed.connect(_on_call_dutch_pressed)
 	confirm_dutch_btn.pressed.connect(_on_confirm_dutch_pressed)
 	forfeit_dutch_btn.pressed.connect(_on_cancel_dutch_pressed)
-	
-	_update_action_button_labels()
 	
 	# Restyle the TurnLabel
 	turn_label.add_theme_color_override("font_color", Color(0.0, 1.0, 1.0))
@@ -618,7 +616,7 @@ func _apply_emission_to_meshes(node: Node, energy: float):
 
 func _create_chicken_placeholder():
 	var chicken = preload("res://assets/models/chick.glb").instantiate()
-	chicken.position = Vector3(4.0, 1.2, -3.5)
+	chicken.position = Vector3(3.2, 0.58, -2.8)
 	# Scale down the model (GLBs can be very large)
 	chicken.scale = Vector3(0.05, 0.05, 0.05)
 	# Rotate 180 on Y to face player
@@ -692,8 +690,8 @@ func _drop_egg_for(p_idx: int, ab: String):
 	if is_instance_valid(_chicken_node):
 		spawn_particles("ability_buy", _chicken_node.global_position)
 		var tween = create_tween()
-		tween.tween_property(_chicken_node, "position:y", 2.0, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		tween.tween_property(_chicken_node, "position:y", 1.2, 0.2).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+		tween.tween_property(_chicken_node, "position:y", 1.38, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.tween_property(_chicken_node, "position:y", 0.58, 0.2).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
 
 		# Camera cinematic zoom - GUARD against re-entry
 		if not _chicken_zoom_active:
@@ -1928,7 +1926,6 @@ func _on_pause_resumed():
 		pause_menu_instance = null
 	get_tree().paused = false
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	_update_action_button_labels()
 
 func _on_pause_main_menu():
 	get_tree().paused = false
@@ -2441,23 +2438,3 @@ func _update_crosshair_raycast() -> void:
 		_hovered_board_card = hit_card
 		if is_instance_valid(_hovered_board_card):
 			_on_card_hover_enter(_hovered_board_card)
-
-func _update_action_button_labels() -> void:
-	if is_instance_valid(end_turn_btn):
-		end_turn_btn.text = "> END_TURN (%s) <" % _get_action_key_string("game_end_turn")
-	if is_instance_valid(jump_in_btn):
-		jump_in_btn.text = "> JUMP_IN (%s) <" % _get_action_key_string("game_jump_in")
-	if is_instance_valid(call_dutch_btn):
-		call_dutch_btn.text = "> CALL_DUTCH (%s) <" % _get_action_key_string("game_call_dutch")
-	if is_instance_valid(confirm_dutch_btn):
-		confirm_dutch_btn.text = "> CONFIRM_DUTCH (%s) <" % _get_action_key_string("game_confirm_dutch")
-	if is_instance_valid(forfeit_dutch_btn):
-		forfeit_dutch_btn.text = "> FORFEIT_DUTCH (%s) <" % _get_action_key_string("game_forfeit_dutch")
-
-func _get_action_key_string(action: String) -> String:
-	var events = InputMap.action_get_events(action)
-	for e in events:
-		if e is InputEventKey:
-			var keycode = e.physical_keycode if e.physical_keycode != KEY_NONE else e.keycode
-			return OS.get_keycode_string(keycode)
-	return "—"

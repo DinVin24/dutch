@@ -78,17 +78,17 @@ beer_y_offset = 0.75
 environment = SubResource("Environment_1")
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=701076918]
-transform = Transform3D(1, 0, 0, 0, 0.91904604, 0.3941503, 0, -0.3941503, 0.91904604, 0, 4.296666, 11.393677)
+transform = Transform3D(1, 0, 0, 0, 0.91904604, 0.3941503, 0, -0.3941503, 0.91904604, 0, 4.296666, 8.394507)
 fov = 60.0
 
 [node name="Table" parent="." unique_id=1261982012 instance=ExtResource("3_table")]
-transform = Transform3D(24.131344, 0, 0, 0, 3.0000007, 0, 0, 0, 24.131344, 0, -1.6886296, 0)
+transform = Transform3D(19, 0, 0, 0, 2.362, 0, 0, 0, 19, 0, -1.6886296, 0)
 
 [node name="Background" parent="." unique_id=2000000000 instance=ExtResource("4_background")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
 
 [node name="DeckArea" type="Node3D" parent="." unique_id=650630562]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0.1, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.2, -0.3, 0)
 
 [node name="Area3D" type="Area3D" parent="DeckArea" unique_id=2027730407]
 
@@ -108,7 +108,7 @@ transform = Transform3D(1, 0, 0, 0, -1, 8.74228e-08, 0, -8.74228e-08, -1, 0, -0.
 mesh = SubResource("CylinderMesh_ArrowHead")
 
 [node name="DiscardArea" type="Node3D" parent="." unique_id=453331196]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0.1, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.2, -0.3, 0)
 
 [node name="Area3D" type="Area3D" parent="DiscardArea" unique_id=1736436075]
 
@@ -118,20 +118,20 @@ shape = SubResource("BoxShape3D_Deck")
 [node name="PlayerPositions" type="Node3D" parent="." unique_id=556924132]
 
 [node name="TurnIndicatorCircle" type="MeshInstance3D" parent="PlayerPositions" unique_id=987654321]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.102, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.298, 0)
 mesh = SubResource("PlaneMesh_TurnIndicator")
 
 [node name="Bottom" type="Node3D" parent="PlayerPositions" unique_id=1640482197]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 4.724)
 
 [node name="Top" type="Node3D" parent="PlayerPositions" unique_id=1531237525]
-transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 0, 0.1, -6)
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 0, -0.3, -4.724)
 
 [node name="Left" type="Node3D" parent="PlayerPositions" unique_id=346409451]
-transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -6, 0.1, 0)
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -4.724, -0.3, 0)
 
 [node name="Right" type="Node3D" parent="PlayerPositions" unique_id=1342769357]
-transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 6, 0.1, 0)
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 4.724, -0.3, 0)
 
 [node name="GameUI" type="CanvasLayer" parent="." unique_id=322047825]
 
@@ -181,8 +181,8 @@ mouse_filter = 2
 color = Color(0, 0, 0, 0)
 
 [node name="Sketchfab_Scene" parent="." unique_id=1101568271 instance=ExtResource("7_3uego")]
-transform = Transform3D(-1.8795897e-06, 0, 43, 0, 43, 0, -43, 0, -1.8795897e-06, -0.16356874, -2.1563072, 11.241352)
+transform = Transform3D(-1.8795897e-06, 0, 43, 0, 43, 0, -43, 0, -1.8795897e-06, -0.16356874, -2.46139, 8.8513365)
 
 [node name="dulapu_la_proiect" parent="." unique_id=357679735 instance=ExtResource("7_5jmpy")]
-transform = Transform3D(-2.1855695e-07, 0, 5, 0, 4.5188503, 0, -5, 0, -2.1855695e-07, -2.6933734, -2.0051105, 10.626205)
+transform = Transform3D(-2.1855695e-07, 0, 5, 0, 4.5188503, 0, -5, 0, -2.1855695e-07, -2.6933734, -2.0051105, 8.529235)
 script = ExtResource("6_cabinet_script")
