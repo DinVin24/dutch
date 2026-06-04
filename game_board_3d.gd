@@ -77,6 +77,8 @@ var _chicken_node: Node3D = null
 var _chicken_zoom_active: bool = false
 var _hovered_shelf_index: int = -1
 var _cabinet_prompt_label: Label = null
+var _look_yaw: float = 0.0
+var _look_pitch: float = 0.0
 
 @onready var camera = $Camera3D
 var _current_ability_message: String = ""
@@ -176,8 +178,12 @@ func _ready():
 	_create_discard_indicator()
 	_create_beer_placeholders()
 	_create_chicken_placeholder()
+	_create_crosshair()
 	$DeckArea/Area3D.input_event.connect(_on_deck_input_event)
 	$DiscardArea/Area3D.input_event.connect(_on_discard_input_event)
+	
+	# Lock mouse for central gameplay crosshair raycasting and look-around
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 	bot_controller = BotController.new()
 	bot_controller.gm = GameManager
@@ -398,12 +404,12 @@ func _create_hud_ui():
 	action_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	action_panel.add_child(action_container)
 
-	# Standard HUD buttons
-	end_turn_btn = _create_button(action_container, "> END_TURN <", Color(0.0, 1.0, 1.0))
-	jump_in_btn = _create_button(action_container, "> JUMP_IN <", Color(0.0, 1.0, 1.0))
-	call_dutch_btn = _create_button(action_container, "> CALL_DUTCH <", Color(1.0, 0.0, 0.8))
-	confirm_dutch_btn = _create_button(action_container, "> CONFIRM_DUTCH <", Color(0.0, 1.0, 1.0))
-	forfeit_dutch_btn = _create_button(action_container, "> FORFEIT_DUTCH <", Color(1.0, 0.0, 0.8))
+	# Standard HUD buttons with keyboard shortcut indicators
+	end_turn_btn = _create_button(action_container, "> END_TURN (1) <", Color(0.0, 1.0, 1.0))
+	jump_in_btn = _create_button(action_container, "> JUMP_IN (2) <", Color(0.0, 1.0, 1.0))
+	call_dutch_btn = _create_button(action_container, "> CALL_DUTCH (3) <", Color(1.0, 0.0, 0.8))
+	confirm_dutch_btn = _create_button(action_container, "> CONFIRM_DUTCH (1) <", Color(0.0, 1.0, 1.0))
+	forfeit_dutch_btn = _create_button(action_container, "> FORFEIT_DUTCH (3) <", Color(1.0, 0.0, 0.8))
 	end_turn_btn.pressed.connect(_on_end_turn_pressed)
 	jump_in_btn.pressed.connect(_on_jump_in_pressed)
 	call_dutch_btn.pressed.connect(_on_call_dutch_pressed)
@@ -640,6 +646,26 @@ func _create_chicken_placeholder():
 	
 	area.input_event.connect(_on_chicken_clicked)
 	GameManager.ability_unlocked.connect(_on_ability_unlocked)
+
+func _create_crosshair() -> void:
+	var dot = PanelContainer.new()
+	dot.name = "CrosshairDot"
+	dot.set_anchors_preset(Control.PRESET_CENTER)
+	dot.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	dot.grow_vertical = Control.GROW_DIRECTION_BOTH
+	dot.custom_minimum_size = Vector2(6, 6)
+	
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.0, 1.0, 1.0) # neon cyan
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_left = 3
+	style.corner_radius_bottom_right = 3
+	style.shadow_color = Color(0.0, 1.0, 1.0, 0.4)
+	style.shadow_size = 4
+	dot.add_theme_stylebox_override("panel", style)
+	
+	$GameUI/MainHUD.add_child(dot)
 
 func _on_ability_unlocked(p_idx: int, ab: String):
 	_drop_egg_for(p_idx, ab)
@@ -1647,6 +1673,7 @@ func _on_discard_clicked():
 		_send_action("discard_drawn")
 
 func _on_scores_ready(results):
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	var overlay = CanvasLayer.new()
 	add_child(overlay)
 
@@ -1736,8 +1763,8 @@ func _unhandled_input(event):
 	# Cabinet Drawer Interaction (intercept keypress if hovered)
 	if _hovered_shelf_index != -1 and event.is_pressed() and not event.is_echo():
 		if (event is InputEventKey and event.keycode == KEY_E) or event.is_action("game_call_dutch") or event.is_action("game_forfeit_dutch"):
-			if is_instance_valid($Cabinet):
-				$Cabinet.toggle_shelf(_hovered_shelf_index)
+			if is_instance_valid($dulapu_la_proiect):
+				$dulapu_la_proiect.toggle_shelf(_hovered_shelf_index)
 				_update_cabinet_prompt()
 				get_viewport().set_input_as_handled()
 				return
@@ -1752,25 +1779,30 @@ func _unhandled_input(event):
 	_handle_game_keyboard_input(event)
 
 func _handle_game_keyboard_input(event: InputEvent) -> void:
-	# Q — end turn OR confirm dutch (states are mutually exclusive)
-	if event.is_action("game_end_turn") and end_turn_btn.visible and not end_turn_btn.disabled:
+	var is_1 = event is InputEventKey and event.keycode == KEY_1
+	var is_2 = event is InputEventKey and event.keycode == KEY_2
+	var is_3 = event is InputEventKey and event.keycode == KEY_3
+
+	# Q or 1 — end turn OR confirm dutch (states are mutually exclusive)
+	if (event.is_action("game_end_turn") or is_1) and end_turn_btn.visible and not end_turn_btn.disabled:
 		_on_end_turn_pressed()
 		get_viewport().set_input_as_handled()
 
-	elif event.is_action("game_confirm_dutch") and confirm_dutch_btn.visible and not confirm_dutch_btn.disabled:
+	elif (event.is_action("game_confirm_dutch") or is_1) and confirm_dutch_btn.visible and not confirm_dutch_btn.disabled:
 		_on_confirm_dutch_pressed()
 		get_viewport().set_input_as_handled()
 
-	# E — call dutch OR forfeit dutch (states are mutually exclusive)
-	elif event.is_action("game_forfeit_dutch") and forfeit_dutch_btn.visible and not forfeit_dutch_btn.disabled:
+	# E or 3 — call dutch OR forfeit dutch (states are mutually exclusive)
+	elif (event.is_action("game_forfeit_dutch") or is_3) and forfeit_dutch_btn.visible and not forfeit_dutch_btn.disabled:
 		_on_cancel_dutch_pressed()
 		get_viewport().set_input_as_handled()
 
-	elif event.is_action("game_call_dutch") and call_dutch_btn.visible and not call_dutch_btn.disabled:
+	elif (event.is_action("game_call_dutch") or is_3) and call_dutch_btn.visible and not call_dutch_btn.disabled:
 		_on_call_dutch_pressed()
 		get_viewport().set_input_as_handled()
 
-	elif event.is_action("game_jump_in") and jump_in_btn.visible and not jump_in_btn.disabled:
+	# Space or 2 — jump in
+	elif (event.is_action("game_jump_in") or is_2) and jump_in_btn.visible and not jump_in_btn.disabled:
 		_on_jump_in_pressed()
 		get_viewport().set_input_as_handled()
 
@@ -1828,6 +1860,7 @@ func _keyboard_confirm_card() -> void:
 
 func _pause_game():
 	if pause_menu_instance == null:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		pause_menu_instance = pause_menu_scene.instantiate()
 		add_child(pause_menu_instance)
 		pause_menu_instance.resumed.connect(_on_pause_resumed)
@@ -1839,6 +1872,7 @@ func _on_pause_resumed():
 		pause_menu_instance.queue_free()
 		pause_menu_instance = null
 	get_tree().paused = false
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 func _on_pause_main_menu():
 	get_tree().paused = false
@@ -1923,37 +1957,18 @@ func _process(delta: float) -> void:
 	if noclip_enabled and not DevConsole.window.visible:
 		_handle_noclip_movement(delta)
 	elif not noclip_enabled:
-		var mouse_pos = get_viewport().get_mouse_position()
-		var vp_size = get_viewport().get_visible_rect().size
-		
-		# Center is at (0.5, 0.5)
-		# nx and ny normalized from -0.5 to 0.5 relative to center
-		var nx = (mouse_pos.x / float(vp_size.x)) - 0.5
-		var ny = (mouse_pos.y / float(vp_size.y)) - 0.5
-		
-		# Rotate left/right (yaw) up to 170 degrees, and up/down (pitch) up to 50 degrees
-		var target_yaw = -nx * deg_to_rad(170.0)
-		var target_pitch = -ny * deg_to_rad(50.0)
-		
-		camera.rotation.y = lerp_angle(camera.rotation.y, _base_camera_rotation.y + target_yaw, delta * 12.0)
-		camera.rotation.x = lerp_angle(camera.rotation.x, _base_camera_rotation.x + target_pitch, delta * 12.0)
+		# Rotate camera smoothly towards the look angles accumulated from mouse motion
+		camera.rotation.y = lerp_angle(camera.rotation.y, _base_camera_rotation.y + _look_yaw, delta * 12.0)
+		camera.rotation.x = lerp_angle(camera.rotation.x, _base_camera_rotation.x + _look_pitch, delta * 12.0)
 
 func _update_cabinet_hover() -> void:
 	if not is_instance_valid(camera):
 		return
 	
-	var ray_origin := Vector3.ZERO
-	var ray_normal := Vector3.ZERO
-	
-	if noclip_enabled:
-		var viewport_size := get_viewport().get_visible_rect().size
-		var center := viewport_size / 2.0
-		ray_origin = camera.project_ray_origin(center)
-		ray_normal = camera.project_ray_normal(center)
-	else:
-		var mouse_pos := get_viewport().get_mouse_position()
-		ray_origin = camera.project_ray_origin(mouse_pos)
-		ray_normal = camera.project_ray_normal(mouse_pos)
+	var viewport_size := get_viewport().get_visible_rect().size
+	var center := viewport_size / 2.0
+	var ray_origin = camera.project_ray_origin(center)
+	var ray_normal = camera.project_ray_normal(center)
 	
 	var space_state := get_world_3d().direct_space_state
 	var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
@@ -1977,12 +1992,12 @@ func _update_cabinet_prompt() -> void:
 	if not is_instance_valid(_cabinet_prompt_label):
 		return
 		
-	if _hovered_shelf_index == -1 or not is_instance_valid($Cabinet):
+	if _hovered_shelf_index == -1 or not is_instance_valid($dulapu_la_proiect):
 		_cabinet_prompt_label.hide()
 		return
 		
-	var is_open = $Cabinet.is_shelf_open(_hovered_shelf_index)
-	var shelf_name = $Cabinet.get_shelf_name(_hovered_shelf_index)
+	var is_open = $dulapu_la_proiect.is_shelf_open(_hovered_shelf_index)
+	var shelf_name = $dulapu_la_proiect.get_shelf_name(_hovered_shelf_index)
 	var action_text = "Close" if is_open else "Open"
 	_cabinet_prompt_label.text = "[E] %s %s" % [action_text, shelf_name]
 	
@@ -2024,13 +2039,25 @@ func _handle_noclip_movement(delta: float) -> void:
 	camera.global_position += move_dir.normalized() * 10.0 * delta
 
 func _input(event: InputEvent) -> void:
-	if noclip_enabled and not DevConsole.window.visible and event is InputEventMouseMotion:
-		camera_rot_y -= event.relative.x * 0.005
-		camera_rot_x -= event.relative.y * 0.005
-		camera_rot_x = clamp(camera_rot_x, -PI / 2, PI / 2)
-		camera.basis = Basis() # Reset
-		camera.rotate_y(camera_rot_y)
-		camera.rotate_object_local(Vector3.RIGHT, camera_rot_x)
+	if DevConsole and DevConsole.window.visible:
+		return
+		
+	if event is InputEventMouseMotion:
+		if noclip_enabled:
+			camera_rot_y -= event.relative.x * 0.005
+			camera_rot_x -= event.relative.y * 0.005
+			camera_rot_x = clamp(camera_rot_x, -PI / 2, PI / 2)
+			camera.basis = Basis() # Reset
+			camera.rotate_y(camera_rot_y)
+			camera.rotate_object_local(Vector3.RIGHT, camera_rot_x)
+		else:
+			# Accumulate mouse rotation relative to base rotation
+			_look_yaw -= event.relative.x * 0.0025
+			_look_pitch -= event.relative.y * 0.0025
+			
+			# Clamp yaw to -170 to +170 degrees, and pitch to -50 to +50 degrees
+			_look_yaw = clamp(_look_yaw, deg_to_rad(-170.0), deg_to_rad(170.0))
+			_look_pitch = clamp(_look_pitch, deg_to_rad(-50.0), deg_to_rad(50.0))
 
 func _on_jack_swap_resolved(p1: int, c1: int, p2: int, c2: int) -> void:
 	if c1 >= player_hands[p1].size() or c2 >= player_hands[p2].size():
@@ -2083,7 +2110,9 @@ func toggle_noclip() -> bool:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	else:
 		camera.global_transform = base_camera_transform
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		_look_yaw = 0.0
+		_look_pitch = 0.0
 	return noclip_enabled
 
 func is_noclip_active() -> bool:
