@@ -75,6 +75,8 @@ var player_beers_nodes: Array = [[], [], [], []]
 var money_labels: Array = []
 var _chicken_node: Node3D = null
 var _chicken_zoom_active: bool = false
+var _hovered_shelf_index: int = -1
+var _cabinet_prompt_label: Label = null
 
 @onready var camera = $Camera3D
 var _current_ability_message: String = ""
@@ -424,6 +426,25 @@ func _create_hud_ui():
 	l.add_theme_constant_override("shadow_offset_y", 2)
 	$GameUI/MainHUD/TopLeft.add_child(l)
 	money_labels.append(l)
+
+	# Cabinet Interaction HUD Prompt
+	_cabinet_prompt_label = Label.new()
+	_cabinet_prompt_label.name = "CabinetPrompt"
+	_cabinet_prompt_label.add_theme_font_size_override("font_size", 28)
+	_cabinet_prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_cabinet_prompt_label.add_theme_color_override("font_color", Color(1.0, 0.0, 0.8))
+	_cabinet_prompt_label.add_theme_color_override("font_shadow_color", Color(1.0, 0.0, 0.8, 0.5))
+	_cabinet_prompt_label.add_theme_constant_override("shadow_offset_x", 0)
+	_cabinet_prompt_label.add_theme_constant_override("shadow_offset_y", 2)
+	_cabinet_prompt_label.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_cabinet_prompt_label.offset_left = -300
+	_cabinet_prompt_label.offset_right = 300
+	_cabinet_prompt_label.offset_top = -100
+	_cabinet_prompt_label.offset_bottom = -50
+	_cabinet_prompt_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_cabinet_prompt_label.text = ""
+	_cabinet_prompt_label.hide()
+	$GameUI/MainHUD.add_child(_cabinet_prompt_label)
 
 func _create_button(parent: Node, text: String, color: Color) -> Button:
 	var btn = Button.new()
@@ -1708,11 +1729,21 @@ func _unhandled_input(event):
 			_toggle_debug_reveal()
 
 	# --- GAME KEYBOARD CONTROLS ---
-	# Priority Guard 1: Noclip is active — keys belong to the camera, not the game.
-	if noclip_enabled:
-		return
 	# Priority Guard 2: Dev console is open — keys belong to the text input, not the game.
 	if DevConsole and DevConsole.window.is_visible():
+		return
+
+	# Cabinet Drawer Interaction (intercept keypress if hovered)
+	if _hovered_shelf_index != -1 and event.is_pressed() and not event.is_echo():
+		if (event is InputEventKey and event.keycode == KEY_E) or event.is_action("game_call_dutch") or event.is_action("game_forfeit_dutch"):
+			if is_instance_valid($Cabinet):
+				$Cabinet.toggle_shelf(_hovered_shelf_index)
+				_update_cabinet_prompt()
+				get_viewport().set_input_as_handled()
+				return
+
+	# Priority Guard 1: Noclip is active — keys belong to the camera, not the game.
+	if noclip_enabled:
 		return
 
 	if not (event is InputEventKey and event.pressed and not event.echo):
@@ -1872,7 +1903,61 @@ func _on_bot_action(message):
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint(): return
 	
+	_update_cabinet_hover()
 	_update_action_buttons_state()
+
+func _update_cabinet_hover() -> void:
+	if not is_instance_valid(camera):
+		return
+	
+	var ray_origin := Vector3.ZERO
+	var ray_normal := Vector3.ZERO
+	
+	if noclip_enabled:
+		var viewport_size := get_viewport().get_visible_rect().size
+		var center := viewport_size / 2.0
+		ray_origin = camera.project_ray_origin(center)
+		ray_normal = camera.project_ray_normal(center)
+	else:
+		var mouse_pos := get_viewport().get_mouse_position()
+		ray_origin = camera.project_ray_origin(mouse_pos)
+		ray_normal = camera.project_ray_normal(mouse_pos)
+	
+	var space_state := get_world_3d().direct_space_state
+	var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
+	query.collision_mask = 8 # Layer 4 only
+	query.collide_with_areas = true
+	query.collide_with_bodies = false
+	
+	var result := space_state.intersect_ray(query)
+	var new_hover_idx := -1
+	
+	if result and result.collider:
+		var collider = result.collider
+		if collider.has_meta("shelf_index"):
+			new_hover_idx = collider.get_meta("shelf_index")
+	
+	if new_hover_idx != _hovered_shelf_index:
+		_hovered_shelf_index = new_hover_idx
+		_update_cabinet_prompt()
+
+func _update_cabinet_prompt() -> void:
+	if not is_instance_valid(_cabinet_prompt_label):
+		return
+		
+	if _hovered_shelf_index == -1 or not is_instance_valid($Cabinet):
+		_cabinet_prompt_label.hide()
+		return
+		
+	var is_open = $Cabinet.is_shelf_open(_hovered_shelf_index)
+	var shelf_name = $Cabinet.get_shelf_name(_hovered_shelf_index)
+	var action_text = "Close" if is_open else "Open"
+	_cabinet_prompt_label.text = "[E] %s %s" % [action_text, shelf_name]
+	
+	_cabinet_prompt_label.show()
+	_cabinet_prompt_label.modulate.a = 0.0
+	var tween = create_tween()
+	tween.tween_property(_cabinet_prompt_label, "modulate:a", 1.0, 0.15)
 	
 	if is_instance_valid(draw_arrow) and draw_arrow.visible:
 		draw_arrow.position.y = 1.2 + sin(Time.get_ticks_msec() * 0.005) * 0.15
@@ -1930,7 +2015,7 @@ func _handle_noclip_movement(delta: float) -> void:
 	if Input.is_key_pressed(KEY_S): move_dir += camera.global_transform.basis.z
 	if Input.is_key_pressed(KEY_A): move_dir -= camera.global_transform.basis.x
 	if Input.is_key_pressed(KEY_D): move_dir += camera.global_transform.basis.x
-	if Input.is_key_pressed(KEY_E): move_dir += Vector3.UP
+	if Input.is_key_pressed(KEY_E) and _hovered_shelf_index == -1: move_dir += Vector3.UP
 	if Input.is_key_pressed(KEY_Q): move_dir += Vector3.DOWN
 
 	camera.global_position += move_dir.normalized() * 10.0 * delta

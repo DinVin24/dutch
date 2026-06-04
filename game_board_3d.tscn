@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://dwowse5ksiil0" path="res://assets/models/table.glb" id="3_table"]
 [ext_resource type="PackedScene" uid="uid://dmsi4kgr88r2u" path="res://assets/models/background.glb" id="4_background"]
 [ext_resource type="Shader" path="res://shaders/turn_indicator.gdshader" id="5_turn_indicator_shader"]
+[ext_resource type="PackedScene" uid="uid://c5p2c8x7a9q2k" path="res://cabinet_3d.tscn" id="6_cabinet"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -80,6 +81,9 @@ fov = 60.0
 
 [node name="Table" parent="." unique_id=1261982012 instance=ExtResource("3_table")]
 transform = Transform3D(24.131344, 0, 0, 0, 3.0000007, 0, 0, 0, 24.131344, 0, -1.6886296, 0)
+
+[node name="Cabinet" parent="." unique_id=998877665 instance=ExtResource("6_cabinet")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 3.2)
 
 [node name="Background" parent="." unique_id=2000000000 instance=ExtResource("4_background")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
