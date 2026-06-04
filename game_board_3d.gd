@@ -576,6 +576,7 @@ func _update_deck_visual():
 		card.setup(CardData.new("Ace", "Clubs"))
 		card.rotation_degrees = Vector3(90, 0, 0)
 		card.position = Vector3(0, i * 0.02, 0)
+		card.scale = Vector3(1.5, 1.5, 1.5)
 		card.set_interactive(false)
 
 func _update_discard_visual():
@@ -592,6 +593,7 @@ func _update_discard_visual():
 		card_node.data.is_face_up = true
 		card_node.rotation_degrees = Vector3(90, 0, 0)
 		card_node.position = Vector3.ZERO
+		card_node.scale = Vector3(1.5, 1.5, 1.5)
 		card_node.set_interactive(false)
 		if discard_indicator: discard_indicator.hide()
 	else:
@@ -600,7 +602,7 @@ func _update_discard_visual():
 func _create_discard_indicator():
 	discard_indicator = MeshInstance3D.new()
 	var mesh = PlaneMesh.new()
-	mesh.size = Vector2(0.8, 1.1) # Slightly larger than a card
+	mesh.size = Vector2(0.8, 1.1) * 1.5 # Scaled to match 1.5x card size
 	discard_indicator.mesh = mesh
 
 	var mat = StandardMaterial3D.new()
