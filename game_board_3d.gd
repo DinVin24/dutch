@@ -77,6 +77,8 @@ var _chicken_node: Node3D = null
 var _chicken_zoom_active: bool = false
 var _hovered_shelf_index: int = -1
 var _hovered_cabinet_node: Node = null
+var _hovered_hammer_idx_board: int = -1
+var _hovered_hammer_cabinet: Node = null
 var _cabinets: Dictionary = {}
 var _cabinet_prompt_label: Label = null
 var _look_yaw: float = 0.0
@@ -689,17 +691,17 @@ func _on_chicken_clicked(_camera, event, _position, _normal, _shape_idx):
 			_try_buy_ability(GameManager.local_player_idx)
 
 func _try_buy_ability(p_idx: int):
-	if GameManager.players_info[p_idx].abilities.size() >= 8:
-		_show_message("Inventory Full! (Max 8)")
+	if GameManager.players_info[p_idx].abilities.size() >= 6:
+		_show_message("Inventory Full! (Max 6)")
 		return
 		
 	_send_action("buy_ability")
 
 func _drop_egg_for(p_idx: int, ab: String):
 	if p_idx == _human_ui_idx():
-		_show_message("You got: " + ab.capitalize() + "!")
+		_show_message("You got: " + ab.capitalize() + "! (Check your cabinet)")
 	else:
-		_show_message(GameManager.players_info[p_idx].name + " got an egg!")
+		_show_message(GameManager.players_info[p_idx].name + " bought an ability!")
 	
 	if is_instance_valid(_chicken_node):
 		spawn_particles("ability_buy", _chicken_node.global_position)
@@ -727,54 +729,17 @@ func _drop_egg_for(p_idx: int, ab: String):
 				camera.position = restore_cam_local
 				_chicken_zoom_active = false
 			)
-	# authoritative inventory is now managed in GameManager.buy_ability
-	print("BOARD: sync ability visuals for P", p_idx)
-	_update_ability_visuals(p_idx)
-	
-	# Spawn ability token visually
-	var token_scene = load("res://ability_token_3d.tscn")
-	var token = token_scene.instantiate()
-	player_pos_nodes[p_idx].add_child(token)
-	token.setup(ab)
-	token.token_clicked.connect(_on_ability_token_clicked)
-	
-	# Spawn at the chicken's global position, then beautifully tween into the grid
-	# Rotation 180 on Y fixes the upside-down question mark
-	token.rotation_degrees = Vector3(90, 180, 0) 
-	token.global_position = Vector3(0, 2.0, 0) 
-	
-	# REVEAL ON RECEIPT: Show for 2 seconds then flip down
-	token.set_face_up(true)
-	get_tree().create_timer(2.0, false).timeout.connect(func():
-		if is_instance_valid(token):
-			token.animate_flip(false)
-	)
-	
+	# Spawn hammer in the player's cabinet
+	print("BOARD: syncing ability hammers for P", p_idx)
 	_update_ability_visuals(p_idx)
 	
 func _update_ability_visuals(p_idx: int):
-	var tokens = []
-	for c in player_pos_nodes[p_idx].get_children():
-		if "ability_id" in c and not c.is_queued_for_deletion():
-			tokens.append(c)
-			
-	for i in range(tokens.size()):
-		var t = tokens[i]
-		var cols = i % 4
-		var rows = floori(i / 4.0)
-		
-		# Clean, perfect 4x4 matrix centered right next to the hand
-		# x spacing: 0.8, z spacing: 0.8 (for 0.65m tokens)
-		var target_pos = Vector3(3.5 + (cols * 0.8), 0.1, (rows * 0.8) - 0.4)
-		
-		# Snappy, satisfying placement animation
-		var tween = create_tween()
-		tween.tween_property(t, "position", target_pos, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-
-	# Update the cabinet hammers for this player to match their active abilities count
+	# Abilities are now represented exclusively by hammers in the cabinet.
+	# Use the authoritative GameManager abilities array as the source of truth.
+	var ability_count = GameManager.players_info[p_idx].abilities.size()
 	var cab = _cabinets.get(p_idx)
 	if is_instance_valid(cab):
-		cab.update_hammers(tokens.size())
+		cab.update_hammers(ability_count)
 	
 func _on_ability_token_clicked(token):
 	var p_idx = -1
@@ -816,8 +781,41 @@ func _on_ability_token_clicked(token):
 	else:
 		_show_message("Not your turn to play abilities!")
 
+## Called when the player clicks on a hammer in their cabinet drawer.
+## hammer_collider: the Area3D Area3D that was clicked (has "hammer_index" meta).
+func _on_hammer_clicked(hammer_collider: Area3D) -> void:
+	var p_idx = GameManager.local_player_idx
+	# Only the current player may use abilities
+	if p_idx != GameManager.current_player_index:
+		_show_message("Not your turn to play abilities!")
+		return
+	if _is_preparing_ability or _is_waiting_for_target:
+		return
+	var h_idx: int = hammer_collider.get_meta("hammer_index", -1)
+	var abilities: Array = GameManager.players_info[p_idx].abilities
+	if h_idx < 0 or h_idx >= abilities.size():
+		_show_message("Invalid ability slot!")
+		return
+	var ability_id: String = abilities[h_idx]
+	var targeting_abilities = ["bottoms_up", "boulder", "skip", "inflation", "half_off", "shuffle", "jumpscare"]
+	if ability_id in targeting_abilities:
+		print("BOARD: Hammer ability ", ability_id, " requires target selection.")
+		_is_waiting_for_target = true
+		_set_targeting_areas_enabled(true)
+		_highlight_selectable_cards(true)
+		_update_turn_lights(-1, true)
+		_pending_ability = {
+			"id": ability_id,
+			"token": null,
+			"activator": p_idx
+		}
+		_show_message("SELECT TARGET PLAYER (click their cards or zone)")
+	else:
+		_send_action("play_ability", {"ability_id": ability_id, "target_idx": p_idx})
+
 func _create_player_targeting_areas():
 	for i in range(4):
+
 		var area = Area3D.new()
 		area.name = "TargetArea"
 		var col = CollisionShape3D.new()
@@ -900,27 +898,14 @@ func _on_player_gained_money(player_idx, _amount, total):
 func _on_ability_played(player_idx, ability_id):
 	var p_name = GameManager.players_info[player_idx].name
 	_show_message(p_name + " used " + ability_id.capitalize() + "!")
-	
-	# CENTRALIZED VISUAL CLEANUP: Find and remove the 3D token
-	var pos_node = player_pos_nodes[player_idx]
-	var token_node: AbilityToken3D = null
-	for child in pos_node.get_children():
-		if "ability_id" in child and child.ability_id == ability_id:
-			token_node = child
-			break
-	
-	if token_node:
-		spawn_particles("ability_use", token_node.global_position)
-		# If it's a bot (p_idx != 0), we want to reveal the card for 2s too
-		# if it's not already face up (the human reveal handles p_idx=0)
-		if player_idx != _human_ui_idx():
-			token_node.animate_flip(true)
-			await get_tree().create_timer(2.0, false).timeout
-		
-		if is_instance_valid(token_node):
-			token_node.queue_free()
-	
-	# Re-layout remaining tokens for this player
+	# Reset any hammer hover state when an ability is consumed
+	if _hovered_hammer_cabinet != null and _hovered_hammer_idx_board >= 0:
+		if is_instance_valid(_hovered_hammer_cabinet):
+			_hovered_hammer_cabinet.unhover_hammer(_hovered_hammer_idx_board)
+		_hovered_hammer_idx_board = -1
+		_hovered_hammer_cabinet = null
+	spawn_particles("ability_use", player_pos_nodes[player_idx].global_position + Vector3(0, 0.5, 0))
+	# Wait one frame so GameManager has already removed the ability from the array
 	await get_tree().process_frame
 	_update_ability_visuals(player_idx)
 
@@ -1825,6 +1810,19 @@ func _unhandled_input(event):
 						_on_player_area_input(null, null, Vector3.ZERO, Vector3.ZERO, 0, player_idx)
 						get_viewport().set_input_as_handled()
 						return
+			
+			# Also check layer 8 (hammers + cabinet drawers) on click
+			var query8 := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
+			query8.collision_mask = 8
+			query8.collide_with_areas = true
+			query8.collide_with_bodies = false
+			var result8 := space_state.intersect_ray(query8)
+			if result8 and result8.collider:
+				var col8 = result8.collider
+				if col8.has_meta("hammer_index"):
+					_on_hammer_clicked(col8)
+					get_viewport().set_input_as_handled()
+					return
 
 	# DEBUG: Press L to toggle all face-down cards face-up.
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -2054,7 +2052,41 @@ func _update_cabinet_hover() -> void:
 	
 	if result and result.collider:
 		var collider = result.collider
-		if collider.has_meta("shelf_index"):
+		if collider.has_meta("hammer_index"):
+			# Hovering a hammer — find the cabinet it belongs to
+			var h_idx = collider.get_meta("hammer_index")
+			var cab_node = collider.get_meta("cabinet_node", null)
+			if not is_instance_valid(cab_node):
+				# Traverse upwards as fallback
+				var node = collider
+				while node:
+					if node.has_method("hover_hammer"):
+						cab_node = node
+						break
+					node = node.get_parent()
+			if is_instance_valid(cab_node):
+				# Only allow hovering hammers in the local player's own cabinet
+				var cab_p_idx = -1
+				for pi in _cabinets:
+					if _cabinets[pi] == cab_node:
+						cab_p_idx = pi
+						break
+				if cab_p_idx == GameManager.local_player_idx:
+					# Unhover old hammer if different
+					if _hovered_hammer_idx_board != h_idx or _hovered_hammer_cabinet != cab_node:
+						if _hovered_hammer_cabinet != null and is_instance_valid(_hovered_hammer_cabinet):
+							_hovered_hammer_cabinet.unhover_hammer(_hovered_hammer_idx_board)
+						_hovered_hammer_idx_board = h_idx
+						_hovered_hammer_cabinet = cab_node
+						cab_node.hover_hammer(h_idx)
+					# Update prompt
+					if is_instance_valid(_cabinet_prompt_label):
+						_cabinet_prompt_label.text = "[CLICK] Use Ability Hammer"
+						_cabinet_prompt_label.show()
+					new_hover_idx = _hovered_shelf_index  # Keep drawer hover state unchanged
+					new_hover_cabinet = _hovered_cabinet_node
+					return  # Don't overwrite drawer hover state
+		elif collider.has_meta("shelf_index"):
 			new_hover_idx = collider.get_meta("shelf_index")
 			# Traverse upwards to find the cabinet node
 			var node = collider
@@ -2064,6 +2096,12 @@ func _update_cabinet_hover() -> void:
 					break
 				node = node.get_parent()
 	
+	# Not hovering a hammer — unhover if we were
+	if _hovered_hammer_idx_board >= 0 and is_instance_valid(_hovered_hammer_cabinet):
+		_hovered_hammer_cabinet.unhover_hammer(_hovered_hammer_idx_board)
+		_hovered_hammer_idx_board = -1
+		_hovered_hammer_cabinet = null
+
 	if new_hover_idx != _hovered_shelf_index or new_hover_cabinet != _hovered_cabinet_node:
 		_hovered_shelf_index = new_hover_idx
 		_hovered_cabinet_node = new_hover_cabinet
