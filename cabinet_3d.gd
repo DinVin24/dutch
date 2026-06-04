@@ -116,7 +116,7 @@ func update_hammers(count: int) -> void:
 	if _shelves.size() < 3:
 		return
 		
-	var hammer_scene = load("res://assets/models/puteri/medium_poly_hammer.glb")
+	var hammer_scene = load("res://assets/models/medium_poly_hammer.glb")
 	if not hammer_scene:
 		push_error("Cabinet3D: Could not load hammer model!")
 		return
@@ -126,12 +126,12 @@ func update_hammers(count: int) -> void:
 	# 2, 3: raft2 (middle), left and right
 	# 4, 5: raft3 (bottom), left and right
 	var slots = [
-		{"shelf": 0, "pos": Vector3(-0.09, -0.06, -0.212)}, # top left
-		{"shelf": 0, "pos": Vector3(0.09, -0.06, -0.212)},  # top right
-		{"shelf": 1, "pos": Vector3(-0.09, -0.06, -0.212)}, # middle left
-		{"shelf": 1, "pos": Vector3(0.09, -0.06, -0.212)},  # middle right
-		{"shelf": 2, "pos": Vector3(-0.09, -0.06, -0.212)}, # bottom left
-		{"shelf": 2, "pos": Vector3(0.09, -0.06, -0.212)}   # bottom right
+		{"shelf": 0, "pos": Vector3(-0.09, -0.06, -0.12)}, # top left
+		{"shelf": 0, "pos": Vector3(0.09, -0.06, -0.12)},  # top right
+		{"shelf": 1, "pos": Vector3(-0.09, -0.06, -0.12)}, # middle left
+		{"shelf": 1, "pos": Vector3(0.09, -0.06, -0.12)},  # middle right
+		{"shelf": 2, "pos": Vector3(-0.09, -0.06, -0.12)}, # bottom left
+		{"shelf": 2, "pos": Vector3(0.09, -0.06, -0.12)}   # bottom right
 	]
 	
 	for i in range(target_count):
@@ -141,6 +141,16 @@ func update_hammers(count: int) -> void:
 			var hammer = hammer_scene.instantiate()
 			shelf_node.add_child(hammer)
 			hammer.position = slot.pos
-			# Scale down the 1-meter hammer model so it fits the drawer bounds
-			hammer.scale = Vector3(0.25, 0.25, 0.25)
+			
+			# Calculate the local scale required to achieve a global scale of Vector3(0.008, 0.008, 0.008)
+			var parent_global_scale = shelf_node.global_transform.basis.get_scale()
+			var local_s = Vector3(0.008, 0.008, 0.008)
+			if parent_global_scale.x > 0.0001: local_s.x /= parent_global_scale.x
+			if parent_global_scale.y > 0.0001: local_s.y /= parent_global_scale.y
+			if parent_global_scale.z > 0.0001: local_s.z /= parent_global_scale.z
+			hammer.scale = local_s
+			
+			# Match rotation shown in editor manually placed reference
+			hammer.rotation_degrees = Vector3(90.0, -50.1, 0.0)
+			
 			_hammers.append(hammer)
