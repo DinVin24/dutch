@@ -656,7 +656,7 @@ func _create_crosshair() -> void:
 	dot.custom_minimum_size = Vector2(6, 6)
 	
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.6, 0.6, 0.6, 0.6) # slightly transparent gray
+	style.bg_color = Color(0.4, 0.4, 0.4, 0.9) # more opaque gray
 	style.corner_radius_top_left = 3
 	style.corner_radius_top_right = 3
 	style.corner_radius_bottom_left = 3
@@ -802,6 +802,7 @@ func _create_player_targeting_areas():
 		var area = Area3D.new()
 		area.name = "TargetArea"
 		var col = CollisionShape3D.new()
+		col.name = "CollisionShape3D"
 		var shape = BoxShape3D.new()
 		shape.size = Vector3(4.0, 1.0, 4.0) # Larger area
 		col.shape = shape
@@ -812,6 +813,7 @@ func _create_player_targeting_areas():
 		
 		# DEBUG FIX: non-pickable by default so we don't block cards
 		area.input_ray_pickable = false
+		col.disabled = true
 		area.collision_layer = 1
 		area.collision_mask = 1
 		
@@ -825,7 +827,10 @@ func _set_targeting_areas_enabled(enabled: bool):
 		var area = player_pos_nodes[i].find_child("TargetArea")
 		if area:
 			area.input_ray_pickable = enabled
-			print("  - Player ", i, " area pickable: ", area.input_ray_pickable)
+			var col = area.find_child("CollisionShape3D")
+			if col:
+				col.disabled = !enabled
+			print("  - Player ", i, " area pickable: ", area.input_ray_pickable, " shape disabled: ", col.disabled if col else "no shape")
 
 func _on_player_area_input(_camera, event, _position, _normal, _shape_idx, player_idx: int):
 	if not _is_waiting_for_target: return

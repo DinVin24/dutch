@@ -184,5 +184,5 @@ color = Color(0, 0, 0, 0)
 transform = Transform3D(-1.8795897e-06, 0, 43, 0, 43, 0, -43, 0, -1.8795897e-06, -0.16356874, -2.1563072, 11.241352)
 
 [node name="dulapu_la_proiect" parent="." unique_id=357679735 instance=ExtResource("7_5jmpy")]
-transform = Transform3D(-2.1855695e-07, 0, 5, 0, 5, 0, -5, 0, -2.1855695e-07, -3.793785, -2.0051105, 10.626205)
+transform = Transform3D(-2.1855695e-07, 0, 5, 0, 4.5188503, 0, -5, 0, -2.1855695e-07, -2.6933734, -2.0051105, 10.626205)
 script = ExtResource("6_cabinet_script")
