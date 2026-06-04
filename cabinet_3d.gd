@@ -286,9 +286,9 @@ func update_hammers(abilities: Array, p_idx: int = -1) -> void:
 		shelf_node.add_child(hammer)
 		hammer.position = slot.pos
 
-		# Scale to ~0.022 global (TEMPORARILY LARGER for verification, normal is 0.008)
+		# Scale to ~0.008 global
 		var pg_scale = shelf_node.global_transform.basis.get_scale()
-		var local_s = Vector3(0.022, 0.022, 0.022)
+		var local_s = Vector3(0.008, 0.008, 0.008)
 		if pg_scale.x > 0.0001: local_s.x /= pg_scale.x
 		if pg_scale.y > 0.0001: local_s.y /= pg_scale.y
 		if pg_scale.z > 0.0001: local_s.z /= pg_scale.z

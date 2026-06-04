@@ -1236,6 +1236,17 @@ func _on_game_state_changed(new_state):
 	_hide_message()
 	_update_draw_arrow_visibility()
 
+	# Manage mouse capture/visibility based on game state
+	if new_state == GameManager.GameState.TURN_CONFIRM_DUTCH:
+		if GameManager.can_player_confirm_dutch(_human_ui_idx()):
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	elif new_state == GameManager.GameState.GAME_OVER:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	else:
+		if not noclip_enabled:
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
 	var is_active_turn_state = new_state in [
 		GameManager.GameState.TURN_START_DRAW,
 		GameManager.GameState.TURN_RESOLVE_DRAWN,
@@ -1919,6 +1930,34 @@ func _unhandled_input(event):
 	_handle_game_keyboard_input(event)
 
 func _handle_game_keyboard_input(event: InputEvent) -> void:
+	# Support numeric keys 1, 2, 3, 4 directly to match the HUD labels
+	if event is InputEventKey:
+		var keycode = event.keycode
+		if keycode == KEY_1 or keycode == KEY_KP_1:
+			if confirm_dutch_btn.visible and not confirm_dutch_btn.disabled:
+				_on_confirm_dutch_pressed()
+				get_viewport().set_input_as_handled()
+				return
+			elif end_turn_btn.visible and not end_turn_btn.disabled:
+				_on_end_turn_pressed()
+				get_viewport().set_input_as_handled()
+				return
+		elif keycode == KEY_2 or keycode == KEY_KP_2:
+			if jump_in_btn.visible and not jump_in_btn.disabled:
+				_on_jump_in_pressed()
+				get_viewport().set_input_as_handled()
+				return
+		elif keycode == KEY_3 or keycode == KEY_KP_3:
+			if call_dutch_btn.visible and not call_dutch_btn.disabled:
+				_on_call_dutch_pressed()
+				get_viewport().set_input_as_handled()
+				return
+		elif keycode == KEY_4 or keycode == KEY_KP_4:
+			if forfeit_dutch_btn.visible and not forfeit_dutch_btn.disabled:
+				_on_cancel_dutch_pressed()
+				get_viewport().set_input_as_handled()
+				return
+
 	# Q — end turn OR confirm dutch (states are mutually exclusive)
 	if event.is_action("game_end_turn") and end_turn_btn.visible and not end_turn_btn.disabled:
 		_on_end_turn_pressed()
