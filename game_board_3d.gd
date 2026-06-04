@@ -344,14 +344,22 @@ func _on_multiplayer_sync_applied() -> void:
 		for pi in range(GameManager.num_players):
 			var new_abs: Array = GameManager.players_info[pi].abilities
 			var old_abs: Array = prev_abilities[pi] if pi < prev_abilities.size() else []
+			
+			var new_filtered = new_abs.filter(func(a): return a != "")
+			var old_filtered = old_abs.filter(func(a): return a != "")
+			
 			# Ability appeared in the new list — player gained it
-			for ab in new_abs:
-				if not ab in old_abs:
+			for ab in new_filtered:
+				if not ab in old_filtered:
 					_on_ability_unlocked(pi, ab)
 			# Ability disappeared from the list — player used it
-			for ab in old_abs:
-				if not ab in new_abs:
+			for ab in old_filtered:
+				if not ab in new_filtered:
 					_on_ability_played(pi, ab)
+	
+	# Sync all player cabinets with their actual abilities
+	for pi in range(GameManager.num_players):
+		_update_ability_visuals(pi)
 	
 	if state_changed:
 		_on_game_state_changed(GameManager.current_state)
@@ -736,10 +744,10 @@ func _drop_egg_for(p_idx: int, ab: String):
 func _update_ability_visuals(p_idx: int):
 	# Abilities are now represented exclusively by hammers in the cabinet.
 	# Use the authoritative GameManager abilities array as the source of truth.
-	var ability_count = GameManager.players_info[p_idx].abilities.size()
 	var cab = _cabinets.get(p_idx)
 	if is_instance_valid(cab):
-		cab.update_hammers(ability_count, p_idx)
+		var abilities = GameManager.players_info[p_idx].abilities
+		cab.update_hammers(abilities, p_idx)
 	
 func _on_ability_token_clicked(token):
 	var p_idx = -1
@@ -797,6 +805,8 @@ func _on_hammer_clicked(hammer_collider: Area3D) -> void:
 		_show_message("Invalid ability slot!")
 		return
 	var ability_id: String = abilities[h_idx]
+	if ability_id == "":
+		return
 	var targeting_abilities = ["bottoms_up", "boulder", "skip", "inflation", "half_off", "shuffle", "jumpscare"]
 	if ability_id in targeting_abilities:
 		print("BOARD: Hammer ability ", ability_id, " requires target selection.")
@@ -807,11 +817,12 @@ func _on_hammer_clicked(hammer_collider: Area3D) -> void:
 		_pending_ability = {
 			"id": ability_id,
 			"token": null,
-			"activator": p_idx
+			"activator": p_idx,
+			"slot_idx": h_idx
 		}
 		_show_message("SELECT TARGET PLAYER (click their cards or zone)")
 	else:
-		_send_action("play_ability", {"ability_id": ability_id, "target_idx": p_idx})
+		_send_action("play_ability", {"ability_id": ability_id, "target_idx": p_idx, "slot_idx": h_idx})
 
 func _create_player_targeting_areas():
 	for i in range(4):
@@ -863,10 +874,11 @@ func _on_player_area_input(_camera, event, _position, _normal, _shape_idx, playe
 
 		var ab_id = _pending_ability.id
 		var activator = _pending_ability.activator
+		var slot_idx = _pending_ability.get("slot_idx", -1)
 
-		print("[DEBUG] Requesting play_ability: ", ab_id, " by P", activator, " on P", player_idx)
+		print("[DEBUG] Requesting play_ability: ", ab_id, " by P", activator, " on P", player_idx, " from slot ", slot_idx)
 		
-		_send_action("play_ability", {"ability_id": ab_id, "target_idx": player_idx})
+		_send_action("play_ability", {"ability_id": ab_id, "target_idx": player_idx, "slot_idx": slot_idx})
 		_is_waiting_for_target = false
 		_set_targeting_areas_enabled(false)
 		_clear_all_highlights()

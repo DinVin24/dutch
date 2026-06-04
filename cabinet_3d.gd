@@ -28,6 +28,7 @@ var _hammer_orig_mats: Array = []        # Array[Array[Material]] — per hammer
 var _hovered_hammer_idx: int = -1
 var _hammer_shake_time: float = 0.0
 var _sparkles: Array[Node3D] = []
+var _last_abilities: Array = []
 
 # The player slot this cabinet belongs to (set by game_board_3d)
 var player_index: int = -1
@@ -40,7 +41,7 @@ func _ready() -> void:
 	_gold_mat.albedo_color = Color(1.0, 0.75, 0.1)
 	_gold_mat.emission_enabled = true
 	_gold_mat.emission = Color(1.0, 0.7, 0.0)
-	_gold_mat.emission_energy_multiplier = 3.0
+	_gold_mat.emission_energy_multiplier = 1.2
 	_gold_mat.roughness = 0.3
 	_gold_mat.metallic = 0.9
 
@@ -121,7 +122,7 @@ func _process(delta: float) -> void:
 	var h = _hammers[_hovered_hammer_idx]
 	if not is_instance_valid(h):
 		return
-	_hammer_shake_time += delta * 30.0
+	_hammer_shake_time += delta * 12.0
 	var s = HAMMER_HOVER_SHAKE
 	var base = _hammer_base_pos[_hovered_hammer_idx]
 	h.position = base + Vector3(
@@ -143,7 +144,7 @@ func hover_hammer(i: int) -> void:
 	# Intensify OmniLight
 	if i < _hammer_omnis.size() and is_instance_valid(_hammer_omnis[i]):
 		var tw = create_tween()
-		tw.tween_property(_hammer_omnis[i], "light_energy", 10.0, 0.15)
+		tw.tween_property(_hammer_omnis[i], "light_energy", 4.0, 0.15)
 	# Apply gold material to all MeshInstance3D children
 	var h = _hammers[i]
 	if not is_instance_valid(h):
@@ -169,7 +170,7 @@ func unhover_hammer(i: int) -> void:
 	# Dim OmniLight
 	if i < _hammer_omnis.size() and is_instance_valid(_hammer_omnis[i]):
 		var tw2 = create_tween()
-		tw2.tween_property(_hammer_omnis[i], "light_energy", 3.5, 0.2)
+		tw2.tween_property(_hammer_omnis[i], "light_energy", 1.5, 0.2)
 	# Restore original materials
 	var h = _hammers[i]
 	if not is_instance_valid(h):
@@ -210,12 +211,16 @@ func get_hammer_at(i: int) -> Node3D:
 		return null
 	return _hammers[i]
 
-## Spawns/despawns hammer models based on the player's active abilities count.
+## Spawns/despawns hammer models based on the player's active abilities slot array.
 ## player_idx is stored in each hammer's Area3D meta so game_board_3d can identify the owner.
-func update_hammers(count: int, p_idx: int = -1) -> void:
+func update_hammers(abilities: Array, p_idx: int = -1) -> void:
 	if p_idx >= 0:
 		player_index = p_idx
-	var target_count = clamp(count, 0, 6)
+
+	# If abilities array is identical to the last one, do nothing
+	if _last_abilities == abilities:
+		return
+	_last_abilities = abilities.duplicate()
 
 	# Unhover any active hammer
 	if _hovered_hammer_idx >= 0:
@@ -253,11 +258,28 @@ func update_hammers(count: int, p_idx: int = -1) -> void:
 		{"shelf": 2, "pos": Vector3(0.11,  -0.07, -0.09)}
 	]
 
-	for i in range(target_count):
+	_hammers.resize(6)
+	_hammer_base_pos.resize(6)
+	_hammer_omnis.resize(6)
+	_hammer_orig_mats.resize(6)
+
+	var used_shelves := {}
+
+	for i in range(min(abilities.size(), 6)):
+		var ab = abilities[i]
+		if ab == "":
+			_hammers[i] = null
+			_hammer_base_pos[i] = Vector3.ZERO
+			_hammer_omnis[i] = null
+			_hammer_orig_mats[i] = []
+			continue
+
 		var slot = slots[i]
 		var shelf_node = _shelves[slot.shelf]
 		if not is_instance_valid(shelf_node):
 			continue
+
+		used_shelves[slot.shelf] = true
 
 		var hammer = hammer_scene.instantiate()
 		shelf_node.add_child(hammer)
@@ -272,24 +294,22 @@ func update_hammers(count: int, p_idx: int = -1) -> void:
 		hammer.scale = local_s
 		hammer.rotation_degrees = Vector3(90.0, -140.0, 0.0)
 
-		_hammers.append(hammer)
-		_hammer_base_pos.append(slot.pos)
-		_hammer_orig_mats.append([])  # will be populated lazily on first hover
+		_hammers[i] = hammer
+		_hammer_base_pos[i] = slot.pos
+		_hammer_orig_mats[i] = []
 
 		# Golden OmniLight
 		var omni = OmniLight3D.new()
 		omni.light_color = Color(1.0, 0.85, 0.3)
-		omni.light_energy = 3.5
+		omni.light_energy = 1.5
 		omni.omni_range = 0.5
 		hammer.add_child(omni)
-		_hammer_omnis.append(omni)
+		_hammer_omnis[i] = omni
 
 		# Area3D for hover/click detection on layer 16 (separate from drawer layer 8)
-		# Layer separation is critical: the shelf's Area3D (layer 8) physically contains
-		# the hammer's Area3D, so using the same layer would cause the shelf to occlude the hammer.
 		var hammer_area = Area3D.new()
 		hammer_area.name = "HammerArea3D"
-		hammer_area.collision_layer = 16  # DEDICATED hammer layer — NOT shared with drawer (8)
+		hammer_area.collision_layer = 16
 		hammer_area.collision_mask = 0
 		hammer_area.set_meta("hammer_index", i)
 		hammer_area.set_meta("player_index", player_index)
@@ -297,8 +317,9 @@ func update_hammers(count: int, p_idx: int = -1) -> void:
 
 		var hammer_col = CollisionShape3D.new()
 		var hammer_box = BoxShape3D.new()
-		hammer_box.size = Vector3(40.0, 40.0, 40.0)  # Large in local space → ~32cm global
+		hammer_box.size = Vector3(55.0, 30.0, 110.0)
 		hammer_col.shape = hammer_box
+		hammer_col.position = Vector3(0.0, 0.0, 38.25)
 		hammer_area.add_child(hammer_col)
 
 		# Floating sparkles
@@ -339,10 +360,6 @@ func update_hammers(count: int, p_idx: int = -1) -> void:
 			_sparkles.append(sparkle)
 
 	# Auto-open drawers that now contain at least one hammer
-	# so the visual change is immediately visible to all players.
-	var used_shelves := {}
-	for i in range(target_count):
-		used_shelves[slots[i].shelf] = true
 	for shelf_idx in used_shelves:
 		if not _is_open[shelf_idx]:
 			toggle_shelf(shelf_idx)

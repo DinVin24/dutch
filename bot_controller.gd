@@ -312,7 +312,7 @@ func _execute_end_choice(bot_idx: int) -> void:
 	if not gm.can_player_end_turn(bot_idx): return
 
 	# 1. Use Abilities first
-	var pool: Array = gm.players_info[bot_idx].abilities
+	var pool: Array = gm.players_info[bot_idx].abilities.filter(func(a): return a != "")
 	if not pool.is_empty():
 		var ab = pool[0] # Just use the first one for now
 		
@@ -322,8 +322,9 @@ func _execute_end_choice(bot_idx: int) -> void:
 			
 		if should_use:
 			var target = _get_best_target_for(bot_idx, ab)
-			print("Bot ", bot_idx, " using ability: ", ab, " on target ", target)
-			if gm.play_ability(bot_idx, ab, target):
+			var slot_idx = gm.players_info[bot_idx].abilities.find(ab)
+			print("Bot ", bot_idx, " using ability: ", ab, " on target ", target, " from slot ", slot_idx)
+			if gm.play_ability(bot_idx, ab, target, slot_idx):
 				await gm.ability_finished # Wait for it to complete
 			
 			await _wait(0.5)

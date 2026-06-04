@@ -185,7 +185,11 @@ func _cmd_give(args: Array):
 	
 	if ability_map.has(target_name):
 		var ab_id = ability_map[target_name]
-		player.abilities.append(ab_id)
+		var empty_slot = player.abilities.find("")
+		if empty_slot != -1:
+			player.abilities[empty_slot] = ab_id
+		else:
+			player.abilities.append(ab_id)
 		output.append_text("\n[color=cyan]Gave Ability '" + target_name.capitalize() + "' to " + player.name + "[/color]")
 		
 		# Visually spawn the token if we are in the 3D board scene
