@@ -4,8 +4,9 @@
 [ext_resource type="Shader" uid="uid://chcpger88sefc" path="res://shaders/crt_glitch.gdshader" id="2_shader"]
 [ext_resource type="PackedScene" uid="uid://dwowse5ksiil0" path="res://assets/models/table.glb" id="3_table"]
 [ext_resource type="PackedScene" uid="uid://dmsi4kgr88r2u" path="res://assets/models/background.glb" id="4_background"]
-[ext_resource type="Shader" path="res://shaders/turn_indicator.gdshader" id="5_turn_indicator_shader"]
-[ext_resource type="PackedScene" uid="uid://c5p2c8x7a9q2k" path="res://cabinet_3d.tscn" id="6_cabinet"]
+[ext_resource type="Shader" uid="uid://3pi0jmdhmstq" path="res://shaders/turn_indicator.gdshader" id="5_turn_indicator_shader"]
+[ext_resource type="PackedScene" path="res://cabinet_3d.tscn" id="6_cabinet"]
+[ext_resource type="PackedScene" uid="uid://cijucteykpjh8" path="res://assets/models/wooden_chair.glb" id="7_3uego"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -26,28 +27,6 @@ volumetric_fog_albedo = Color(0.05, 0.05, 0.05, 1)
 [sub_resource type="BoxShape3D" id="BoxShape3D_Deck"]
 size = Vector3(1.2, 0.5, 1.6)
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_CRT"]
-shader = ExtResource("2_shader")
-shader_parameter/scanline_count = 360.0
-shader_parameter/scanline_intensity = 0.05
-shader_parameter/aberration_amount = 0.4
-shader_parameter/vignette_intensity = 0.3
-shader_parameter/curvature = 1.8
-shader_parameter/glitch_intensity = 0.0
-shader_parameter/time = 0.0
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_TurnIndicator"]
-shader = ExtResource("5_turn_indicator_shader")
-shader_parameter/active_player_index = -1
-shader_parameter/active_color = Color(0.9, 0.1, 0.1, 0.95)
-shader_parameter/inactive_color = Color(0.08, 0.08, 0.1, 0.4)
-shader_parameter/inner_radius = 0.25
-shader_parameter/outer_radius = 0.85
-
-[sub_resource type="PlaneMesh" id="PlaneMesh_TurnIndicator"]
-material = SubResource("ShaderMaterial_TurnIndicator")
-size = Vector2(2.0, 2.0)
-
 [sub_resource type="StandardMaterial3D" id="StandardMaterial_ArrowNeon"]
 shading_mode = 2
 albedo_color = Color(0, 1, 1, 1)
@@ -66,6 +45,28 @@ bottom_radius = 0.12
 height = 0.25
 radial_segments = 16
 
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_TurnIndicator"]
+render_priority = 0
+shader = ExtResource("5_turn_indicator_shader")
+shader_parameter/active_player_index = -1
+shader_parameter/active_color = Color(0.9, 0.1, 0.1, 0.95)
+shader_parameter/inactive_color = Color(0.08, 0.08, 0.1, 0.4)
+shader_parameter/inner_radius = 0.25
+shader_parameter/outer_radius = 0.85
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_TurnIndicator"]
+material = SubResource("ShaderMaterial_TurnIndicator")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_CRT"]
+shader = ExtResource("2_shader")
+shader_parameter/scanline_count = 360.0
+shader_parameter/scanline_intensity = 0.05
+shader_parameter/aberration_amount = 0.4
+shader_parameter/vignette_intensity = 0.3
+shader_parameter/curvature = 1.8
+shader_parameter/glitch_intensity = 0.0
+shader_parameter/time = 0.0
+
 [node name="GameBoard3D" type="Node3D" unique_id=1162522278]
 script = ExtResource("1_script")
 beer_scale = Vector3(4.5, 4.5, 4.5)
@@ -83,7 +84,7 @@ fov = 60.0
 transform = Transform3D(24.131344, 0, 0, 0, 3.0000007, 0, 0, 0, 24.131344, 0, -1.6886296, 0)
 
 [node name="Cabinet" parent="." unique_id=998877665 instance=ExtResource("6_cabinet")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 3.2)
+transform = Transform3D(10, 0, 0, 0, 10, 0, 0, 0, 10, -2.5986388, -2, 10.824749)
 
 [node name="Background" parent="." unique_id=2000000000 instance=ExtResource("4_background")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
@@ -96,15 +97,15 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0.1, 0)
 [node name="CollisionShape3D" type="CollisionShape3D" parent="DeckArea/Area3D" unique_id=213724805]
 shape = SubResource("BoxShape3D_Deck")
 
-[node name="DrawIndicatorArrow" type="Node3D" parent="DeckArea"]
+[node name="DrawIndicatorArrow" type="Node3D" parent="DeckArea" unique_id=1930883092]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
 visible = false
 
-[node name="Shaft" type="MeshInstance3D" parent="DeckArea/DrawIndicatorArrow"]
+[node name="Shaft" type="MeshInstance3D" parent="DeckArea/DrawIndicatorArrow" unique_id=645215501]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 0)
 mesh = SubResource("CylinderMesh_ArrowShaft")
 
-[node name="Head" type="MeshInstance3D" parent="DeckArea/DrawIndicatorArrow"]
+[node name="Head" type="MeshInstance3D" parent="DeckArea/DrawIndicatorArrow" unique_id=9331443]
 transform = Transform3D(1, 0, 0, 0, -1, 8.74228e-08, 0, -8.74228e-08, -1, 0, -0.125, 0)
 mesh = SubResource("CylinderMesh_ArrowHead")
 
@@ -123,16 +124,16 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.102, 0)
 mesh = SubResource("PlaneMesh_TurnIndicator")
 
 [node name="Bottom" type="Node3D" parent="PlayerPositions" unique_id=1640482197]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 6.0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 6)
 
 [node name="Top" type="Node3D" parent="PlayerPositions" unique_id=1531237525]
-transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 0, 0.1, -6.0)
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 0, 0.1, -6)
 
 [node name="Left" type="Node3D" parent="PlayerPositions" unique_id=346409451]
-transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -6.0, 0.1, 0)
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -6, 0.1, 0)
 
 [node name="Right" type="Node3D" parent="PlayerPositions" unique_id=1342769357]
-transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 6.0, 0.1, 0)
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 6, 0.1, 0)
 
 [node name="GameUI" type="CanvasLayer" parent="." unique_id=322047825]
 
@@ -180,3 +181,4 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 color = Color(0, 0, 0, 0)
+

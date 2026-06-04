@@ -176,6 +176,7 @@ func _ready():
 	_create_discard_indicator()
 	_create_beer_placeholders()
 	_create_chicken_placeholder()
+	_create_player_chairs()
 	$DeckArea/Area3D.input_event.connect(_on_deck_input_event)
 	$DiscardArea/Area3D.input_event.connect(_on_discard_input_event)
 
@@ -640,6 +641,24 @@ func _create_chicken_placeholder():
 	
 	area.input_event.connect(_on_chicken_clicked)
 	GameManager.ability_unlocked.connect(_on_ability_unlocked)
+
+func _create_player_chairs() -> void:
+	var chair_scene = load("res://assets/models/wooden_chair.glb")
+	if not chair_scene:
+		push_error("GameBoard3D: Could not load wooden_chair.glb!")
+		return
+	
+	# Instantiate a chair behind each player seat
+	for seat_idx in player_pos_nodes.keys():
+		var seat_node = player_pos_nodes[seat_idx]
+		if is_instance_valid(seat_node):
+			var chair = chair_scene.instantiate()
+			chair.name = "WoodenChair"
+			# Apply local transform relative to seat node (Bottom, Top, Left, Right)
+			chair.position = Vector3(0.0, -2.205, 5.001558)
+			chair.rotation_degrees = Vector3(0.0, -90.0, 0.0)
+			chair.scale = Vector3(35.0, 35.0, 35.0)
+			seat_node.add_child(chair)
 
 func _on_ability_unlocked(p_idx: int, ab: String):
 	_drop_egg_for(p_idx, ab)
@@ -1925,15 +1944,18 @@ func _process(delta: float) -> void:
 	elif not noclip_enabled:
 		var mouse_pos = get_viewport().get_mouse_position()
 		var vp_size = get_viewport().get_visible_rect().size
-		var nx = mouse_pos.x / float(vp_size.x)
-		var target_yaw = 0.0
 		
-		if nx < 0.2:
-			target_yaw = deg_to_rad(12.0) * (0.2 - nx) / 0.2
-		elif nx > 0.8:
-			target_yaw = -deg_to_rad(12.0) * (nx - 0.8) / 0.2
-			
-		camera.rotation.y = lerp_angle(camera.rotation.y, _base_camera_rotation.y + target_yaw, delta * 4.0)
+		# Center is at (0.5, 0.5)
+		# nx and ny normalized from -0.5 to 0.5 relative to center
+		var nx = (mouse_pos.x / float(vp_size.x)) - 0.5
+		var ny = (mouse_pos.y / float(vp_size.y)) - 0.5
+		
+		# Rotate left/right (yaw) up to 45 degrees, and up/down (pitch) up to 20 degrees
+		var target_yaw = -nx * deg_to_rad(45.0)
+		var target_pitch = ny * deg_to_rad(20.0)
+		
+		camera.rotation.y = lerp_angle(camera.rotation.y, _base_camera_rotation.y + target_yaw, delta * 3.0)
+		camera.rotation.x = lerp_angle(camera.rotation.x, _base_camera_rotation.x + target_pitch, delta * 3.0)
 
 func _update_cabinet_hover() -> void:
 	if not is_instance_valid(camera):
