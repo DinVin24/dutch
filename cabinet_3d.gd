@@ -11,8 +11,8 @@ const MAX_INTERACT_DISTANCE := 4.5
 const HAMMER_HOVER_RISE   := 0.035  # meters to rise in Y
 const HAMMER_HOVER_SHAKE  := 0.004  # shake amplitude
 
-# References to drawer nodes
-var _shelves: Array[MeshInstance3D] = []
+# References to drawer nodes (GLB nodes may be plain Node3D, not MeshInstance3D)
+var _shelves: Array[Node3D] = []
 # Cache of initial Z positions
 var _initial_z: Array[float] = []
 # Open/close state of drawers
@@ -284,11 +284,12 @@ func update_hammers(count: int, p_idx: int = -1) -> void:
 		hammer.add_child(omni)
 		_hammer_omnis.append(omni)
 
-		# Area3D for hover/click detection on layer 8
-		# The hammer scale is ~0.008 globally, so we need a large local box (40 units = 32cm)
+		# Area3D for hover/click detection on layer 16 (separate from drawer layer 8)
+		# Layer separation is critical: the shelf's Area3D (layer 8) physically contains
+		# the hammer's Area3D, so using the same layer would cause the shelf to occlude the hammer.
 		var hammer_area = Area3D.new()
 		hammer_area.name = "HammerArea3D"
-		hammer_area.collision_layer = 8
+		hammer_area.collision_layer = 16  # DEDICATED hammer layer — NOT shared with drawer (8)
 		hammer_area.collision_mask = 0
 		hammer_area.set_meta("hammer_index", i)
 		hammer_area.set_meta("player_index", player_index)
@@ -336,3 +337,12 @@ func update_hammers(count: int, p_idx: int = -1) -> void:
 			tw.tween_property(sparkle, "position", bp, dur).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 			tw.parallel().tween_property(sparkle, "scale", bs, dur).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 			_sparkles.append(sparkle)
+
+	# Auto-open drawers that now contain at least one hammer
+	# so the visual change is immediately visible to all players.
+	var used_shelves := {}
+	for i in range(target_count):
+		used_shelves[slots[i].shelf] = true
+	for shelf_idx in used_shelves:
+		if not _is_open[shelf_idx]:
+			toggle_shelf(shelf_idx)

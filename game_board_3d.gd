@@ -1811,16 +1811,16 @@ func _unhandled_input(event):
 						get_viewport().set_input_as_handled()
 						return
 			
-			# Also check layer 8 (hammers + cabinet drawers) on click
-			var query8 := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
-			query8.collision_mask = 8
-			query8.collide_with_areas = true
-			query8.collide_with_bodies = false
-			var result8 := space_state.intersect_ray(query8)
-			if result8 and result8.collider:
-				var col8 = result8.collider
-				if col8.has_meta("hammer_index"):
-					_on_hammer_clicked(col8)
+			# Check layer 16 (hammers — dedicated layer, separate from drawer layer 8)
+			var query16 := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
+			query16.collision_mask = 16
+			query16.collide_with_areas = true
+			query16.collide_with_bodies = false
+			var result16 := space_state.intersect_ray(query16)
+			if result16 and result16.collider:
+				var col16 = result16.collider
+				if col16.has_meta("hammer_index"):
+					_on_hammer_clicked(col16)
 					get_viewport().set_input_as_handled()
 					return
 
@@ -2039,25 +2039,23 @@ func _update_cabinet_hover() -> void:
 	var center := viewport_size / 2.0
 	var ray_origin = camera.project_ray_origin(center)
 	var ray_normal = camera.project_ray_normal(center)
-	
 	var space_state := get_world_3d().direct_space_state
-	var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
-	query.collision_mask = 8
-	query.collide_with_areas = true
-	query.collide_with_bodies = false
 	
-	var result := space_state.intersect_ray(query)
-	var new_hover_idx := -1
-	var new_hover_cabinet: Node = null
+	# --- PASS 1: Hammer detection on layer 16 ---
+	# Layer 16 is ONLY for hammers. The shelf Area3D (layer 8) is invisible to this raycast,
+	# so the ray passes through the shelf box and hits the hammer Area3D directly.
+	var q_hammer := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
+	q_hammer.collision_mask = 16
+	q_hammer.collide_with_areas = true
+	q_hammer.collide_with_bodies = false
+	var r_hammer := space_state.intersect_ray(q_hammer)
 	
-	if result and result.collider:
-		var collider = result.collider
-		var hit_dist: float = ray_origin.distance_to(result.position as Vector3)
-		
+	if r_hammer and r_hammer.collider:
+		var collider = r_hammer.collider
 		if collider.has_meta("hammer_index"):
 			var h_idx: int = collider.get_meta("hammer_index")
 			var h_player_idx: int = collider.get_meta("player_index", -1)
-			# Only local player can hover/click their own hammers — no distance limit
+			# Only local player can hover/click their own hammers
 			if h_player_idx == GameManager.local_player_idx:
 				var cab_node = _cabinets.get(h_player_idx)
 				if is_instance_valid(cab_node):
@@ -2073,13 +2071,31 @@ func _update_cabinet_hover() -> void:
 						var ab_name = abilities[h_idx].capitalize().replace("_", " ") if h_idx < abilities.size() else "?"
 						_cabinet_prompt_label.text = "[CLICK] %s" % ab_name
 						_cabinet_prompt_label.show()
-					new_hover_idx = _hovered_shelf_index
-					new_hover_cabinet = _hovered_cabinet_node
-					return
-		
-		elif collider.has_meta("shelf_index"):
-			# Find which cabinet this drawer belongs to
-			var candidate_idx := -1
+					return  # Hammer handled; skip drawer detection this frame
+	
+	# Not hovering a hammer this frame — unhover if we were before
+	if _hovered_hammer_idx_board >= 0 and is_instance_valid(_hovered_hammer_cabinet):
+		_hovered_hammer_cabinet.unhover_hammer(_hovered_hammer_idx_board)
+		_hovered_hammer_idx_board = -1
+		_hovered_hammer_cabinet = null
+		if is_instance_valid(_cabinet_prompt_label):
+			_cabinet_prompt_label.hide()
+	
+	# --- PASS 2: Drawer detection on layer 8 ---
+	var q_drawer := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
+	q_drawer.collision_mask = 8
+	q_drawer.collide_with_areas = true
+	q_drawer.collide_with_bodies = false
+	var r_drawer := space_state.intersect_ray(q_drawer)
+	
+	var new_hover_idx := -1
+	var new_hover_cabinet: Node = null
+	
+	if r_drawer and r_drawer.collider:
+		var collider = r_drawer.collider
+		var hit_dist: float = ray_origin.distance_to(r_drawer.position as Vector3)
+		if collider.has_meta("shelf_index"):
+			var candidate_idx: int = collider.get_meta("shelf_index")
 			var candidate_cab: Node = null
 			var node = collider
 			while node:
@@ -2087,27 +2103,16 @@ func _update_cabinet_hover() -> void:
 					candidate_cab = node
 					break
 				node = node.get_parent()
-			candidate_idx = collider.get_meta("shelf_index")
-			
-			# Determine drawer cabinet owner
+			# Determine owner of this cabinet
 			var cab_owner := -1
 			for pi in _cabinets:
 				if _cabinets[pi] == candidate_cab:
 					cab_owner = pi
 					break
-			
-			# Own cabinet: always reachable. Other players: 4.5m max.
+			# Own cabinet: always reachable. Others: 4.5m limit.
 			if cab_owner == GameManager.local_player_idx or hit_dist <= 4.5:
 				new_hover_idx = candidate_idx
 				new_hover_cabinet = candidate_cab
-	
-	# Not hovering a hammer — unhover if we were
-	if _hovered_hammer_idx_board >= 0 and is_instance_valid(_hovered_hammer_cabinet):
-		_hovered_hammer_cabinet.unhover_hammer(_hovered_hammer_idx_board)
-		_hovered_hammer_idx_board = -1
-		_hovered_hammer_cabinet = null
-		if is_instance_valid(_cabinet_prompt_label):
-			_cabinet_prompt_label.hide()
 	
 	if new_hover_idx != _hovered_shelf_index or new_hover_cabinet != _hovered_cabinet_node:
 		_hovered_shelf_index = new_hover_idx
