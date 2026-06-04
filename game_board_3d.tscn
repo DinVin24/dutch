@@ -5,7 +5,6 @@
 [ext_resource type="PackedScene" uid="uid://dwowse5ksiil0" path="res://assets/models/table.glb" id="3_table"]
 [ext_resource type="PackedScene" uid="uid://dmsi4kgr88r2u" path="res://assets/models/background.glb" id="4_background"]
 [ext_resource type="Shader" uid="uid://3pi0jmdhmstq" path="res://shaders/turn_indicator.gdshader" id="5_turn_indicator_shader"]
-[ext_resource type="PackedScene" path="res://cabinet_3d.tscn" id="6_cabinet"]
 [ext_resource type="PackedScene" uid="uid://cijucteykpjh8" path="res://assets/models/wooden_chair.glb" id="7_3uego"]
 
 [sub_resource type="Environment" id="Environment_1"]
@@ -77,14 +76,11 @@ beer_y_offset = 0.75
 environment = SubResource("Environment_1")
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=701076918]
-transform = Transform3D(1, 0, 0, 0, 0.6354183, 0.77216816, 0, -0.77216816, 0.6354183, 0, 7.8, 8.5)
+transform = Transform3D(1, 0, 0, 0, 0.919046, 0.39415023, 0, -0.39415026, 0.919046, 0, 3.375153, 11.393677)
 fov = 60.0
 
 [node name="Table" parent="." unique_id=1261982012 instance=ExtResource("3_table")]
 transform = Transform3D(24.131344, 0, 0, 0, 3.0000007, 0, 0, 0, 24.131344, 0, -1.6886296, 0)
-
-[node name="Cabinet" parent="." unique_id=998877665 instance=ExtResource("6_cabinet")]
-transform = Transform3D(10, 0, 0, 0, 10, 0, 0, 0, 10, -2.5986388, -2, 10.824749)
 
 [node name="Background" parent="." unique_id=2000000000 instance=ExtResource("4_background")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
@@ -182,3 +178,5 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0, 0, 0, 0)
 
+[node name="Sketchfab_Scene" parent="." unique_id=1101568271 instance=ExtResource("7_3uego")]
+transform = Transform3D(-1.8795897e-06, 0, 43, 0, 43, 0, -43, 0, -1.8795897e-06, -0.16356874, -2.1563072, 11.241352)

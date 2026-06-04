@@ -1931,9 +1931,9 @@ func _process(delta: float) -> void:
 		var nx = (mouse_pos.x / float(vp_size.x)) - 0.5
 		var ny = (mouse_pos.y / float(vp_size.y)) - 0.5
 		
-		# Rotate left/right (yaw) up to 100 degrees, and up/down (pitch) up to 45 degrees
-		var target_yaw = -nx * deg_to_rad(100.0)
-		var target_pitch = -ny * deg_to_rad(45.0)
+		# Rotate left/right (yaw) up to 170 degrees, and up/down (pitch) up to 50 degrees
+		var target_yaw = -nx * deg_to_rad(170.0)
+		var target_pitch = -ny * deg_to_rad(50.0)
 		
 		camera.rotation.y = lerp_angle(camera.rotation.y, _base_camera_rotation.y + target_yaw, delta * 12.0)
 		camera.rotation.x = lerp_angle(camera.rotation.x, _base_camera_rotation.x + target_pitch, delta * 12.0)
