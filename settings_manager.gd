@@ -10,7 +10,8 @@ const CONFIGURABLE_ACTIONS = [
 	"game_select_left",
 	"game_select_right",
 	"game_confirm_card",
-	"game_discard_drawn"
+	"game_discard_drawn",
+	"game_forfeit_dutch"
 ]
 
 var config = ConfigFile.new()

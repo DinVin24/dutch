@@ -88,6 +88,7 @@ const KEYBIND_ACTIONS: Dictionary = {
 	"game_select_right": "Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/SelectRightBind",
 	"game_confirm_card": "Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/ConfirmCardBind",
 	"game_discard_drawn":"Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/DiscardDrawnBind",
+	"game_forfeit_dutch":"Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/ForfeitDutchBind",
 }
 
 var _listening_action: String = ""

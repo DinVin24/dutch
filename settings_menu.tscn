@@ -290,6 +290,19 @@ theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
 flat = true
 text = "F"
 
+[node name="ForfeitDutchLabel" type="Label" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
+theme_override_font_sizes/font_size = 17
+text = "Forfeit Dutch"
+
+[node name="ForfeitDutchBind" type="Button" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
+flat = true
+text = "4"
+
 [node name="FooterLine" type="ColorRect" parent="Panel"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 2)
@@ -317,4 +330,5 @@ alignment = 2
 [connection signal="pressed" from="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/SelectRightBind" to="." method="_on_keybind_button_pressed" binds= ["game_select_right", "Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/SelectRightBind"]]
 [connection signal="pressed" from="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/ConfirmCardBind" to="." method="_on_keybind_button_pressed" binds= ["game_confirm_card", "Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/ConfirmCardBind"]]
 [connection signal="pressed" from="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/DiscardDrawnBind" to="." method="_on_keybind_button_pressed" binds= ["game_discard_drawn", "Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/DiscardDrawnBind"]]
+[connection signal="pressed" from="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/ForfeitDutchBind" to="." method="_on_keybind_button_pressed" binds= ["game_forfeit_dutch", "Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/ForfeitDutchBind"]]
 [connection signal="pressed" from="Panel/BackButton" to="." method="_on_back_button_pressed"]

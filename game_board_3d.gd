@@ -409,7 +409,7 @@ func _create_hud_ui():
 	jump_in_btn = _create_button(action_container, "> JUMP_IN (2) <", Color(0.0, 1.0, 1.0))
 	call_dutch_btn = _create_button(action_container, "> CALL_DUTCH (3) <", Color(1.0, 0.0, 0.8))
 	confirm_dutch_btn = _create_button(action_container, "> CONFIRM_DUTCH (1) <", Color(0.0, 1.0, 1.0))
-	forfeit_dutch_btn = _create_button(action_container, "> FORFEIT_DUTCH (3) <", Color(1.0, 0.0, 0.8))
+	forfeit_dutch_btn = _create_button(action_container, "> FORFEIT_DUTCH (4) <", Color(1.0, 0.0, 0.8))
 	end_turn_btn.pressed.connect(_on_end_turn_pressed)
 	jump_in_btn.pressed.connect(_on_jump_in_pressed)
 	call_dutch_btn.pressed.connect(_on_call_dutch_pressed)
@@ -1111,25 +1111,32 @@ func _update_action_buttons_state():
 	var can_jump_in = GameManager.can_player_start_jump_in(local_idx) or GameManager.should_human_show_jump_in_button(local_idx)
 	var can_call_dutch = GameManager.can_player_call_dutch(local_idx)
 
+	# Confirm Dutch and Forfeit Dutch are only shown in TURN_CONFIRM_DUTCH state
+	var is_confirm_dutch_state = GameManager.current_state == GameManager.GameState.TURN_CONFIRM_DUTCH
+	var can_confirm = GameManager.can_player_confirm_dutch(local_idx)
+
 	# Set button disabled states (disabled = not allowed)
 	end_turn_btn.disabled = not can_end_turn
 	jump_in_btn.disabled = not can_jump_in
 	call_dutch_btn.disabled = not can_call_dutch
 
-	# The three core actions are always visible inside the action panel
-	end_turn_btn.visible = true
+	# The core actions: end_turn is replaced by confirm_dutch in confirm state.
+	# call_dutch and jump_in are still visible.
+	end_turn_btn.visible = not is_confirm_dutch_state
 	jump_in_btn.visible = true
 	call_dutch_btn.visible = true
-
-	# Confirm Dutch and Forfeit Dutch are only shown in TURN_CONFIRM_DUTCH state
-	var is_confirm_dutch_state = GameManager.current_state == GameManager.GameState.TURN_CONFIRM_DUTCH
-	var can_confirm = GameManager.can_player_confirm_dutch(local_idx)
 	
 	confirm_dutch_btn.visible = is_confirm_dutch_state
 	confirm_dutch_btn.disabled = not can_confirm
 	
 	forfeit_dutch_btn.visible = is_confirm_dutch_state
 	forfeit_dutch_btn.disabled = not can_confirm
+
+	# Size action panel taller if forfeit_dutch is visible
+	if is_confirm_dutch_state:
+		action_panel.offset_top = -280
+	else:
+		action_panel.offset_top = -220
 
 	# Update the action panel's pulsing/glowing style
 	_update_action_panel_style()
@@ -1829,30 +1836,26 @@ func _unhandled_input(event):
 	_handle_game_keyboard_input(event)
 
 func _handle_game_keyboard_input(event: InputEvent) -> void:
-	var is_1 = event is InputEventKey and event.keycode == KEY_1
-	var is_2 = event is InputEventKey and event.keycode == KEY_2
-	var is_3 = event is InputEventKey and event.keycode == KEY_3
-
-	# Q or 1 — end turn OR confirm dutch (states are mutually exclusive)
-	if (event.is_action("game_end_turn") or is_1) and end_turn_btn.visible and not end_turn_btn.disabled:
+	# Q — end turn OR confirm dutch (states are mutually exclusive)
+	if event.is_action("game_end_turn") and end_turn_btn.visible and not end_turn_btn.disabled:
 		_on_end_turn_pressed()
 		get_viewport().set_input_as_handled()
 
-	elif (event.is_action("game_confirm_dutch") or is_1) and confirm_dutch_btn.visible and not confirm_dutch_btn.disabled:
+	elif event.is_action("game_confirm_dutch") and confirm_dutch_btn.visible and not confirm_dutch_btn.disabled:
 		_on_confirm_dutch_pressed()
 		get_viewport().set_input_as_handled()
 
-	# E or 3 — call dutch OR forfeit dutch (states are mutually exclusive)
-	elif (event.is_action("game_forfeit_dutch") or is_3) and forfeit_dutch_btn.visible and not forfeit_dutch_btn.disabled:
+	# forfeit dutch OR call dutch (states are mutually exclusive)
+	elif event.is_action("game_forfeit_dutch") and forfeit_dutch_btn.visible and not forfeit_dutch_btn.disabled:
 		_on_cancel_dutch_pressed()
 		get_viewport().set_input_as_handled()
 
-	elif (event.is_action("game_call_dutch") or is_3) and call_dutch_btn.visible and not call_dutch_btn.disabled:
+	elif event.is_action("game_call_dutch") and call_dutch_btn.visible and not call_dutch_btn.disabled:
 		_on_call_dutch_pressed()
 		get_viewport().set_input_as_handled()
 
-	# Space or 2 — jump in
-	elif (event.is_action("game_jump_in") or is_2) and jump_in_btn.visible and not jump_in_btn.disabled:
+	# Space — jump in
+	elif event.is_action("game_jump_in") and jump_in_btn.visible and not jump_in_btn.disabled:
 		_on_jump_in_pressed()
 		get_viewport().set_input_as_handled()
 
