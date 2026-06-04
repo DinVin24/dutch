@@ -371,7 +371,6 @@ func _can_transition_to(new_state: GameState) -> bool:
 				GameState.TURN_START_DRAW,
 				GameState.TURN_RESOLVE_DRAWN,
 				GameState.TURN_END_CHOICE,
-				GameState.TURN_CONFIRM_DUTCH,
 				GameState.TURN_PEEK_ABILITY,
 				GameState.TURN_SWAP_ABILITY,
 				GameState.GAME_OVER
@@ -379,7 +378,7 @@ func _can_transition_to(new_state: GameState) -> bool:
 		GameState.CHECK_DUTCH:
 			return new_state == GameState.TURN_CONFIRM_DUTCH
 		GameState.TURN_CONFIRM_DUTCH:
-			return new_state in [GameState.TURN_START_DRAW, GameState.TURN_JUMP_IN_SELECTION, GameState.GAME_OVER]
+			return new_state in [GameState.TURN_START_DRAW, GameState.GAME_OVER]
 		GameState.GAME_OVER:
 			return new_state == GameState.DEAL_CARDS
 	return false
