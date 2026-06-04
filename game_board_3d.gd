@@ -1603,6 +1603,12 @@ func _update_hand_visuals(player_idx: int):
 			# Shrink back to normal hand size if the card came from the draw pile (1.5x)
 			if card_node.scale != Vector3.ONE:
 				tween.tween_property(card_node, "scale", Vector3.ONE, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT).set_delay(delay)
+			# After a swap-in tween completes, re-evaluate interactivity so the
+			# card can immediately be clicked/jumped-in (it was set_interactive(false)
+			# when consumed from pending_card, before the state-change highlight
+			# refresh fired).
+			if delay > 0.0:
+				tween.chain().tween_callback(_refresh_human_interactivity)
 
 func _handle_initial_deal():
 	print("GameBoard3D: _handle_initial_deal started")
