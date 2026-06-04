@@ -699,7 +699,8 @@ func _on_chicken_clicked(_camera, event, _position, _normal, _shape_idx):
 			_try_buy_ability(GameManager.local_player_idx)
 
 func _try_buy_ability(p_idx: int):
-	if GameManager.players_info[p_idx].abilities.size() >= 6:
+	var active_abilities = GameManager.players_info[p_idx].abilities.filter(func(a): return a != "")
+	if active_abilities.size() >= 6:
 		_show_message("Inventory Full! (Max 6)")
 		return
 		

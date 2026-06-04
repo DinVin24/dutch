@@ -249,13 +249,14 @@ func update_hammers(abilities: Array, p_idx: int = -1) -> void:
 		return
 
 	# 6 slot positions: 0,1 = top drawer; 2,3 = middle; 4,5 = bottom
+	# Symmetrically centered at X = 0.0 (left slot: -0.06, right slot: +0.06)
 	var slots = [
-		{"shelf": 0, "pos": Vector3(-0.03, -0.07, -0.09)},
-		{"shelf": 0, "pos": Vector3(0.11,  -0.07, -0.09)},
-		{"shelf": 1, "pos": Vector3(-0.03, -0.07, -0.09)},
-		{"shelf": 1, "pos": Vector3(0.11,  -0.07, -0.09)},
-		{"shelf": 2, "pos": Vector3(-0.03, -0.07, -0.09)},
-		{"shelf": 2, "pos": Vector3(0.11,  -0.07, -0.09)}
+		{"shelf": 0, "pos": Vector3(-0.06, -0.07, -0.09)},
+		{"shelf": 0, "pos": Vector3(0.06,  -0.07, -0.09)},
+		{"shelf": 1, "pos": Vector3(-0.06, -0.07, -0.09)},
+		{"shelf": 1, "pos": Vector3(0.06,  -0.07, -0.09)},
+		{"shelf": 2, "pos": Vector3(-0.06, -0.07, -0.09)},
+		{"shelf": 2, "pos": Vector3(0.06,  -0.07, -0.09)}
 	]
 
 	_hammers.resize(6)
@@ -285,9 +286,9 @@ func update_hammers(abilities: Array, p_idx: int = -1) -> void:
 		shelf_node.add_child(hammer)
 		hammer.position = slot.pos
 
-		# Scale to ~0.008 global
+		# Scale to ~0.022 global (TEMPORARILY LARGER for verification, normal is 0.008)
 		var pg_scale = shelf_node.global_transform.basis.get_scale()
-		var local_s = Vector3(0.008, 0.008, 0.008)
+		var local_s = Vector3(0.022, 0.022, 0.022)
 		if pg_scale.x > 0.0001: local_s.x /= pg_scale.x
 		if pg_scale.y > 0.0001: local_s.y /= pg_scale.y
 		if pg_scale.z > 0.0001: local_s.z /= pg_scale.z
