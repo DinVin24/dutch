@@ -434,17 +434,18 @@ func _create_hud_ui():
 	action_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	action_panel.add_child(action_container)
 
-	# Standard HUD buttons with keyboard shortcut indicators
-	end_turn_btn = _create_button(action_container, "> END_TURN (1) <", Color(0.0, 1.0, 1.0))
-	jump_in_btn = _create_button(action_container, "> JUMP_IN (2) <", Color(0.0, 1.0, 1.0))
-	call_dutch_btn = _create_button(action_container, "> CALL_DUTCH (3) <", Color(1.0, 0.0, 0.8))
-	confirm_dutch_btn = _create_button(action_container, "> CONFIRM_DUTCH (1) <", Color(0.0, 1.0, 1.0))
-	forfeit_dutch_btn = _create_button(action_container, "> FORFEIT_DUTCH (4) <", Color(1.0, 0.0, 0.8))
+	# Standard HUD buttons — labels are dynamically populated from InputMap keybinds
+	end_turn_btn = _create_button(action_container, "", Color(0.0, 1.0, 1.0))
+	jump_in_btn = _create_button(action_container, "", Color(0.0, 1.0, 1.0))
+	call_dutch_btn = _create_button(action_container, "", Color(1.0, 0.0, 0.8))
+	confirm_dutch_btn = _create_button(action_container, "", Color(0.0, 1.0, 1.0))
+	forfeit_dutch_btn = _create_button(action_container, "", Color(1.0, 0.0, 0.8))
 	end_turn_btn.pressed.connect(_on_end_turn_pressed)
 	jump_in_btn.pressed.connect(_on_jump_in_pressed)
 	call_dutch_btn.pressed.connect(_on_call_dutch_pressed)
 	confirm_dutch_btn.pressed.connect(_on_confirm_dutch_pressed)
 	forfeit_dutch_btn.pressed.connect(_on_cancel_dutch_pressed)
+	_update_action_button_labels()
 	
 	# Restyle the TurnLabel
 	turn_label.add_theme_color_override("font_color", Color(0.0, 1.0, 1.0))
@@ -1945,34 +1946,6 @@ func _unhandled_input(event):
 	_handle_game_keyboard_input(event)
 
 func _handle_game_keyboard_input(event: InputEvent) -> void:
-	# Support numeric keys 1, 2, 3, 4 directly to match the HUD labels
-	if event is InputEventKey:
-		var keycode = event.keycode
-		if keycode == KEY_1 or keycode == KEY_KP_1:
-			if confirm_dutch_btn.visible and not confirm_dutch_btn.disabled:
-				_on_confirm_dutch_pressed()
-				get_viewport().set_input_as_handled()
-				return
-			elif end_turn_btn.visible and not end_turn_btn.disabled:
-				_on_end_turn_pressed()
-				get_viewport().set_input_as_handled()
-				return
-		elif keycode == KEY_2 or keycode == KEY_KP_2:
-			if jump_in_btn.visible and not jump_in_btn.disabled:
-				_on_jump_in_pressed()
-				get_viewport().set_input_as_handled()
-				return
-		elif keycode == KEY_3 or keycode == KEY_KP_3:
-			if call_dutch_btn.visible and not call_dutch_btn.disabled:
-				_on_call_dutch_pressed()
-				get_viewport().set_input_as_handled()
-				return
-		elif keycode == KEY_4 or keycode == KEY_KP_4:
-			if forfeit_dutch_btn.visible and not forfeit_dutch_btn.disabled:
-				_on_cancel_dutch_pressed()
-				get_viewport().set_input_as_handled()
-				return
-
 	# Q — end turn OR confirm dutch (states are mutually exclusive)
 	if event.is_action("game_end_turn") and end_turn_btn.visible and not end_turn_btn.disabled:
 		_on_end_turn_pressed()
@@ -2063,6 +2036,8 @@ func _on_pause_resumed():
 		pause_menu_instance = null
 	get_tree().paused = false
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	# Refresh button labels in case keybinds were changed in settings
+	_update_action_button_labels()
 
 func _on_pause_main_menu():
 	get_tree().paused = false
@@ -2744,3 +2719,30 @@ func play_take_animation(player_idx: int) -> void:
 			ap.stop()
 			ap.play("take")
 			ap.queue("idle")
+
+## Reads the configured keybind for each game action from InputMap and updates
+## all HUD button labels to show e.g. "> END_TURN (Q) <" or "> JUMP_IN (Space) <".
+## Call this after _create_hud_ui() and again whenever settings may have changed.
+func _update_action_button_labels() -> void:
+	if is_instance_valid(end_turn_btn):
+		end_turn_btn.text = "> END_TURN (%s) <" % _get_action_key_string("game_end_turn")
+	if is_instance_valid(jump_in_btn):
+		jump_in_btn.text = "> JUMP_IN (%s) <" % _get_action_key_string("game_jump_in")
+	if is_instance_valid(call_dutch_btn):
+		call_dutch_btn.text = "> CALL_DUTCH (%s) <" % _get_action_key_string("game_call_dutch")
+	if is_instance_valid(confirm_dutch_btn):
+		confirm_dutch_btn.text = "> CONFIRM_DUTCH (%s) <" % _get_action_key_string("game_confirm_dutch")
+	if is_instance_valid(forfeit_dutch_btn):
+		forfeit_dutch_btn.text = "> FORFEIT_DUTCH (%s) <" % _get_action_key_string("game_forfeit_dutch")
+
+## Returns the human-readable key name for the first keyboard event bound to [action],
+## e.g. "Space", "Q", "Y". Falls back to "—" if no key is mapped.
+func _get_action_key_string(action: String) -> String:
+	if not InputMap.has_action(action):
+		return "—"
+	var events = InputMap.action_get_events(action)
+	for e in events:
+		if e is InputEventKey:
+			var keycode = e.physical_keycode if e.physical_keycode != KEY_NONE else e.keycode
+			return OS.get_keycode_string(keycode)
+	return "—"
