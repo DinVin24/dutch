@@ -137,17 +137,101 @@ func _verify_emote_wheel() -> void:
 
 func _verify_money_juice() -> void:
 	_log("--- MONEY JUICE TEST ---")
+	var gm := _gm()
 	if _board == null:
 		_fail("money_juice_board", "board missing")
 		return
 	if not _board.has_method("_show_money_juice_popup"):
 		_fail("money_juice_api", "popup method missing")
 		return
-	_board._show_money_juice_popup(0, 40, false)
+	if not gm.has_method("get_discard_money_amount"):
+		_fail("money_payout_api", "get_discard_money_amount missing")
+		return
+
+	# Payout table — must match gain_money_for_discard / in-game rules
+	var payout_cases: Array = [
+		[CardData.new("4", "Clubs"), 30],
+		[CardData.new("5", "Hearts"), 40],
+		[CardData.new("6", "Diamonds"), 40],
+		[CardData.new("7", "Spades"), 50],
+		[CardData.new("9", "Hearts"), 70],
+		[CardData.new("Jack", "Clubs"), 80],
+		[CardData.new("Ace", "Spades"), 100],
+		[CardData.new("King", "Hearts"), 10],
+		[CardData.new("King", "Diamonds"), 200],
+	]
+	for row in payout_cases:
+		var card: CardData = row[0]
+		var expected: int = row[1]
+		var got: int = gm.get_discard_money_amount(card)
+		if got == expected:
+			_pass("payout %s -> $%d" % [card.display_name(), got])
+		else:
+			_fail("payout_%s_%s" % [card.rank, card.suit], "expected $%d got $%d" % [expected, got])
+
+	# End-to-end: signal -> 3D popup text matches in-game amount
+	await _verify_money_juice_discard(gm, CardData.new("5", "Hearts"), 40, false)
+	await create_timer(1.0).timeout
+	_clear_money_juice_labels(0)
 	await process_frame
-	_board._show_money_juice_popup(0, 200, true)
+	await _verify_money_juice_discard(gm, CardData.new("King", "Diamonds"), 200, true)
+
+func _clear_money_juice_labels(player_idx: int) -> void:
+	if _board == null or not _board.has_method("_get_safe_player_pos"):
+		return
+	var seat: Node3D = _board._get_safe_player_pos(player_idx)
+	if not is_instance_valid(seat):
+		return
+	for child in seat.get_children():
+		if child is Label3D and child.name == "MoneyJuice":
+			child.queue_free()
+
+func _verify_money_juice_discard(gm: Node, card: CardData, expected: int, expect_kod: bool) -> void:
+	gm.deck_manager.discard_pile.clear()
+	gm.deck_manager.discard_pile.append(card)
+	var money_before: int = gm.players_info[0].money
+	_log("[ACTION] gain_money_for_discard P0 %s (expect +$%d)" % [card.display_name(), expected])
+	gm.gain_money_for_discard(0, card)
 	await process_frame
-	_pass("money juice popup spawned (standard + K♦)")
+	await process_frame
+
+	if gm.players_info[0].money != money_before + expected:
+		_fail("money_balance_%s" % card.rank, "expected $%d got $%d" % [
+			money_before + expected, gm.players_info[0].money
+		])
+	else:
+		_pass("balance +$%d after %s discard" % [expected, card.display_name()])
+
+	var label := _find_money_juice_label(0)
+	if label == null:
+		_fail("money_juice_label_%s" % card.rank, "MoneyJuice Label3D not spawned")
+		return
+	var want_text := "+$%d" % expected
+	if label.text != want_text:
+		_fail("money_juice_text_%s" % card.rank, "want '%s' got '%s'" % [want_text, label.text])
+	else:
+		_pass("popup text '%s' for %s" % [want_text, card.display_name()])
+
+	if expect_kod:
+		if label.font_size >= 110:
+			_pass("K♦ popup uses premium font size (%d)" % label.font_size)
+		else:
+			_fail("money_juice_kod_style", "font_size=%d" % label.font_size)
+	elif label.font_size < 110:
+		_pass("standard popup font size (%d)" % label.font_size)
+	else:
+		_fail("money_juice_std_style", "font too large for non-K♦")
+
+func _find_money_juice_label(player_idx: int) -> Label3D:
+	if _board == null or not _board.has_method("_get_safe_player_pos"):
+		return null
+	var seat: Node3D = _board._get_safe_player_pos(player_idx)
+	if not is_instance_valid(seat):
+		return null
+	for child in seat.get_children():
+		if child is Label3D and child.name == "MoneyJuice":
+			return child
+	return null
 
 func _verify_beer() -> void:
 	_log("--- BEER TEST ---")

@@ -679,25 +679,29 @@ func drink_beer(p_idx: int):
 			print("Player died on their turn. Forcing next turn.")
 			next_turn()
 
+func get_discard_money_amount(card: CardData) -> int:
+	var r: String = card.rank
+	var s: String = card.suit
+	if r == "King":
+		return 200 if s == "Diamonds" else 10
+	if r == "Ace":
+		return 100
+	if r == "Queen" or r == "Jack":
+		return 80
+	if r == "10" or r == "9":
+		return 70
+	if r == "8" or r == "7":
+		return 50
+	if r == "6" or r == "5":
+		return 40
+	return 30
+
 func gain_money_for_discard(p_idx: int, card: CardData):
 	if players_info[p_idx].is_eliminated: return
-	var amount = 0
-	var r = card.rank
-	var s = card.suit
-	
-	if r == "King":
-		if s == "Diamonds": amount = 200
-		else: amount = 10
-	elif r == "Ace": amount = 100
-	elif r == "Queen" or r == "Jack": amount = 80
-	elif r == "10" or r == "9": amount = 70
-	elif r == "8" or r == "7": amount = 50
-	elif r == "6" or r == "5": amount = 40
-	else: amount = 30
-	
+	var amount := get_discard_money_amount(card)
 	players_info[p_idx].money += amount
 	player_gained_money.emit(p_idx, amount, players_info[p_idx].money)
-	print("Player ", p_idx, " gained $", amount, " for discarding ", r, " of ", s)
+	print("Player ", p_idx, " gained $", amount, " for discarding ", card.rank, " of ", card.suit)
 
 
 func start_game():
