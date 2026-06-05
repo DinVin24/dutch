@@ -306,15 +306,16 @@ func _apply_local_player_seat_rotation() -> void:
 		camera.position = _effective_camera_base_local()
 
 func _attach_cabinets_to_seats() -> void:
-	# Cabinets were placed behind the camera; anchor each one beside its player seat.
+	# Local offsets from each seat — left/beside the player, toward the table.
+	# Y lift keeps drawers above the oversized table mesh (table scale ~19).
 	const OFFSETS := {
-		0: Vector3(-2.5, -1.1, 0.9),
-		1: Vector3(0.9, -1.1, -2.5),
-		2: Vector3(2.5, -1.1, -0.9),
-		3: Vector3(-0.9, -1.1, 2.5),
+		0: Vector3(-2.8, 1.55, 1.6),
+		1: Vector3(1.6, 1.55, -2.8),
+		2: Vector3(2.8, 1.55, -1.6),
+		3: Vector3(-1.6, 1.55, 2.8),
 	}
-	const LOCAL_SCALE := Vector3(4.5, 4.0, 5.0)
-	const LOCAL_ROT := Vector3(0.0, 90.0, 0.0)
+	const LOCAL_SCALE := Vector3(3.2, 3.2, 3.2)
+	const LOCAL_ROT := Vector3(0.0, -90.0, 0.0)
 
 	for p_idx in _cabinets:
 		var cab: Node3D = _cabinets[p_idx]
@@ -325,7 +326,7 @@ func _attach_cabinets_to_seats() -> void:
 		if not is_instance_valid(seat):
 			continue
 		if cab.get_parent() != seat:
-			seat.add_child(cab)
+			cab.reparent(seat)
 		cab.position = OFFSETS.get(p_idx, Vector3.ZERO)
 		cab.rotation_degrees = LOCAL_ROT
 		cab.scale = LOCAL_SCALE
