@@ -2122,16 +2122,14 @@ func _process(delta: float) -> void:
 	if is_instance_valid(draw_arrow) and draw_arrow.visible:
 		draw_arrow.position.y = 1.2 + sin(Time.get_ticks_msec() * 0.005) * 0.15
 	
+	var shake_offset = Vector3.ZERO
 	if _shake_timer > 0:
 		_shake_timer -= delta
-		var offset = Vector3(
+		shake_offset = Vector3(
 			randf_range(-1, 1) * _shake_intensity,
 			randf_range(-1, 1) * _shake_intensity,
 			0
 		)
-		camera.position = _effective_camera_base_local() + offset
-		if _shake_timer <= 0:
-			camera.position = _effective_camera_base_local()
 
 	if noclip_enabled and not DevConsole.window.visible:
 		_handle_noclip_movement(delta)
@@ -2139,6 +2137,38 @@ func _process(delta: float) -> void:
 		# Rotate camera smoothly towards the look angles accumulated from mouse motion
 		camera.rotation.y = lerp_angle(camera.rotation.y, _base_camera_rotation.y + _look_yaw, delta * 12.0)
 		camera.rotation.x = lerp_angle(camera.rotation.x, _base_camera_rotation.x + _look_pitch, delta * 12.0)
+
+		# First-Person Camera and Head tracking for the local human player
+		var first_person_active = false
+		var local_p_idx = _human_ui_idx()
+		if player_avatars.has(local_p_idx) and is_instance_valid(player_avatars[local_p_idx]):
+			var avatar = player_avatars[local_p_idx]
+			var skeleton = avatar.get_node_or_null("Armature/Skeleton3D") as Skeleton3D
+			if skeleton:
+				var head_idx = skeleton.find_bone("mixamorig_Head")
+				if head_idx != -1:
+					first_person_active = true
+					# 1. Hide local player's head (scale to 0.0001)
+					skeleton.set_bone_pose_scale(head_idx, Vector3(0.0001, 0.0001, 0.0001))
+					
+					# 2. Rotate head to follow camera look direction
+					var smooth_yaw = camera.rotation.y - _base_camera_rotation.y
+					var smooth_pitch = camera.rotation.x - _base_camera_rotation.x
+					var head_rot = Quaternion.from_euler(Vector3(-smooth_pitch, -smooth_yaw, 0.0))
+					skeleton.set_bone_pose_rotation(head_idx, head_rot)
+					
+					# Force skeleton update to get correct global bone pose in the same frame
+					skeleton.force_update_all_bone_transforms()
+					
+					# 3. Align camera exactly with the head bone, offset slightly forward/up + shake
+					if is_instance_valid(camera):
+						var head_global_pos = skeleton.global_transform * skeleton.get_bone_global_pose(head_idx).origin
+						var forward = -camera.global_transform.basis.z.normalized()
+						var up = camera.global_transform.basis.y.normalized()
+						camera.global_position = head_global_pos + forward * 0.12 + up * 0.05 + shake_offset
+
+		if not first_person_active and is_instance_valid(camera):
+			camera.position = _effective_camera_base_local() + shake_offset
 
 func _update_cabinet_hover() -> void:
 	if not is_instance_valid(camera):
@@ -2679,6 +2709,12 @@ func _spawn_player_avatars() -> void:
 		2: get_node_or_null("Sketchfab_Scene3"), # Top (Player 2)
 		3: get_node_or_null("Sketchfab_Scene2")  # Right (Player 3)
 	}
+
+	# Move the chairs slightly further back from the table to accommodate first-person view spacing
+	if is_instance_valid(chairs[0]): chairs[0].position.z += 0.5
+	if is_instance_valid(chairs[1]): chairs[1].position.x -= 0.5
+	if is_instance_valid(chairs[2]): chairs[2].position.z -= 0.5
+	if is_instance_valid(chairs[3]): chairs[3].position.x += 0.5
 
 	var chair_rotations = {
 		0: 90.0,
