@@ -96,10 +96,7 @@ func _verify_beer() -> void:
 		_pass("beer_count decremented (%d -> %d)" % [before_count, after_count])
 
 	if is_instance_valid(target_beer):
-		var liquid = target_beer.get_node_or_null("LiquidFill") as MeshInstance3D
-		var emptied := not target_beer.visible
-		if not emptied and liquid:
-			emptied = liquid.scale.y <= 0.1
+		var emptied := not target_beer.visible or target_beer.scale.y < base_scale.y * 0.2
 		if emptied:
 			_pass("beer_emptying animation (hidden or drained)")
 		else:
