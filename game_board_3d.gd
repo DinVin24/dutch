@@ -235,8 +235,7 @@ func _ready():
 	$DeckArea/Area3D.input_event.connect(_on_deck_input_event)
 	$DiscardArea/Area3D.input_event.connect(_on_discard_input_event)
 	
-	# Lock mouse for central gameplay crosshair raycasting and look-around
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_apply_gameplay_mouse_mode()
 
 	_spawn_player_avatars()
 
@@ -465,7 +464,7 @@ func _create_hud_ui():
 	action_panel.offset_right = 260
 	action_panel.offset_top = -220
 	action_panel.offset_bottom = -20
-	action_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	action_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 
 	var panel_style = StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.04, 0.04, 0.06, 0.20)
@@ -601,10 +600,10 @@ func _create_hud_ui():
 func _create_emote_wheel_ui() -> void:
 	_emote_wheel_panel = PanelContainer.new()
 	_emote_wheel_panel.name = "EmoteWheel"
-	_emote_wheel_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_emote_wheel_panel.offset_left = 20.0
+	_emote_wheel_panel.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_emote_wheel_panel.offset_left = -268.0
 	_emote_wheel_panel.offset_top = -258.0
-	_emote_wheel_panel.offset_right = 268.0
+	_emote_wheel_panel.offset_right = -20.0
 	_emote_wheel_panel.offset_bottom = -20.0
 	_emote_wheel_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_emote_wheel_panel.visible = false
@@ -634,7 +633,7 @@ func _create_emote_wheel_ui() -> void:
 	_emote_wheel_panel.add_child(vbox)
 
 	var title := Label.new()
-	title.text = "Emotes"
+	title.text = "> EMOTES <"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 15)
 	title.add_theme_color_override("font_color", EMOTE_WHEEL_ACCENT)
@@ -649,8 +648,9 @@ func _create_emote_wheel_ui() -> void:
 	vbox.add_child(grid)
 
 	_emote_buttons.clear()
-	for emote in GAME_EMOTES:
-		var btn := _create_emote_tile_button(grid, emote)
+	for i in range(GAME_EMOTES.size()):
+		var emote: Dictionary = GAME_EMOTES[i]
+		var btn := _create_emote_tile_button(grid, emote, i + 1)
 		btn.pressed.connect(_on_emote_wheel_pressed.bind(emote.id))
 		_emote_buttons.append(btn)
 
@@ -661,11 +661,11 @@ func _create_emote_wheel_ui() -> void:
 	_emote_cooldown_label.text = ""
 	vbox.add_child(_emote_cooldown_label)
 
-func _create_emote_tile_button(parent: Node, emote: Dictionary) -> Button:
+func _create_emote_tile_button(parent: Node, emote: Dictionary, key_num: int) -> Button:
 	var accent: Color = emote.color
 	var btn := Button.new()
 	btn.custom_minimum_size = Vector2(108, 74)
-	btn.text = "%s\n%s" % [emote.glyph, emote.label]
+	btn.text = "[%d]\n%s\n%s" % [key_num, emote.glyph, emote.label]
 	btn.add_theme_font_size_override("font_size", 15)
 	btn.add_theme_color_override("font_color", accent.lightened(0.15))
 	btn.add_theme_color_override("font_hover_color", Color.WHITE)
@@ -1592,15 +1592,7 @@ func _on_game_state_changed(new_state):
 	_hide_message()
 	_update_draw_arrow_visibility()
 
-	# Manage mouse capture/visibility based on game state
-	if new_state == GameManager.GameState.TURN_CONFIRM_DUTCH:
-		if GameManager.can_player_confirm_dutch(_human_ui_idx()):
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	elif new_state == GameManager.GameState.GAME_OVER:
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	else:
-		if not noclip_enabled:
-			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_apply_gameplay_mouse_mode()
 
 
 	var is_active_turn_state = new_state in [
@@ -2300,64 +2292,12 @@ func _unhandled_input(event):
 			_on_pause_resumed()
 		get_viewport().set_input_as_handled()
 
-	# --- BOARD CLICK INTERACTION WHEN MOUSE IS CAPTURED ---
-	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not noclip_enabled:
-		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-			var viewport_size := get_viewport().get_visible_rect().size
-			var center := viewport_size / 2.0
-			var ray_origin = camera.project_ray_origin(center)
-			var ray_normal = camera.project_ray_normal(center)
-			
-			var space_state := get_world_3d().direct_space_state
-			var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
-			query.collision_mask = 1
-			query.collide_with_areas = true
-			query.collide_with_bodies = false
-			
-			var result := space_state.intersect_ray(query)
-			if result and result.collider:
-				var col = result.collider
-				var parent = col.get_parent()
-				
-				if parent is Card3D:
-					_on_card_clicked(parent, parent.data)
-					get_viewport().set_input_as_handled()
-					return
-				elif col.get_parent() == $DeckArea:
-					if $DeckArea/Area3D.input_ray_pickable:
-						_on_deck_clicked()
-						get_viewport().set_input_as_handled()
-						return
-				elif col.get_parent() == $DiscardArea:
-					if $DiscardArea/Area3D.input_ray_pickable:
-						_on_discard_clicked()
-						get_viewport().set_input_as_handled()
-						return
-				elif parent == _chicken_node:
-					if GameManager.current_player_index == GameManager.local_player_idx:
-						_try_buy_ability(GameManager.local_player_idx)
-						get_viewport().set_input_as_handled()
-						return
-				elif col.name == "TargetArea" and col.input_ray_pickable:
-					var player_idx = col.get_meta("player_index", -1)
-					if player_idx != -1:
-						_on_player_area_input(null, null, Vector3.ZERO, Vector3.ZERO, 0, player_idx)
-						get_viewport().set_input_as_handled()
-						return
-			
-			# Check layer 16 (hammers — dedicated layer, separate from drawer layer 8)
-			var query16 := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
-			query16.collision_mask = 16
-			query16.collide_with_areas = true
-			query16.collide_with_bodies = false
-			var result16 := space_state.intersect_ray(query16)
-			if result16 and result16.collider:
-				var col16 = result16.collider
-				if col16.has_meta("hammer_index"):
-					play_take_animation(_human_ui_idx())
-					_on_hammer_clicked(col16)
-					get_viewport().set_input_as_handled()
-					return
+	# --- BOARD CLICK (free cursor; hold RMB to look around) ---
+	if not noclip_enabled and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var screen_pos := _get_screen_ray_position()
+		if not _is_mouse_over_hud(screen_pos) and _handle_board_click_at_screen(screen_pos):
+			get_viewport().set_input_as_handled()
+			return
 
 	# DEBUG: Press L to toggle all face-down cards face-up.
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -2495,8 +2435,7 @@ func _on_pause_resumed():
 		pause_menu_instance.queue_free()
 		pause_menu_instance = null
 	get_tree().paused = false
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	# Refresh button labels in case keybinds were changed in settings
+	_apply_gameplay_mouse_mode()
 	_update_action_button_labels()
 
 func _on_pause_main_menu():
@@ -2903,13 +2842,9 @@ func _input(event: InputEvent) -> void:
 			camera.basis = Basis() # Reset
 			camera.rotate_y(camera_rot_y)
 			camera.rotate_object_local(Vector3.RIGHT, camera_rot_x)
-		else:
-			# Accumulate mouse rotation relative to base rotation
+		elif Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 			_look_yaw -= event.relative.x * 0.0025
 			_look_pitch -= event.relative.y * 0.0025
-			
-			# Clamp yaw to -105 to +105 degrees (cabinet-to-cabinet view limit, with 25 deg extra)
-			# Clamp pitch to -50 (up) and +22 (down, just enough to see cards)
 			_look_yaw = clamp(_look_yaw, deg_to_rad(-105.0), deg_to_rad(105.0))
 			_look_pitch = clamp(_look_pitch, deg_to_rad(-50.0), deg_to_rad(22.0))
 
@@ -2998,6 +2933,7 @@ func _toggle_emote_wheel() -> void:
 	_emote_wheel_open = not _emote_wheel_open
 	if is_instance_valid(_emote_wheel_panel):
 		_emote_wheel_panel.visible = _emote_wheel_open
+	_apply_gameplay_mouse_mode()
 
 func _on_emote_wheel_pressed(emote_id: String) -> void:
 	if not GameManager.request_emote(emote_id):
@@ -3005,6 +2941,7 @@ func _on_emote_wheel_pressed(emote_id: String) -> void:
 	_emote_wheel_open = false
 	if is_instance_valid(_emote_wheel_panel):
 		_emote_wheel_panel.visible = false
+	_apply_gameplay_mouse_mode()
 
 func _on_victory_emote_pressed(winner_id: int, emote_id: String) -> void:
 	GameManager.emit_player_emote(winner_id, emote_id, false)
@@ -3018,8 +2955,10 @@ func _update_emote_wheel_state() -> void:
 	var in_game := GameManager.current_state != GameManager.GameState.GAME_OVER \
 			and GameManager.current_state != GameManager.GameState.INITIALIZING
 	if not in_game or pause_menu_instance != null:
-		_emote_wheel_open = false
-		_emote_wheel_panel.visible = false
+		if _emote_wheel_open:
+			_emote_wheel_open = false
+			_emote_wheel_panel.visible = false
+			_apply_gameplay_mouse_mode()
 
 	var remaining := GameManager.get_emote_cooldown_remaining(_human_ui_idx())
 	var on_cooldown := remaining > 0.0
@@ -3131,9 +3070,9 @@ func toggle_noclip() -> bool:
 			camera.near = 0.05
 	else:
 		camera.global_transform = base_camera_transform
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		_look_yaw = 0.0
 		_look_pitch = 0.0
+	_apply_gameplay_mouse_mode()
 	return noclip_enabled
 
 func is_noclip_active() -> bool:
@@ -3463,24 +3402,101 @@ func _generate_victory_fanfare_stream() -> AudioStreamWAV:
 
 var _hovered_board_card: Card3D = null
 
-func _update_crosshair_raycast() -> void:
-	if not is_instance_valid(camera) or noclip_enabled or Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
-		if is_instance_valid(_hovered_board_card):
-			_on_card_hover_exit(_hovered_board_card)
-			_hovered_board_card = null
+func _apply_gameplay_mouse_mode() -> void:
+	if pause_menu_instance != null or GameManager.current_state == GameManager.GameState.GAME_OVER:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		return
-		
+	if _emote_wheel_open:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		return
+	if GameManager.current_state == GameManager.GameState.TURN_CONFIRM_DUTCH \
+			and GameManager.can_player_confirm_dutch(_human_ui_idx()):
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		return
+	if noclip_enabled:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		return
+	Input.mouse_mode = Input.MOUSE_MODE_CONFINED
+
+func _get_screen_ray_position() -> Vector2:
 	var viewport_size := get_viewport().get_visible_rect().size
-	var center := viewport_size / 2.0
-	var ray_origin = camera.project_ray_origin(center)
-	var ray_normal = camera.project_ray_normal(center)
-	
+	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		return viewport_size / 2.0
+	return get_viewport().get_mouse_position()
+
+func _is_mouse_over_hud(screen_pos: Vector2) -> bool:
+	if is_instance_valid(action_panel) and action_panel.get_global_rect().has_point(screen_pos):
+		return true
+	if _emote_wheel_open and is_instance_valid(_emote_wheel_panel) \
+			and _emote_wheel_panel.get_global_rect().has_point(screen_pos):
+		return true
+	return false
+
+func _handle_board_click_at_screen(screen_pos: Vector2) -> bool:
+	if not is_instance_valid(camera):
+		return false
+	var ray_origin: Vector3 = camera.project_ray_origin(screen_pos)
+	var ray_normal: Vector3 = camera.project_ray_normal(screen_pos)
 	var space_state := get_world_3d().direct_space_state
 	var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
 	query.collision_mask = 1
 	query.collide_with_areas = true
 	query.collide_with_bodies = false
-	
+	var result := space_state.intersect_ray(query)
+	if result and result.collider:
+		var col = result.collider
+		var parent = col.get_parent()
+		if parent is Card3D:
+			_on_card_clicked(parent, parent.data)
+			return true
+		if col.get_parent() == $DeckArea and $DeckArea/Area3D.input_ray_pickable:
+			_on_deck_clicked()
+			return true
+		if col.get_parent() == $DiscardArea and $DiscardArea/Area3D.input_ray_pickable:
+			_on_discard_clicked()
+			return true
+		if parent == _chicken_node and GameManager.current_player_index == GameManager.local_player_idx:
+			_try_buy_ability(GameManager.local_player_idx)
+			return true
+		if col.name == "TargetArea" and col.input_ray_pickable:
+			var player_idx: int = col.get_meta("player_index", -1)
+			if player_idx != -1:
+				_on_player_area_input(null, null, Vector3.ZERO, Vector3.ZERO, 0, player_idx)
+				return true
+	var query16 := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
+	query16.collision_mask = 16
+	query16.collide_with_areas = true
+	query16.collide_with_bodies = false
+	var result16 := space_state.intersect_ray(query16)
+	if result16 and result16.collider and result16.collider.has_meta("hammer_index"):
+		play_take_animation(_human_ui_idx())
+		_on_hammer_clicked(result16.collider)
+		return true
+	return false
+
+func _update_crosshair_raycast() -> void:
+	if not is_instance_valid(camera) or noclip_enabled:
+		if is_instance_valid(_hovered_board_card):
+			_on_card_hover_exit(_hovered_board_card)
+			_hovered_board_card = null
+		return
+
+	var screen_pos := _get_screen_ray_position()
+	if _is_mouse_over_hud(screen_pos):
+		if is_instance_valid(_hovered_board_card):
+			_on_card_hover_exit(_hovered_board_card)
+			_hovered_board_card = null
+		return
+
+	var ray_origin: Vector3 = camera.project_ray_origin(screen_pos)
+	var ray_normal: Vector3 = camera.project_ray_normal(screen_pos)
+
+	var space_state := get_world_3d().direct_space_state
+	var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
+	query.collision_mask = 1
+	query.collide_with_areas = true
+	query.collide_with_bodies = false
+
 	var result := space_state.intersect_ray(query)
 	var hit_card: Card3D = null
 	
