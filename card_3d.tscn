@@ -3,7 +3,10 @@
 [ext_resource type="Script" path="res://card_3d.gd" id="1_script"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
-size = Vector3(1, 1.4, 0.2)
+size = Vector3(1, 1.4, 0.08)
+
+[sub_resource type="BoxMesh" id="BoxMesh_core"]
+size = Vector3(0.98, 1.38, 0.05)
 
 [sub_resource type="QuadMesh" id="QuadMesh_1"]
 size = Vector2(1, 1.4)
@@ -15,6 +18,9 @@ size = Vector2(1, 1.4)
 script = ExtResource("1_script")
 
 [node name="Visuals" type="Node3D" parent="."]
+
+[node name="CardCore" type="MeshInstance3D" parent="Visuals"]
+mesh = SubResource("BoxMesh_core")
 
 [node name="FrontFace" type="MeshInstance3D" parent="Visuals"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.026)

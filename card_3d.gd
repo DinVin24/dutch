@@ -7,7 +7,10 @@ signal hover_state_changed(card_node, is_hovering: bool)
 
 @onready var front_face: MeshInstance3D = $Visuals/FrontFace
 @onready var back_face: MeshInstance3D = $Visuals/BackFace
+@onready var card_core: MeshInstance3D = $Visuals/CardCore
 @onready var area: Area3D = $Area3D
+
+const CARD_EDGE_COLOR := Color(0.93, 0.89, 0.82)
 
 var multiplier_label: Label3D
 var data: CardData
@@ -35,6 +38,7 @@ static var _master_texture: Texture2D = null
 
 var _current_suit: String = ""
 var _current_rank: String = ""
+var _discard_trail: CPUParticles3D = null
 
 func setup(p_data: CardData) -> void:
 	data = p_data
@@ -61,6 +65,8 @@ func _ready():
 	multiplier_label.no_depth_test = true
 	anchor.add_child(multiplier_label)
 	
+	_setup_card_edge_material()
+	_setup_discard_trail()
 	_update_visuals()
 	if area:
 		area.input_event.connect(_on_input_event)
@@ -99,6 +105,52 @@ func _update_visuals() -> void:
 	
 	# Selection visuals handled in _process() for smooth dynamic animation
 	pass
+
+func _setup_card_edge_material() -> void:
+	if not is_instance_valid(card_core):
+		return
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = CARD_EDGE_COLOR
+	mat.roughness = 0.92
+	mat.metallic = 0.0
+	card_core.material_override = mat
+
+func _setup_discard_trail() -> void:
+	if is_instance_valid(_discard_trail):
+		return
+	_discard_trail = CPUParticles3D.new()
+	_discard_trail.name = "DiscardTrail"
+	_discard_trail.emitting = false
+	_discard_trail.amount = 18
+	_discard_trail.lifetime = 0.4
+	_discard_trail.one_shot = false
+	_discard_trail.explosiveness = 0.0
+	_discard_trail.randomness = 0.35
+	_discard_trail.spread = 28.0
+	_discard_trail.direction = Vector3(0, 0.15, -0.85)
+	_discard_trail.gravity = Vector3(0, -0.6, 0)
+	_discard_trail.initial_velocity_min = 0.4
+	_discard_trail.initial_velocity_max = 1.2
+	_discard_trail.local_coords = false
+	var mesh := QuadMesh.new()
+	mesh.size = Vector2(0.06, 0.09)
+	_discard_trail.mesh = mesh
+	var pmat := StandardMaterial3D.new()
+	pmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	pmat.vertex_color_use_as_albedo = true
+	pmat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	pmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_discard_trail.material_override = pmat
+	var grad := Gradient.new()
+	grad.set_color(0, Color(0.45, 0.85, 1.0, 0.85))
+	grad.set_color(1, Color(0.1, 0.25, 0.55, 0.0))
+	_discard_trail.color_ramp = grad
+	_discard_trail.color = Color(0.4, 0.9, 1.0, 0.9)
+	add_child(_discard_trail)
+
+func set_discard_trail_active(active: bool) -> void:
+	if is_instance_valid(_discard_trail):
+		_discard_trail.emitting = active
 
 func _apply_atlas_textures():
 	if _master_texture == null:
@@ -279,6 +331,9 @@ func _process(delta: float):
 
 	$Visuals.position = _base_visual_pos + Vector3(0, hover_lift, 0) + wobble_offset
 	$Visuals.quaternion = base_q * Quaternion.from_euler(wobble_rot + hover_rot)
+
+	if is_discarding and is_instance_valid(_discard_trail) and _discard_trail.emitting:
+		_discard_trail.global_position = global_position + Vector3(0, 0.05, 0)
 	
 	# Sync Area3D transform to match Visuals so clicking still aligns perfectly
 	$Area3D.position = $Visuals.position

@@ -60,6 +60,8 @@ func _run() -> void:
 
 	await create_timer(1.0).timeout
 
+	await _verify_card_mesh()
+	await create_timer(0.5).timeout
 	await _verify_beer()
 	await create_timer(1.5).timeout
 	await _verify_jumpscare()
@@ -68,6 +70,45 @@ func _run() -> void:
 	await create_timer(3.0).timeout
 
 	_finish()
+
+func _verify_card_mesh() -> void:
+	_log("--- CARD MESH TEST ---")
+	var card_scene: PackedScene = load("res://card_3d.tscn")
+	if card_scene == null:
+		_fail("card_scene", "card_3d.tscn missing")
+		return
+
+	var card: Node3D = card_scene.instantiate()
+	root.add_child(card)
+	await process_frame
+
+	var core := card.get_node_or_null("Visuals/CardCore") as MeshInstance3D
+	if core and core.mesh is BoxMesh:
+		var thickness: float = (core.mesh as BoxMesh).size.z
+		if thickness >= 0.04:
+			_pass("card core thickness %.3f" % thickness)
+		else:
+			_fail("card_core_thickness", "z=%.3f" % thickness)
+	else:
+		_fail("card_core", "CardCore BoxMesh missing")
+
+	var trail := card.get_node_or_null("DiscardTrail") as CPUParticles3D
+	if trail:
+		_pass("discard trail particles ready")
+		if card.has_method("set_discard_trail_active"):
+			card.set_discard_trail_active(true)
+			await process_frame
+			if trail.emitting:
+				_pass("discard trail toggles on")
+			else:
+				_fail("discard_trail_emit", "not emitting")
+			card.set_discard_trail_active(false)
+		else:
+			_fail("discard_trail_api", "set_discard_trail_active missing")
+	else:
+		_fail("discard_trail", "DiscardTrail node missing")
+
+	card.queue_free()
 
 func _verify_beer() -> void:
 	_log("--- BEER TEST ---")

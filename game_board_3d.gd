@@ -333,7 +333,16 @@ func _on_multiplayer_sync_applied() -> void:
 		player_hands[j].clear()
 	if deck_changed:
 		_update_deck_visual()
-		_update_discard_visual()
+		var prev_discard: int = int(_last_sync_diag["discard"])
+		if new_discard > prev_discard \
+				and GameManager.is_multiplayer \
+				and not multiplayer.is_server():
+			# Server already got card_discarded; clients only see the sync diff.
+			var top_card: CardData = GameManager.deck_manager.discard_pile.back()
+			var actor_idx: int = int(_last_sync_diag["cur"])
+			_on_card_discarded(actor_idx, top_card)
+		else:
+			_update_discard_visual()
 	if GameManager.drawn_card_data != null \
 			and GameManager.current_state == GameManager.GameState.TURN_RESOLVE_DRAWN \
 			and GameManager.current_player_index == GameManager.local_player_idx \
@@ -1325,6 +1334,8 @@ func _on_card_discarded(player_idx, card_data):
 	# 4. ANIMATE DISCARD
 	if card_to_discard:
 		card_to_discard.is_discarding = true # SET FLAG IMMEDIATELY
+		if card_to_discard is Card3D:
+			card_to_discard.set_discard_trail_active(true)
 		card_to_discard.set_highlight(false)
 		card_to_discard.set_interactive(false)
 		
@@ -1340,10 +1351,12 @@ func _on_card_discarded(player_idx, card_data):
 		tween.tween_property(card_to_discard, "rotation_degrees:x", 90.0, 0.45) # Keep horizontal, let animate_flip roll it
 		card_to_discard.animate_flip(true)
 		tween.chain().tween_callback(func():
+			if card_to_discard is Card3D:
+				card_to_discard.set_discard_trail_active(false)
 			_update_discard_visual()
 			_update_deck_visual()
 			shake(0.05, 0.2)
-			spawn_particles("default", target_global_pos)
+			spawn_particles("card_trail", target_global_pos)
 			if is_instance_valid(card_to_discard):
 				card_to_discard.queue_free()
 		)
@@ -3131,6 +3144,19 @@ func spawn_particles(type: String, global_pos: Vector3):
 			grad.set_color(0, Color(1.0, 0.1, 0.2, 1.0))
 			grad.set_color(1, Color(0.1, 0.0, 0.0, 0.0))
 			mesh.size = Vector2(0.14, 0.14)
+
+		"card_trail":
+			particles.amount = 22
+			particles.lifetime = 0.45
+			particles.spread = 70.0
+			particles.direction = Vector3(0, 0.2, 0)
+			particles.gravity = Vector3(0, -1.0, 0)
+			particles.initial_velocity_min = 0.8
+			particles.initial_velocity_max = 2.0
+			particles.color = Color(0.35, 0.82, 1.0)
+			grad.set_color(0, Color(0.5, 0.9, 1.0, 0.9))
+			grad.set_color(1, Color(0.05, 0.15, 0.4, 0.0))
+			mesh.size = Vector2(0.07, 0.1)
 
 		"turn_change":
 			particles.amount = 50
