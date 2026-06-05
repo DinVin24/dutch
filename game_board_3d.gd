@@ -2154,10 +2154,10 @@ func _process(delta: float) -> void:
 					skeleton.set_bone_pose_scale(head_idx, Vector3(1.0, 1.0, 1.0))
 					
 					# 2. Rotate body stanga-dreapta based on camera yaw (smooth_yaw)
-					# Clamp body rotation Y relative to the chair to -60 to +60 degrees
+					# Damp body rotation to 30% of camera yaw (clamped to -20 to +20 degrees) so the body turns less
 					var smooth_yaw = camera.rotation.y - _base_camera_rotation.y
 					var smooth_pitch = camera.rotation.x - _base_camera_rotation.x
-					var body_yaw = clamp(smooth_yaw, deg_to_rad(-60.0), deg_to_rad(60.0))
+					var body_yaw = clamp(smooth_yaw * 0.3, deg_to_rad(-20.0), deg_to_rad(20.0))
 					avatar.rotation.y = deg_to_rad(90.0) + body_yaw
 					
 					# 3. Rotate head to follow camera look direction (relative to body)
@@ -2168,19 +2168,17 @@ func _process(delta: float) -> void:
 					# Force skeleton update to get correct global bone pose in the same frame
 					skeleton.force_update_all_bone_transforms()
 					
-					# 4. Smoothly align camera with the head bone, offset forward (0.18) and up (0.05) + shake
+					# 4. Align camera with the head bone, offset forward (0.32) and up (0.08) + shake
 					if is_instance_valid(camera):
 						camera.near = 0.25 # Clip out local player's head/face meshes
 						var head_global_pos = skeleton.global_transform * skeleton.get_bone_global_pose(head_idx).origin
 						var forward = -camera.global_transform.basis.z.normalized()
 						var up = camera.global_transform.basis.y.normalized()
-						var target_camera_pos = head_global_pos + forward * 0.18 + up * 0.05 + shake_offset
+						var target_camera_pos = head_global_pos + forward * 0.32 + up * 0.08 + shake_offset
 						
-						if not _camera_initialized:
-							camera.global_position = target_camera_pos
-							_camera_initialized = true
-						else:
-							camera.global_position = camera.global_position.lerp(target_camera_pos, delta * 25.0)
+						# Direct assignment to prevent lag between camera and head bone, eliminating skull clipping
+						camera.global_position = target_camera_pos
+						_camera_initialized = true
 
 		if not first_person_active and is_instance_valid(camera):
 			camera.near = 0.05 # Restore default near clip
