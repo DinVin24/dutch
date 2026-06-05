@@ -140,7 +140,8 @@ var _last_sync_diag := {
 	"dutch_i": -1,
 	"abilities": [[], [], [], []],
 	"beers": [3, 3, 3, 3],
-	"hand_sizes": [0, 0, 0, 0]
+	"hand_sizes": [0, 0, 0, 0],
+	"money": [0, 0, 0, 0]
 }
 
 func _ready():
@@ -369,6 +370,16 @@ func _on_multiplayer_sync_applied() -> void:
 	if new_dutch_i != -1 and _last_sync_diag["dutch_i"] == -1:
 		_on_dutch_called(new_dutch_i)
 	
+	# --- Money juice on MP clients (server already gets player_gained_money) ---
+	var prev_money: Array = _last_sync_diag.get("money", [0, 0, 0, 0])
+	for pi in range(GameManager.num_players):
+		var cur_money: int = GameManager.players_info[pi].money
+		var old_money: int = int(prev_money[pi]) if pi < prev_money.size() else 0
+		if cur_money > old_money:
+			var gained: int = cur_money - old_money
+			var is_kod := _is_king_of_diamonds_on_discard_pile()
+			_show_money_juice_popup(pi, gained, is_kod)
+
 	# --- Bug 3: Refresh local player money label from synced data ---
 	var local_idx := GameManager.local_player_idx
 	if local_idx >= 0 and local_idx < GameManager.players_info.size():
@@ -455,6 +466,13 @@ func _on_multiplayer_sync_applied() -> void:
 		else:
 			hand_sizes_snapshot.append(0)
 	_last_sync_diag["hand_sizes"] = hand_sizes_snapshot
+	var money_snapshot: Array = []
+	for pi in range(4):
+		if pi < GameManager.players_info.size():
+			money_snapshot.append(GameManager.players_info[pi].money)
+		else:
+			money_snapshot.append(0)
+	_last_sync_diag["money"] = money_snapshot
 	_update_draw_arrow_visibility()
 
 func _create_hud_ui():
@@ -1259,9 +1277,51 @@ func _animate_beer_refill(beers_array: Array, remaining: int) -> void:
 func _on_player_eliminated(player_idx):
 	_show_message(GameManager.players_info[player_idx].name + " PASSED OUT!")
 
-func _on_player_gained_money(player_idx, _amount, total):
+func _on_player_gained_money(player_idx, amount, total):
 	if player_idx == _human_ui_idx() and money_labels.size() > 0:
 		money_labels[0].text = "$" + str(total)
+	if amount > 0:
+		var is_kod := _is_king_of_diamonds_on_discard_pile()
+		_show_money_juice_popup(player_idx, amount, is_kod)
+
+func _is_king_of_diamonds_on_discard_pile() -> bool:
+	var pile = GameManager.deck_manager.discard_pile
+	if pile.is_empty():
+		return false
+	var top: CardData = pile.back()
+	return top.rank == "King" and top.suit == "Diamonds"
+
+func _show_money_juice_popup(player_idx: int, amount: int, is_king_of_diamonds: bool = false) -> void:
+	var seat := _get_safe_player_pos(player_idx)
+	if not seat:
+		return
+	var label := Label3D.new()
+	label.name = "MoneyJuice"
+	label.text = "+$%d" % amount
+	label.font_size = 118 if is_king_of_diamonds else 76
+	label.outline_size = 16 if is_king_of_diamonds else 12
+	label.outline_modulate = Color(0.05, 0.05, 0.08, 0.95)
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.modulate = Color(1.0, 0.88, 0.12) if is_king_of_diamonds else Color(0.3, 1.0, 0.5)
+	var side: float = 0.42 if player_idx in [0, 2] else -0.42
+	label.position = Vector3(side, 1.2, 0.15)
+	seat.add_child(label)
+	label.scale = Vector3(0.35, 0.35, 0.35)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(label, "scale", Vector3.ONE * (1.15 if is_king_of_diamonds else 1.0), 0.24) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(label, "position:y", label.position.y + 0.75, 0.95) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(label, "modulate:a", 0.0, 0.5).set_delay(0.7)
+	tw.chain().tween_callback(label.queue_free)
+	var burst_pos := seat.global_position + Vector3(0, 1.05, 0)
+	if is_king_of_diamonds:
+		spawn_particles("turn_change", burst_pos)
+		spawn_particles("card_flip", burst_pos + Vector3(0, 0.15, 0))
+		shake(0.1, 0.18)
+	else:
+		spawn_particles("card_flip", burst_pos)
 
 func _on_ability_played(player_idx, ability_id, target_idx: int = -1):
 	play_take_animation(player_idx)

@@ -64,6 +64,8 @@ func _run() -> void:
 	await create_timer(0.5).timeout
 	await _verify_emote_wheel()
 	await create_timer(0.5).timeout
+	await _verify_money_juice()
+	await create_timer(0.5).timeout
 	await _verify_beer()
 	await create_timer(1.5).timeout
 	await _verify_jumpscare()
@@ -132,6 +134,20 @@ func _verify_emote_wheel() -> void:
 		return
 	await process_frame
 	_pass("player emote signal + VFX path")
+
+func _verify_money_juice() -> void:
+	_log("--- MONEY JUICE TEST ---")
+	if _board == null:
+		_fail("money_juice_board", "board missing")
+		return
+	if not _board.has_method("_show_money_juice_popup"):
+		_fail("money_juice_api", "popup method missing")
+		return
+	_board._show_money_juice_popup(0, 40, false)
+	await process_frame
+	_board._show_money_juice_popup(0, 200, true)
+	await process_frame
+	_pass("money juice popup spawned (standard + K♦)")
 
 func _verify_beer() -> void:
 	_log("--- BEER TEST ---")
