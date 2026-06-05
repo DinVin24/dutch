@@ -462,28 +462,26 @@ func _create_hud_ui():
 	action_panel = PanelContainer.new()
 	action_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	action_panel.offset_left = 20
-	action_panel.offset_right = 248
+	action_panel.offset_right = 260
 	action_panel.offset_top = -220
 	action_panel.offset_bottom = -20
 	action_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var panel_style = StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.03, 0.04, 0.07, 0.82)
-	panel_style.border_width_left = 1
-	panel_style.border_width_right = 1
-	panel_style.border_width_top = 1
-	panel_style.border_width_bottom = 1
-	panel_style.border_color = Color(0.0, 1.0, 1.0, 0.28)
-	panel_style.corner_radius_top_left = 14
-	panel_style.corner_radius_top_right = 14
-	panel_style.corner_radius_bottom_left = 14
-	panel_style.corner_radius_bottom_right = 14
-	panel_style.shadow_color = Color(0.0, 0.0, 0.0, 0.3)
-	panel_style.shadow_size = 5
-	panel_style.content_margin_left = 12
-	panel_style.content_margin_right = 12
-	panel_style.content_margin_top = 12
-	panel_style.content_margin_bottom = 12
+	panel_style.bg_color = Color(0.04, 0.04, 0.06, 0.20)
+	panel_style.border_width_left = 3
+	panel_style.border_width_right = 3
+	panel_style.border_width_top = 3
+	panel_style.border_width_bottom = 3
+	panel_style.border_color = Color(0.15, 0.18, 0.22, 0.4)
+	panel_style.corner_radius_top_left = 10
+	panel_style.corner_radius_top_right = 10
+	panel_style.corner_radius_bottom_left = 10
+	panel_style.corner_radius_bottom_right = 10
+	panel_style.content_margin_left = 15
+	panel_style.content_margin_right = 15
+	panel_style.content_margin_top = 15
+	panel_style.content_margin_bottom = 15
 	
 	action_panel.add_theme_stylebox_override("panel", panel_style)
 	$GameUI/MainHUD.add_child(action_panel)
@@ -491,7 +489,7 @@ func _create_hud_ui():
 	# Action Buttons Container: Nested inside the Action Panel
 	var action_container = VBoxContainer.new()
 	action_container.alignment = BoxContainer.ALIGNMENT_END
-	action_container.add_theme_constant_override("separation", 10)
+	action_container.add_theme_constant_override("separation", 15)
 	action_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	action_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	action_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -711,40 +709,32 @@ func _create_emote_tile_button(parent: Node, emote: Dictionary) -> Button:
 func _create_button(parent: Node, text: String, color: Color) -> Button:
 	var btn = Button.new()
 	btn.text = text
-	btn.add_theme_font_size_override("font_size", 20)
-	btn.add_theme_color_override("font_color", color.lightened(0.1))
-	btn.add_theme_color_override("font_hover_color", Color.WHITE)
-	btn.add_theme_color_override("font_disabled_color", Color(color.r, color.g, color.b, 0.3))
+	btn.add_theme_font_size_override("font_size", 24)
 
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(color.r * 0.08, color.g * 0.08, color.b * 0.08, 0.45)
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.border_width_top = 1
-	style.border_width_bottom = 1
-	style.border_color = Color(color.r, color.g, color.b, 0.5)
-	style.corner_radius_top_left = 8
-	style.corner_radius_top_right = 8
-	style.corner_radius_bottom_left = 8
-	style.corner_radius_bottom_right = 8
-	style.content_margin_left = 10
-	style.content_margin_right = 10
-	style.content_margin_top = 6
-	style.content_margin_bottom = 6
+	style.bg_color = Color(0, 0, 0, 0)
+	style.border_width_left = 4
+	style.border_color = color
 
-	var hover_style = style.duplicate()
-	hover_style.bg_color = Color(color.r * 0.2, color.g * 0.2, color.b * 0.2, 0.7)
-	hover_style.border_color = color.lightened(0.25)
+	var hover_style = StyleBoxFlat.new()
+	hover_style.bg_color = color
+	hover_style.border_width_left = 4
+	hover_style.border_color = color.lightened(0.5)
 
-	var disabled_style = style.duplicate()
-	disabled_style.bg_color = Color(0.05, 0.05, 0.07, 0.3)
-	disabled_style.border_color = Color(color.r, color.g, color.b, 0.18)
+	var disabled_style = StyleBoxFlat.new()
+	disabled_style.bg_color = Color(0, 0, 0, 0)
+	disabled_style.border_width_left = 4
+	disabled_style.border_color = Color(color.r, color.g, color.b, 0.25)
 
 	btn.add_theme_stylebox_override("normal", style)
 	btn.add_theme_stylebox_override("hover", hover_style)
 	btn.add_theme_stylebox_override("pressed", hover_style)
 	btn.add_theme_stylebox_override("disabled", disabled_style)
-	btn.add_theme_color_override("font_pressed_color", Color.WHITE)
+
+	btn.add_theme_color_override("font_color", color)
+	btn.add_theme_color_override("font_hover_color", Color.BLACK)
+	btn.add_theme_color_override("font_pressed_color", Color.BLACK)
+	btn.add_theme_color_override("font_disabled_color", Color(color.r, color.g, color.b, 0.25))
 	
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	
@@ -3625,15 +3615,15 @@ func _update_mp_connection_label(lag_ms: int, status: String) -> void:
 	_mp_connection_label.add_theme_color_override("font_color", color)
 	_mp_connection_label.add_theme_color_override("font_shadow_color", Color(color.r, color.g, color.b, 0.35))
 
-## Updates HUD action button labels (no keybind hints — same in SP and MP).
+## Updates HUD action button labels (chevron style, no keybind hints — SP and MP).
 func _update_action_button_labels() -> void:
 	if is_instance_valid(end_turn_btn):
-		end_turn_btn.text = "End Turn"
+		end_turn_btn.text = "> END_TURN <"
 	if is_instance_valid(jump_in_btn):
-		jump_in_btn.text = "Jump In"
+		jump_in_btn.text = "> JUMP_IN <"
 	if is_instance_valid(call_dutch_btn):
-		call_dutch_btn.text = "Call Dutch"
+		call_dutch_btn.text = "> CALL_DUTCH <"
 	if is_instance_valid(confirm_dutch_btn):
-		confirm_dutch_btn.text = "Confirm Dutch"
+		confirm_dutch_btn.text = "> CONFIRM_DUTCH <"
 	if is_instance_valid(forfeit_dutch_btn):
-		forfeit_dutch_btn.text = "Forfeit Dutch"
+		forfeit_dutch_btn.text = "> FORFEIT_DUTCH <"
