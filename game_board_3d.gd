@@ -2159,7 +2159,10 @@ func _process(delta: float) -> void:
 						skeleton.set_bone_pose_scale(head_idx, Vector3(1.0, 1.0, 1.0))
 						# Shift the head bone position slightly backwards in local space to prevent clipping with camera
 						var head_pos = skeleton.get_bone_pose_position(head_idx)
-						head_pos.z = 3.74789 - 2.0 # Shift backwards by 2.0 units in bone space
+						if p_idx == local_p_idx:
+							head_pos.z = 3.74789 - 3.5 # Shift local player's head backward by 3.5 units in bone space
+						else:
+							head_pos.z = 3.74789 # Remote players: keep head at default position
 						skeleton.set_bone_pose_position(head_idx, head_pos)
 					if neck_idx != -1:
 						skeleton.set_bone_pose_scale(neck_idx, Vector3(1.0, 1.0, 1.0))
@@ -2184,16 +2187,22 @@ func _process(delta: float) -> void:
 				if head_idx != -1:
 					first_person_active = true
 					
-					# Rotate body Y (yaw) based on camera Y rotation with 70% damping (clamped to -85 to +85 degrees)
+					# Rotate body Y (yaw) based on camera Y rotation with 35% damping (clamped to -50 to +50 degrees)
 					var smooth_yaw = camera.rotation.y - _base_camera_rotation.y
 					var smooth_pitch = camera.rotation.x - _base_camera_rotation.x
-					var body_yaw = clamp(smooth_yaw * 0.7, deg_to_rad(-85.0), deg_to_rad(85.0))
+					var body_yaw = clamp(smooth_yaw * 0.35, deg_to_rad(-50.0), deg_to_rad(50.0))
 					avatar.rotation.y = deg_to_rad(90.0) + body_yaw
 					
-					# Rotate head bone relative to the body's yaw rotation and pitch.
-					var head_local_yaw = smooth_yaw - body_yaw
-					var head_rot = Quaternion.from_euler(Vector3(-smooth_pitch, -head_local_yaw, 0.0))
-					skeleton.set_bone_pose_rotation(head_idx, head_rot)
+					# Rotate head bone to look exactly where the camera is looking in 3D world space
+					var cam_basis = camera.global_transform.basis
+					var target_basis = cam_basis * Basis.from_euler(Vector3(0, PI, 0)) # Rotate 180 on Y because head faces +Z, camera looks -Z
+					var target_global_quat = target_basis.get_rotation_quaternion()
+					var parent_idx = skeleton.get_bone_parent(head_idx)
+					if parent_idx != -1:
+						var parent_global_pose = skeleton.global_transform * skeleton.get_bone_global_pose(parent_idx)
+						var parent_global_quat = parent_global_pose.basis.get_rotation_quaternion()
+						var local_quat = parent_global_quat.inverse() * target_global_quat
+						skeleton.set_bone_pose_rotation(head_idx, local_quat)
 					
 					# Force skeleton update to get correct global bone pose in the same frame
 					skeleton.force_update_all_bone_transforms()
@@ -2210,12 +2219,12 @@ func _process(delta: float) -> void:
 						
 						var forward = Vector3(-sin(camera.rotation.y), 0.0, -cos(camera.rotation.y)).normalized()
 						
-						# Lock camera vertical height to base head position + offset (0.26m up, 0.32m forward)
+						# Lock camera vertical height to base head position + offset (0.22m up, 0.36m forward)
 						# This prevents the camera from bobbing/rising when the character plays the "take" animation.
 						var target_camera_pos = Vector3(
-							head_global_pos.x + forward.x * 0.32,
-							_base_head_y + 0.26,
-							head_global_pos.z + forward.z * 0.32
+							head_global_pos.x + forward.x * 0.36,
+							_base_head_y + 0.22,
+							head_global_pos.z + forward.z * 0.36
 						) + shake_offset
 						
 						# Direct assignment to prevent relative lag
@@ -2447,9 +2456,9 @@ func _input(event: InputEvent) -> void:
 			_look_yaw -= event.relative.x * 0.0025
 			_look_pitch -= event.relative.y * 0.0025
 			
-			# Clamp yaw to -95 to +95 degrees (cabinet-to-cabinet view limit, with 15 deg extra)
+			# Clamp yaw to -105 to +105 degrees (cabinet-to-cabinet view limit, with 25 deg extra)
 			# Clamp pitch to -50 (up) and +22 (down, just enough to see cards)
-			_look_yaw = clamp(_look_yaw, deg_to_rad(-95.0), deg_to_rad(95.0))
+			_look_yaw = clamp(_look_yaw, deg_to_rad(-105.0), deg_to_rad(105.0))
 			_look_pitch = clamp(_look_pitch, deg_to_rad(-50.0), deg_to_rad(22.0))
 
 func _on_jack_swap_resolved(p1: int, c1: int, p2: int, c2: int) -> void:
