@@ -48,10 +48,11 @@ var swap_sources: Array = [] # Stores [card_node, player_idx, card_idx]
 var _keyboard_selected_card_idx: int = -1 # Index into player_hands[0] for keyboard navigation
 var _hovered_card_node: Card3D = null # Track hovered card for spreading effect
 
-# Peek Phase state
-var cards_peeked: int = 0
-var max_peeks: int = 2
-var peeked_card_nodes: Array = []
+# Initial peek phase (toggle: click to reveal, click again to hide)
+const INITIAL_PEEK_MAX := 2
+const INITIAL_PEEK_DEBUG := true
+var _initial_peek_open: Array = [] # Card3D nodes currently face-up from peek
+var _initial_peek_memorized: Array = [] # unique cards already peeked this phase
 
 var _debug_reveal := false
 var _debug_flipped_nodes: Array = []
@@ -1763,7 +1764,9 @@ func _on_card_hover_enter(card_node: Node3D):
 	if card_node.has_method("set_hovered"):
 		card_node.set_hovered(true)
 	
-	# Trigger layout refresh for neighbor spreading
+	# Relayout during initial peek cancels is_being_peeked via deferred force_layout.
+	if GameManager.current_state == GameManager.GameState.INITIAL_PEEK:
+		return
 	for i in range(4):
 		if card_node in player_hands[i]:
 			_update_hand_visuals(i)
@@ -1777,6 +1780,8 @@ func _on_card_hover_exit(card_node: Node3D):
 	if card_node.has_method("set_hovered"):
 		card_node.set_hovered(false)
 	
+	if GameManager.current_state == GameManager.GameState.INITIAL_PEEK:
+		return
 	for i in range(4):
 		if card_node in player_hands[i]:
 			_update_hand_visuals(i)
@@ -1784,6 +1789,11 @@ func _on_card_hover_exit(card_node: Node3D):
 
 func _update_hand_visuals(player_idx: int, force_layout: bool = false):
 	if player_idx < 0 or player_idx >= 4: return
+	if force_layout \
+			and GameManager.current_state == GameManager.GameState.INITIAL_PEEK \
+			and player_idx == _human_ui_idx():
+		_initial_peek_log("blocked force_layout during peek phase")
+		force_layout = false
 	var hand_data = GameManager.players_info[player_idx].hand
 	var current_nodes = player_hands[player_idx]
 
@@ -1956,6 +1966,10 @@ func _update_hand_visuals(player_idx: int, force_layout: bool = false):
 		_schedule_hand_relayout(player_idx)
 
 func _schedule_hand_relayout(player_idx: int) -> void:
+	if GameManager.current_state == GameManager.GameState.INITIAL_PEEK \
+			and player_idx == _human_ui_idx():
+		_initial_peek_log("skipped deferred relayout during peek phase")
+		return
 	var key := "hand_relayout_%d" % player_idx
 	if has_meta(key):
 		return
@@ -2010,16 +2024,65 @@ func _handle_initial_deal():
 	else:
 		GameManager.change_state(GameManager.GameState.INITIAL_PEEK)
 
-func _start_peek_phase():
-	print("GameBoard3D: _start_peek_phase started")
-	peeked_cards.clear()
-	_show_message("Select TWO cards to peek at.")
-	# In 3D, we can highlight them by raising them slightly
-	for c3d in player_pos_nodes[_human_ui_idx()].get_children():
-		if c3d is Card3D:
-			c3d.set_highlight(true)
+func _initial_peek_log(msg: String) -> void:
+	if INITIAL_PEEK_DEBUG:
+		print("[PEEK DEBUG] %s | open=%d mem=%d state=%s" % [
+			msg, _initial_peek_open.size(), _initial_peek_memorized.size(),
+			GameManager.GameState.keys()[GameManager.current_state]
+		])
 
-var peeked_cards: Array = []
+func _start_peek_phase() -> void:
+	_initial_peek_log("phase started")
+	_initial_peek_open.clear()
+	_initial_peek_memorized.clear()
+	_show_message("Peek 2 cards: click to reveal, click again to hide.")
+	for c3d in player_hands[_human_ui_idx()]:
+		if is_instance_valid(c3d) and c3d is Card3D:
+			c3d.set_highlight(true)
+			c3d.set_interactive(true)
+
+func _initial_peek_is_local_card(node: Node) -> bool:
+	return node in player_hands[_human_ui_idx()]
+
+func _initial_peek_show_card(card: Card3D) -> void:
+	_initial_peek_log("OPEN %s %s" % [card.data.rank, card.data.suit])
+	card.is_being_peeked = true
+	card.animate_flip(true, -1.0, false)
+	if card not in _initial_peek_open:
+		_initial_peek_open.append(card)
+	if card not in _initial_peek_memorized:
+		_initial_peek_memorized.append(card)
+	_show_message("Peek %d/%d — click card again to hide." % [
+		_initial_peek_memorized.size(), INITIAL_PEEK_MAX
+	])
+
+func _initial_peek_hide_card(card: Card3D) -> void:
+	_initial_peek_log("CLOSE %s %s (held face-up until click)" % [card.data.rank, card.data.suit])
+	card.is_being_peeked = false
+	card.animate_flip(false, -1.0, false)
+	_initial_peek_open.erase(card)
+	_try_finish_initial_peek()
+
+func _try_finish_initial_peek() -> void:
+	if _initial_peek_memorized.size() < INITIAL_PEEK_MAX:
+		_initial_peek_log("need %d memorized, have %d" % [INITIAL_PEEK_MAX, _initial_peek_memorized.size()])
+		return
+	if not _initial_peek_open.is_empty():
+		_initial_peek_log("waiting — %d card(s) still face-up" % _initial_peek_open.size())
+		_show_message("Hide all peeked cards (click each again) to continue.")
+		return
+	_initial_peek_log("complete — all %d cards memorized and face-down" % INITIAL_PEEK_MAX)
+	_clear_all_highlights()
+	for c3d in player_hands[_human_ui_idx()]:
+		if is_instance_valid(c3d) and c3d is Card3D:
+			c3d.set_interactive(false)
+	_initial_peek_open.clear()
+	_initial_peek_memorized.clear()
+	if GameManager.is_multiplayer:
+		_send_action("initial_peek_done")
+	else:
+		GameManager.complete_initial_peek()
+
 func _on_card_clicked(node, data):
 	play_take_animation(_human_ui_idx())
 	if not is_instance_valid(node): return
@@ -2050,26 +2113,22 @@ func _on_card_clicked(node, data):
 
 	match GameManager.current_state:
 		GameManager.GameState.INITIAL_PEEK:
-			if node.get_parent() == player_pos_nodes[GameManager.local_player_idx] and not data.is_face_up:
-				if peeked_cards.size() >= 2: return # Strict limit
-				if node in peeked_cards: return
-				node.is_being_peeked = true
-				# Keep peek local-only; do not mutate authoritative CardData face-up state.
-				node.animate_flip(true, -1.0, false)
-				peeked_cards.append(node)
-				if peeked_cards.size() >= 2:
-					await get_tree().create_timer(2.0, false).timeout
-					_clear_all_highlights()
-					for c in peeked_cards:
-						if is_instance_valid(c):
-							c.is_being_peeked = false
-							c.animate_flip(false, 0.05, false)
-							c.set_interactive(false)
-					peeked_cards.clear()
-					if GameManager.is_multiplayer:
-						_send_action("initial_peek_done")
-					else:
-						GameManager.complete_initial_peek()
+			if not _initial_peek_is_local_card(node) or not node is Card3D:
+				_initial_peek_log("ignored click — not local hand card")
+				return
+			var peek_card := node as Card3D
+			if peek_card in _initial_peek_open:
+				_initial_peek_hide_card(peek_card)
+				return
+			if peek_card in _initial_peek_memorized:
+				_initial_peek_log("ignored — already memorized %s %s" % [data.rank, data.suit])
+				_show_message("You already peeked that card.")
+				return
+			if _initial_peek_memorized.size() >= INITIAL_PEEK_MAX:
+				_initial_peek_log("ignored — max memorized, hide open cards first")
+				_show_message("Hide peeked cards first (click them again).")
+				return
+			_initial_peek_show_card(peek_card)
 		
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
 			if p_idx == GameManager.local_player_idx:
