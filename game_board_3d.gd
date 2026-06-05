@@ -23,12 +23,12 @@ var _victory_cinematic_active: bool = false
 var _victory_overlay_layer: CanvasLayer = null
 
 const GAME_EMOTES := [
-	{"id": "laugh", "label": "Laugh", "glyph": ":)"},
-	{"id": "shock", "label": "Shock", "glyph": ":O"},
-	{"id": "gg", "label": "GG", "glyph": "GG"},
-	{"id": "chicken", "label": "Chicken", "glyph": "BOK"},
+	{"id": "laugh", "label": "Laugh", "glyph": ":)", "color": Color(1.0, 0.92, 0.35)},
+	{"id": "shock", "label": "Shock", "glyph": ":O", "color": Color(0.35, 0.9, 1.0)},
+	{"id": "gg", "label": "GG", "glyph": "GG", "color": Color(0.45, 1.0, 0.55)},
+	{"id": "chicken", "label": "Chicken", "glyph": "BOK", "color": Color(1.0, 0.65, 0.2)},
 ]
-const EMOTE_WHEEL_COLOR := Color(1.0, 0.85, 0.2)
+const EMOTE_WHEEL_ACCENT := Color(0.95, 0.78, 0.25)
 
 var bot_controller: BotController = null
 var action_panel: PanelContainer
@@ -462,28 +462,28 @@ func _create_hud_ui():
 	action_panel = PanelContainer.new()
 	action_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	action_panel.offset_left = 20
-	action_panel.offset_right = 260
+	action_panel.offset_right = 248
 	action_panel.offset_top = -220
 	action_panel.offset_bottom = -20
 	action_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var panel_style = StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.04, 0.04, 0.06, 0.20)
-	panel_style.border_width_left = 3
-	panel_style.border_width_right = 3
-	panel_style.border_width_top = 3
-	panel_style.border_width_bottom = 3
-	panel_style.border_color = Color(0.15, 0.18, 0.22, 0.4)
-	panel_style.corner_radius_top_left = 10
-	panel_style.corner_radius_top_right = 10
-	panel_style.corner_radius_bottom_left = 10
-	panel_style.corner_radius_bottom_right = 10
-	
-	# Content margins to pad the buttons inside
-	panel_style.content_margin_left = 15
-	panel_style.content_margin_right = 15
-	panel_style.content_margin_top = 15
-	panel_style.content_margin_bottom = 15
+	panel_style.bg_color = Color(0.03, 0.04, 0.07, 0.82)
+	panel_style.border_width_left = 1
+	panel_style.border_width_right = 1
+	panel_style.border_width_top = 1
+	panel_style.border_width_bottom = 1
+	panel_style.border_color = Color(0.0, 1.0, 1.0, 0.28)
+	panel_style.corner_radius_top_left = 14
+	panel_style.corner_radius_top_right = 14
+	panel_style.corner_radius_bottom_left = 14
+	panel_style.corner_radius_bottom_right = 14
+	panel_style.shadow_color = Color(0.0, 0.0, 0.0, 0.3)
+	panel_style.shadow_size = 5
+	panel_style.content_margin_left = 12
+	panel_style.content_margin_right = 12
+	panel_style.content_margin_top = 12
+	panel_style.content_margin_bottom = 12
 	
 	action_panel.add_theme_stylebox_override("panel", panel_style)
 	$GameUI/MainHUD.add_child(action_panel)
@@ -491,7 +491,7 @@ func _create_hud_ui():
 	# Action Buttons Container: Nested inside the Action Panel
 	var action_container = VBoxContainer.new()
 	action_container.alignment = BoxContainer.ALIGNMENT_END
-	action_container.add_theme_constant_override("separation", 15)
+	action_container.add_theme_constant_override("separation", 10)
 	action_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	action_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	action_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -605,92 +605,146 @@ func _create_emote_wheel_ui() -> void:
 	_emote_wheel_panel.name = "EmoteWheel"
 	_emote_wheel_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	_emote_wheel_panel.offset_left = 20.0
-	_emote_wheel_panel.offset_top = -220.0
-	_emote_wheel_panel.offset_right = 300.0
+	_emote_wheel_panel.offset_top = -258.0
+	_emote_wheel_panel.offset_right = 268.0
 	_emote_wheel_panel.offset_bottom = -20.0
 	_emote_wheel_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_emote_wheel_panel.visible = false
 
 	var wheel_style := StyleBoxFlat.new()
-	wheel_style.bg_color = Color(0.04, 0.04, 0.06, 0.82)
-	wheel_style.border_width_left = 2
-	wheel_style.border_width_right = 2
-	wheel_style.border_width_top = 2
-	wheel_style.border_width_bottom = 2
-	wheel_style.border_color = Color(EMOTE_WHEEL_COLOR.r, EMOTE_WHEEL_COLOR.g, EMOTE_WHEEL_COLOR.b, 0.55)
-	wheel_style.corner_radius_top_left = 10
-	wheel_style.corner_radius_top_right = 10
-	wheel_style.corner_radius_bottom_left = 10
-	wheel_style.corner_radius_bottom_right = 10
-	wheel_style.content_margin_left = 12
-	wheel_style.content_margin_right = 12
-	wheel_style.content_margin_top = 10
+	wheel_style.bg_color = Color(0.03, 0.04, 0.07, 0.9)
+	wheel_style.border_width_left = 1
+	wheel_style.border_width_right = 1
+	wheel_style.border_width_top = 1
+	wheel_style.border_width_bottom = 1
+	wheel_style.border_color = Color(EMOTE_WHEEL_ACCENT.r, EMOTE_WHEEL_ACCENT.g, EMOTE_WHEEL_ACCENT.b, 0.45)
+	wheel_style.corner_radius_top_left = 14
+	wheel_style.corner_radius_top_right = 14
+	wheel_style.corner_radius_bottom_left = 14
+	wheel_style.corner_radius_bottom_right = 14
+	wheel_style.shadow_color = Color(0.0, 0.0, 0.0, 0.35)
+	wheel_style.shadow_size = 6
+	wheel_style.content_margin_left = 14
+	wheel_style.content_margin_right = 14
+	wheel_style.content_margin_top = 12
 	wheel_style.content_margin_bottom = 10
 	_emote_wheel_panel.add_theme_stylebox_override("panel", wheel_style)
 	$GameUI/MainHUD.add_child(_emote_wheel_panel)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
+	vbox.add_theme_constant_override("separation", 10)
 	_emote_wheel_panel.add_child(vbox)
 
 	var title := Label.new()
-	title.text = "EMOTES (%s)" % _get_action_key_string("game_emote_wheel")
+	title.text = "Emotes"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 18)
-	title.add_theme_color_override("font_color", EMOTE_WHEEL_COLOR)
+	title.add_theme_font_size_override("font_size", 15)
+	title.add_theme_color_override("font_color", EMOTE_WHEEL_ACCENT)
+	title.add_theme_color_override("font_shadow_color", Color(EMOTE_WHEEL_ACCENT.r, EMOTE_WHEEL_ACCENT.g, EMOTE_WHEEL_ACCENT.b, 0.25))
+	title.add_theme_constant_override("shadow_offset_y", 1)
 	vbox.add_child(title)
 
 	var grid := GridContainer.new()
 	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("h_separation", 8)
 	grid.add_theme_constant_override("v_separation", 8)
 	vbox.add_child(grid)
 
 	_emote_buttons.clear()
-	for i in range(GAME_EMOTES.size()):
-		var emote: Dictionary = GAME_EMOTES[i]
-		var btn := _create_button(grid, "%d) %s" % [i + 1, emote.label], EMOTE_WHEEL_COLOR)
+	for emote in GAME_EMOTES:
+		var btn := _create_emote_tile_button(grid, emote)
 		btn.pressed.connect(_on_emote_wheel_pressed.bind(emote.id))
 		_emote_buttons.append(btn)
 
 	_emote_cooldown_label = Label.new()
 	_emote_cooldown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_emote_cooldown_label.add_theme_font_size_override("font_size", 14)
-	_emote_cooldown_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
+	_emote_cooldown_label.add_theme_font_size_override("font_size", 12)
+	_emote_cooldown_label.add_theme_color_override("font_color", Color(0.62, 0.66, 0.72))
 	_emote_cooldown_label.text = ""
 	vbox.add_child(_emote_cooldown_label)
+
+func _create_emote_tile_button(parent: Node, emote: Dictionary) -> Button:
+	var accent: Color = emote.color
+	var btn := Button.new()
+	btn.custom_minimum_size = Vector2(108, 74)
+	btn.text = "%s\n%s" % [emote.glyph, emote.label]
+	btn.add_theme_font_size_override("font_size", 15)
+	btn.add_theme_color_override("font_color", accent.lightened(0.15))
+	btn.add_theme_color_override("font_hover_color", Color.WHITE)
+	btn.add_theme_color_override("font_pressed_color", accent)
+	btn.add_theme_color_override("font_disabled_color", Color(accent.r, accent.g, accent.b, 0.35))
+
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(accent.r * 0.12, accent.g * 0.12, accent.b * 0.12, 0.55)
+	normal.border_width_left = 1
+	normal.border_width_right = 1
+	normal.border_width_top = 1
+	normal.border_width_bottom = 1
+	normal.border_color = Color(accent.r, accent.g, accent.b, 0.55)
+	normal.corner_radius_top_left = 10
+	normal.corner_radius_top_right = 10
+	normal.corner_radius_bottom_left = 10
+	normal.corner_radius_bottom_right = 10
+	normal.content_margin_left = 4
+	normal.content_margin_right = 4
+	normal.content_margin_top = 6
+	normal.content_margin_bottom = 6
+
+	var hover := normal.duplicate()
+	hover.bg_color = Color(accent.r * 0.22, accent.g * 0.22, accent.b * 0.22, 0.75)
+	hover.border_color = accent.lightened(0.2)
+
+	var pressed := hover.duplicate()
+	pressed.bg_color = Color(accent.r * 0.3, accent.g * 0.3, accent.b * 0.3, 0.85)
+
+	var disabled := normal.duplicate()
+	disabled.bg_color = Color(0.05, 0.05, 0.07, 0.35)
+	disabled.border_color = Color(accent.r, accent.g, accent.b, 0.18)
+
+	btn.add_theme_stylebox_override("normal", normal)
+	btn.add_theme_stylebox_override("hover", hover)
+	btn.add_theme_stylebox_override("pressed", pressed)
+	btn.add_theme_stylebox_override("disabled", disabled)
+	parent.add_child(btn)
+	return btn
 
 func _create_button(parent: Node, text: String, color: Color) -> Button:
 	var btn = Button.new()
 	btn.text = text
-	btn.add_theme_font_size_override("font_size", 24)
+	btn.add_theme_font_size_override("font_size", 20)
+	btn.add_theme_color_override("font_color", color.lightened(0.1))
+	btn.add_theme_color_override("font_hover_color", Color.WHITE)
+	btn.add_theme_color_override("font_disabled_color", Color(color.r, color.g, color.b, 0.3))
 
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0, 0, 0, 0)
-	style.border_width_left = 4
-	style.border_color = color
+	style.bg_color = Color(color.r * 0.08, color.g * 0.08, color.b * 0.08, 0.45)
+	style.border_width_left = 1
+	style.border_width_right = 1
+	style.border_width_top = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(color.r, color.g, color.b, 0.5)
+	style.corner_radius_top_left = 8
+	style.corner_radius_top_right = 8
+	style.corner_radius_bottom_left = 8
+	style.corner_radius_bottom_right = 8
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
 
-	var hover_style = StyleBoxFlat.new()
-	hover_style.bg_color = color
-	hover_style.border_width_left = 4
-	hover_style.border_color = color.lightened(0.5)
+	var hover_style = style.duplicate()
+	hover_style.bg_color = Color(color.r * 0.2, color.g * 0.2, color.b * 0.2, 0.7)
+	hover_style.border_color = color.lightened(0.25)
 
-	# Disabled state style: faded border (25% opacity)
-	var disabled_style = StyleBoxFlat.new()
-	disabled_style.bg_color = Color(0, 0, 0, 0)
-	disabled_style.border_width_left = 4
-	disabled_style.border_color = Color(color.r, color.g, color.b, 0.25)
+	var disabled_style = style.duplicate()
+	disabled_style.bg_color = Color(0.05, 0.05, 0.07, 0.3)
+	disabled_style.border_color = Color(color.r, color.g, color.b, 0.18)
 
 	btn.add_theme_stylebox_override("normal", style)
 	btn.add_theme_stylebox_override("hover", hover_style)
 	btn.add_theme_stylebox_override("pressed", hover_style)
 	btn.add_theme_stylebox_override("disabled", disabled_style)
-	
-	btn.add_theme_color_override("font_color", color)
-	btn.add_theme_color_override("font_hover_color", Color.BLACK)
-	btn.add_theme_color_override("font_pressed_color", Color.BLACK)
-	# Disabled text color: faded font color (25% opacity)
-	btn.add_theme_color_override("font_disabled_color", Color(color.r, color.g, color.b, 0.25))
+	btn.add_theme_color_override("font_pressed_color", Color.WHITE)
 	
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	
@@ -2984,9 +3038,9 @@ func _update_emote_wheel_state() -> void:
 			btn.disabled = on_cooldown
 	if is_instance_valid(_emote_cooldown_label):
 		if on_cooldown:
-			_emote_cooldown_label.text = "Cooldown %.1fs" % remaining
+			_emote_cooldown_label.text = "%.1fs" % remaining
 		else:
-			_emote_cooldown_label.text = "Ready"
+			_emote_cooldown_label.text = ""
 
 func _emote_glyph(emote_id: String) -> String:
 	for emote in GAME_EMOTES:
@@ -3571,29 +3625,15 @@ func _update_mp_connection_label(lag_ms: int, status: String) -> void:
 	_mp_connection_label.add_theme_color_override("font_color", color)
 	_mp_connection_label.add_theme_color_override("font_shadow_color", Color(color.r, color.g, color.b, 0.35))
 
-## Reads the configured keybind for each game action from InputMap and updates
-## all HUD button labels to show e.g. "> END_TURN (Q) <" or "> JUMP_IN (Space) <".
-## Call this after _create_hud_ui() and again whenever settings may have changed.
+## Updates HUD action button labels (no keybind hints — same in SP and MP).
 func _update_action_button_labels() -> void:
 	if is_instance_valid(end_turn_btn):
-		end_turn_btn.text = "> END_TURN (%s) <" % _get_action_key_string("game_end_turn")
+		end_turn_btn.text = "End Turn"
 	if is_instance_valid(jump_in_btn):
-		jump_in_btn.text = "> JUMP_IN (%s) <" % _get_action_key_string("game_jump_in")
+		jump_in_btn.text = "Jump In"
 	if is_instance_valid(call_dutch_btn):
-		call_dutch_btn.text = "> CALL_DUTCH (%s) <" % _get_action_key_string("game_call_dutch")
+		call_dutch_btn.text = "Call Dutch"
 	if is_instance_valid(confirm_dutch_btn):
-		confirm_dutch_btn.text = "> CONFIRM_DUTCH (%s) <" % _get_action_key_string("game_confirm_dutch")
+		confirm_dutch_btn.text = "Confirm Dutch"
 	if is_instance_valid(forfeit_dutch_btn):
-		forfeit_dutch_btn.text = "> FORFEIT_DUTCH (%s) <" % _get_action_key_string("game_forfeit_dutch")
-
-## Returns the human-readable key name for the first keyboard event bound to [action],
-## e.g. "Space", "Q", "Y". Falls back to "—" if no key is mapped.
-func _get_action_key_string(action: String) -> String:
-	if not InputMap.has_action(action):
-		return "—"
-	var events = InputMap.action_get_events(action)
-	for e in events:
-		if e is InputEventKey:
-			var keycode = e.physical_keycode if e.physical_keycode != KEY_NONE else e.keycode
-			return OS.get_keycode_string(keycode)
-	return "—"
+		forfeit_dutch_btn.text = "Forfeit Dutch"
