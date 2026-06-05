@@ -98,6 +98,8 @@ var _base_camera_pos: Vector3
 var _base_camera_rotation: Vector3
 ## Extra shift on top of scene default camera position (e.g. multiplayer seat framing).
 var _mp_camera_offset: Vector3 = Vector3.ZERO
+var _mp_connection_label: Label = null
+var _mp_status_poll_timer: float = 0.0
 
 # Targeting state
 var _is_waiting_for_target: bool = false
@@ -160,6 +162,7 @@ func _ready():
 	GameManager.polarity_shifted.connect(_on_polarity_shifted)
 	GameManager.pending_card_consumed.connect(_on_pending_card_consumed)
 	GameManager.multiplayer_sync_applied.connect(_on_multiplayer_sync_applied)
+	GameManager.mp_connection_status_changed.connect(_on_mp_connection_status_changed)
 	NetworkManager.play_again_votes_updated.connect(_on_play_again_votes_updated)
 	
 	# Dynamic Tavern Ambient & Spotlight Lighting
@@ -469,6 +472,21 @@ func _create_hud_ui():
 	l.add_theme_constant_override("shadow_offset_y", 2)
 	$GameUI/MainHUD/TopLeft.add_child(l)
 	money_labels.append(l)
+
+	_mp_connection_label = Label.new()
+	_mp_connection_label.name = "MpConnectionLabel"
+	_mp_connection_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_mp_connection_label.offset_left = -280.0
+	_mp_connection_label.offset_top = 20.0
+	_mp_connection_label.offset_right = -20.0
+	_mp_connection_label.offset_bottom = 56.0
+	_mp_connection_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_mp_connection_label.add_theme_font_size_override("font_size", 18)
+	_mp_connection_label.visible = false
+	$GameUI/MainHUD.add_child(_mp_connection_label)
+	if GameManager.is_multiplayer:
+		_mp_connection_label.visible = true
+		_update_mp_connection_label(GameManager.mp_sync_lag_ms, GameManager.mp_connection_status)
 
 	# Cabinet Interaction HUD Prompt
 	_cabinet_prompt_label = Label.new()
@@ -1402,10 +1420,7 @@ func _on_game_state_changed(new_state):
 			_update_turn_lights(-1, true)
 			swap_sources.clear()
 		GameManager.GameState.GAME_OVER:
-			# Bug 6: On multiplayer client, _handle_game_over() never runs here.
-			# Detect GAME_OVER from the sync and calculate/show scores from local synced data.
-			if GameManager.is_multiplayer and not multiplayer.is_server():
-				_on_scores_ready(GameManager._calculate_scores())
+			pass
 
 	$DeckArea/Area3D.input_ray_pickable = GameManager.can_player_draw(_human_ui_idx())
 	$DiscardArea/Area3D.input_ray_pickable = GameManager.can_player_discard_drawn_card(_human_ui_idx())
@@ -2208,6 +2223,12 @@ func _on_bot_action(message):
 
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint(): return
+
+	if GameManager.is_multiplayer:
+		_mp_status_poll_timer += delta
+		if _mp_status_poll_timer >= 0.5:
+			_mp_status_poll_timer = 0.0
+			GameManager.refresh_mp_connection_status()
 	
 	_update_cabinet_hover()
 	_update_crosshair_raycast()
@@ -3070,6 +3091,38 @@ func play_take_animation(player_idx: int) -> void:
 			else:
 				ap.play("take")
 			ap.queue("idle")
+
+func _on_mp_connection_status_changed(lag_ms: int, status: String) -> void:
+	_update_mp_connection_label(lag_ms, status)
+
+func _update_mp_connection_label(lag_ms: int, status: String) -> void:
+	if not is_instance_valid(_mp_connection_label):
+		return
+	if not GameManager.is_multiplayer:
+		_mp_connection_label.visible = false
+		return
+	_mp_connection_label.visible = true
+	var color := Color(0.2, 1.0, 0.4)
+	var text := ""
+	if multiplayer.is_server():
+		text = "HOST | ONLINE"
+	else:
+		match status:
+			"disconnected":
+				color = Color(1.0, 0.25, 0.25)
+				text = "OFFLINE"
+			"lagging":
+				color = Color(1.0, 0.75, 0.2)
+				text = "LAG %dms" % lag_ms
+			_:
+				if lag_ms <= 250:
+					text = "ONLINE %dms" % lag_ms
+				else:
+					color = Color(1.0, 0.85, 0.2)
+					text = "SYNC %dms" % lag_ms
+	_mp_connection_label.text = text
+	_mp_connection_label.add_theme_color_override("font_color", color)
+	_mp_connection_label.add_theme_color_override("font_shadow_color", Color(color.r, color.g, color.b, 0.35))
 
 ## Reads the configured keybind for each game action from InputMap and updates
 ## all HUD button labels to show e.g. "> END_TURN (Q) <" or "> JUMP_IN (Space) <".

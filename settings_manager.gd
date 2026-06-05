@@ -79,3 +79,27 @@ func save_settings() -> void:
 				break
 
 	config.save(SETTINGS_FILE_PATH)
+
+func get_last_room_code() -> String:
+	if config.has_section_key("multiplayer", "last_room_code"):
+		return str(config.get_value("multiplayer", "last_room_code", ""))
+	return ""
+
+func set_last_room_code(code: String) -> void:
+	var trimmed := code.strip_edges().to_upper()
+	if trimmed == "":
+		return
+	config.set_value("multiplayer", "last_room_code", trimmed)
+	config.save(SETTINGS_FILE_PATH)
+
+func get_player_name() -> String:
+	if config.has_section_key("multiplayer", "player_name"):
+		return str(config.get_value("multiplayer", "player_name", ""))
+	return ""
+
+func set_player_name(name: String) -> void:
+	var trimmed := name.strip_edges()
+	if trimmed == "":
+		return
+	config.set_value("multiplayer", "player_name", trimmed)
+	config.save(SETTINGS_FILE_PATH)

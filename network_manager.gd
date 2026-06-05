@@ -100,6 +100,7 @@ func join_game(code: String) -> bool:
 	_mp_log("join_game", "start", {"code": raw_code})
 	if not _connect_ws(): return false
 	room_code = raw_code
+	SettingsManager.set_last_room_code(raw_code)
 	local_player_info["is_host"] = false
 	is_connecting = true
 	return true
@@ -164,6 +165,7 @@ func _handle_signaling_message(msg: String):
 	
 	if type == "room_created":
 		room_code = data["room"]
+		SettingsManager.set_last_room_code(room_code)
 		host_lan_ip_updated.emit("Internet")
 		_mp_log("signaling", "room_created", {"room": room_code})
 		_initialize_webrtc_host()

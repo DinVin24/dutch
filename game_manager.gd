@@ -42,6 +42,7 @@ signal player_gained_money(player_idx, amount, total)
 signal ability_unlocked(player_idx, ability_id)
 signal polarity_shifted(new_state: bool)
 signal multiplayer_sync_applied
+signal mp_connection_status_changed(lag_ms: int, status: String)
 
 var current_state: GameState = GameState.INITIALIZING
 var deck_manager: DeckManager
@@ -79,6 +80,9 @@ var pending_match_seed: int = -1
 var _mp_initial_peek_done: Dictionary = {}
 var _mp_sync_seq: int = 0
 var _mp_last_applied_sync_seq: int = -1
+var _mp_game_over_scores_applied: bool = false
+var mp_sync_lag_ms: int = 0
+var mp_connection_status: String = "ok"
 var turn_direction: int = 1 # 1 for clockwise, -1 for counter-clockwise (Uno Reverse)
 var dutch_caller_index: int = -1 # -1 means no one has called Dutch yet
 var jump_in_player_idx: int = -1 # who is currently attempting the jump-in
@@ -223,6 +227,9 @@ func initialize_game(p_count: int = 4):
 	_mp_initial_peek_done.clear()
 	_mp_sync_seq = 0
 	_mp_last_applied_sync_seq = -1
+	_mp_game_over_scores_applied = false
+	mp_sync_lag_ms = 0
+	mp_connection_status = "ok"
 	players_info.clear()
 	current_state = GameState.INITIALIZING
 	current_player_index = 0
@@ -1167,9 +1174,10 @@ func _build_mp_sync_payload() -> Dictionary:
 	var drawn_d: Variant = null
 	if drawn_card_data != null:
 		drawn_d = _card_to_dict(drawn_card_data)
-	return {
+	var payload := {
 		"v": 1,
 		"seq": _mp_sync_seq,
+		"ts": Time.get_ticks_msec(),
 		"state": int(current_state),
 		"cur": current_player_index,
 		"td": turn_direction,
@@ -1190,6 +1198,9 @@ func _build_mp_sync_payload() -> Dictionary:
 		"drawn": drawn_d,
 		"last_ab": last_ability_event.duplicate()
 	}
+	if current_state == GameState.GAME_OVER:
+		payload["scores"] = _calculate_scores()
+	return payload
 
 func _apply_mp_sync_payload(payload: Dictionary) -> void:
 	if payload.get("v", 0) != 1:
@@ -1269,8 +1280,38 @@ func _apply_mp_sync_payload(payload: Dictionary) -> void:
 		drawn_card_data = _dict_to_card(dr)
 	else:
 		drawn_card_data = null
+	var server_ts := int(payload.get("ts", 0))
+	if server_ts > 0:
+		mp_sync_lag_ms = maxi(0, Time.get_ticks_msec() - server_ts)
+		_update_mp_connection_status()
+	if current_state == GameState.GAME_OVER:
+		var synced_scores: Array = payload.get("scores", [])
+		if synced_scores.size() > 0 and not _mp_game_over_scores_applied:
+			_mp_game_over_scores_applied = true
+			all_cards_revealed.emit()
+			var winner_id: int = synced_scores[0].get("id", -1) if synced_scores[0] is Dictionary else -1
+			game_over.emit(winner_id)
+			scores_ready.emit(synced_scores)
 	if current_state == GameState.TURN_START_DRAW:
 		turn_started.emit(current_player_index)
+
+func _update_mp_connection_status() -> void:
+	if not is_multiplayer:
+		return
+	var status := "ok"
+	if multiplayer.multiplayer_peer == null \
+			or multiplayer.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED:
+		status = "disconnected"
+	elif not multiplayer.is_server() and mp_sync_lag_ms >= 1500:
+		status = "lagging"
+	var prev_status := mp_connection_status
+	var prev_lag := mp_sync_lag_ms
+	mp_connection_status = status
+	if status != prev_status or abs(mp_sync_lag_ms - prev_lag) >= 50:
+		mp_connection_status_changed.emit(mp_sync_lag_ms, status)
+
+func refresh_mp_connection_status() -> void:
+	_update_mp_connection_status()
 
 @rpc("authority", "call_local", "reliable")
 func sync_match_state(payload: Dictionary) -> void:

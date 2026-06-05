@@ -51,6 +51,12 @@ func _ready():
 	_register_arcade_button(copy_code_button, "COPY_CODE", "COPY_CODE")
 
 	_clear_status()
+	var saved_name := SettingsManager.get_player_name()
+	if saved_name != "":
+		name_edit.text = saved_name
+	var saved_code := SettingsManager.get_last_room_code()
+	if saved_code != "":
+		code_edit.text = saved_code
 	name_edit.grab_focus()
 
 func _clear_status() -> void:
@@ -90,7 +96,9 @@ func _on_host_pressed():
 		name_edit.grab_focus()
 		return
 	_clear_status()
-	NetworkManager.set_local_player_name(name_edit.text)
+	var player_name := name_edit.text.strip_edges()
+	SettingsManager.set_player_name(player_name)
+	NetworkManager.set_local_player_name(player_name)
 	if NetworkManager.host_game():
 		NetworkManager.mp_log("ui.lobby", "host_game ok -> transition", {})
 		_transition_to_lobby(true)
@@ -107,7 +115,9 @@ func _on_join_pressed():
 		code_edit.grab_focus()
 		return
 	_clear_status()
-	NetworkManager.set_local_player_name(name_edit.text)
+	var player_name := name_edit.text.strip_edges()
+	SettingsManager.set_player_name(player_name)
+	NetworkManager.set_local_player_name(player_name)
 	if NetworkManager.join_game(code_edit.text):
 		NetworkManager.mp_log("ui.lobby", "join_game started -> transition", {})
 		_transition_to_lobby(false)
