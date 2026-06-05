@@ -2214,7 +2214,7 @@ func _process(delta: float) -> void:
 						var head_global_pos = skeleton.global_transform * skeleton.get_bone_global_pose(head_idx).origin
 						var forward = Vector3(-sin(camera.rotation.y), 0.0, -cos(camera.rotation.y)).normalized()
 						var up = Vector3.UP
-						var target_camera_pos = head_global_pos + forward * 0.05 + up * 0.05 + shake_offset
+						var target_camera_pos = head_global_pos + forward * 0.16 + up * 0.14 + shake_offset
 						
 						# Direct assignment to prevent relative lag
 						camera.global_position = target_camera_pos
@@ -2446,9 +2446,10 @@ func _input(event: InputEvent) -> void:
 			_look_yaw -= event.relative.x * 0.0025
 			_look_pitch -= event.relative.y * 0.0025
 			
-			# Clamp yaw to -170 to +170 degrees, and pitch to -50 to +50 degrees
-			_look_yaw = clamp(_look_yaw, deg_to_rad(-170.0), deg_to_rad(170.0))
-			_look_pitch = clamp(_look_pitch, deg_to_rad(-50.0), deg_to_rad(50.0))
+			# Clamp yaw to -65 to +65 degrees (cabinet-to-cabinet view limit)
+			# Clamp pitch to -50 (up) and +22 (down, just enough to see cards)
+			_look_yaw = clamp(_look_yaw, deg_to_rad(-65.0), deg_to_rad(65.0))
+			_look_pitch = clamp(_look_pitch, deg_to_rad(-50.0), deg_to_rad(22.0))
 
 func _on_jack_swap_resolved(p1: int, c1: int, p2: int, c2: int) -> void:
 	play_take_animation(GameManager.current_player_index)
