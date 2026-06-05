@@ -83,6 +83,8 @@ var _cabinets: Dictionary = {}
 var _cabinet_prompt_label: Label = null
 var _ability_desc_panel: PanelContainer = null
 var player_avatars: Dictionary = {}
+var avatar_arm_weights: Dictionary = {}
+var _camera_initialized: bool = false
 var _look_yaw: float = 0.0
 var _look_pitch: float = 0.0
 
@@ -2148,27 +2150,76 @@ func _process(delta: float) -> void:
 				var head_idx = skeleton.find_bone("mixamorig_Head")
 				if head_idx != -1:
 					first_person_active = true
-					# 1. Hide local player's head (scale to 0.0001)
-					skeleton.set_bone_pose_scale(head_idx, Vector3(0.0001, 0.0001, 0.0001))
+					# 1. Keep local player's head visible (scale Vector3(1,1,1))
+					skeleton.set_bone_pose_scale(head_idx, Vector3(1.0, 1.0, 1.0))
 					
-					# 2. Rotate head to follow camera look direction
+					# 2. Rotate body stanga-dreapta based on camera yaw (smooth_yaw)
+					# Clamp body rotation Y relative to the chair to -60 to +60 degrees
 					var smooth_yaw = camera.rotation.y - _base_camera_rotation.y
 					var smooth_pitch = camera.rotation.x - _base_camera_rotation.x
-					var head_rot = Quaternion.from_euler(Vector3(-smooth_pitch, -smooth_yaw, 0.0))
+					var body_yaw = clamp(smooth_yaw, deg_to_rad(-60.0), deg_to_rad(60.0))
+					avatar.rotation.y = deg_to_rad(90.0) + body_yaw
+					
+					# 3. Rotate head to follow camera look direction (relative to body)
+					var head_local_yaw = smooth_yaw - body_yaw
+					var head_rot = Quaternion.from_euler(Vector3(-smooth_pitch, -head_local_yaw, 0.0))
 					skeleton.set_bone_pose_rotation(head_idx, head_rot)
 					
 					# Force skeleton update to get correct global bone pose in the same frame
 					skeleton.force_update_all_bone_transforms()
 					
-					# 3. Align camera exactly with the head bone, offset slightly forward/up + shake
+					# 4. Smoothly align camera with the head bone, offset forward (0.18) and up (0.05) + shake
 					if is_instance_valid(camera):
+						camera.near = 0.25 # Clip out local player's head/face meshes
 						var head_global_pos = skeleton.global_transform * skeleton.get_bone_global_pose(head_idx).origin
 						var forward = -camera.global_transform.basis.z.normalized()
 						var up = camera.global_transform.basis.y.normalized()
-						camera.global_position = head_global_pos + forward * 0.12 + up * 0.05 + shake_offset
+						var target_camera_pos = head_global_pos + forward * 0.18 + up * 0.05 + shake_offset
+						
+						if not _camera_initialized:
+							camera.global_position = target_camera_pos
+							_camera_initialized = true
+						else:
+							camera.global_position = camera.global_position.lerp(target_camera_pos, delta * 25.0)
 
 		if not first_person_active and is_instance_valid(camera):
+			camera.near = 0.05 # Restore default near clip
 			camera.position = _effective_camera_base_local() + shake_offset
+
+		# Apply idle arm adjustments (hands down) for all spawned player avatars during idle animation
+		for p_idx in player_avatars:
+			var avatar = player_avatars[p_idx]
+			if is_instance_valid(avatar) and avatar.visible:
+				var skeleton = avatar.get_node_or_null("Armature/Skeleton3D") as Skeleton3D
+				var ap = avatar.get_node_or_null("AnimationPlayer") as AnimationPlayer
+				if skeleton and ap:
+					if not avatar_arm_weights.has(p_idx):
+						avatar_arm_weights[p_idx] = 1.0
+					
+					var target_w = 1.0 if ap.current_animation == "idle" else 0.0
+					avatar_arm_weights[p_idx] = move_toward(avatar_arm_weights[p_idx], target_w, delta * 3.33)
+					
+					var w = avatar_arm_weights[p_idx]
+					if w > 0.0:
+						var left_arm = skeleton.find_bone("mixamorig_LeftArm")
+						var left_forearm = skeleton.find_bone("mixamorig_LeftForeArm")
+						var right_arm = skeleton.find_bone("mixamorig_RightArm")
+						var right_forearm = skeleton.find_bone("mixamorig_RightForeArm")
+						
+						if left_arm != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(left_arm)
+							var target_rot = Quaternion.from_euler(Vector3(0.0, deg_to_rad(60.0), deg_to_rad(60.0)))
+							skeleton.set_bone_pose_rotation(left_arm, anim_rot.slerp(target_rot, w))
+						if left_forearm != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(left_forearm)
+							skeleton.set_bone_pose_rotation(left_forearm, anim_rot.slerp(Quaternion.IDENTITY, w))
+						if right_arm != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(right_arm)
+							var target_rot = Quaternion.from_euler(Vector3(0.0, deg_to_rad(-60.0), deg_to_rad(-60.0)))
+							skeleton.set_bone_pose_rotation(right_arm, anim_rot.slerp(target_rot, w))
+						if right_forearm != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(right_forearm)
+							skeleton.set_bone_pose_rotation(right_forearm, anim_rot.slerp(Quaternion.IDENTITY, w))
 
 func _update_cabinet_hover() -> void:
 	if not is_instance_valid(camera):
@@ -2411,6 +2462,8 @@ func toggle_noclip() -> bool:
 		camera_rot_x = camera.rotation.x
 		camera_rot_y = camera.rotation.y
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		if is_instance_valid(camera):
+			camera.near = 0.05
 	else:
 		camera.global_transform = base_camera_transform
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -2755,8 +2808,11 @@ func _spawn_player_avatars() -> void:
 
 			# Play the idle animation initially
 			ap.play("idle")
+			ap.set_blend_time("idle", "take", 0.3)
+			ap.set_blend_time("take", "idle", 0.3)
 
 		player_avatars[i] = char_node
+		avatar_arm_weights[i] = 1.0
 
 	take_inst.queue_free()
 
@@ -2765,8 +2821,10 @@ func play_take_animation(player_idx: int) -> void:
 		var char_node = player_avatars[player_idx]
 		var ap: AnimationPlayer = char_node.get_node("AnimationPlayer")
 		if ap:
-			ap.stop()
-			ap.play("take")
+			if ap.current_animation == "take":
+				ap.seek(0.0, true)
+			else:
+				ap.play("take")
 			ap.queue("idle")
 
 ## Reads the configured keybind for each game action from InputMap and updates
