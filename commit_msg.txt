@@ -1,4 +1,8 @@
-feat(balance): limit game-breaking abilities to 2 per match
-feat(visuals): implement custom room and table models with full-bright lighting
+feat(avatar): lock hips Y sitting height, expand look yaw clamp, and shift head bone backwards
 
-Agent: Executor (Antigravity)
+Agent: The Executor (Agent 2)
+- Overrode mixamorig_Hips bone pose Y component to lock it at sitting height (-1.822579) to prevent character model from rising during take animations.
+- Expanded camera look yaw clamp to [-95.0, 95.0] degrees (adding 15 degrees extra) and body yaw clamp to [-85.0, 85.0] degrees.
+- Shuffled camera vertical height offset to +0.26m and horizontal forward offset to +0.32m.
+- Enabled full scale head meshes while shifting the local mixamorig_Head bone position 2.0 bone units backward to completely prevent face/eye camera clipping.
+- Set Camera3D near-clip to 0.15m to ensure zero card clipping while supporting the backward head placement.

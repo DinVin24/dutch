@@ -85,6 +85,7 @@ var _ability_desc_panel: PanelContainer = null
 var player_avatars: Dictionary = {}
 var avatar_arm_weights: Dictionary = {}
 var _camera_initialized: bool = false
+var _base_head_y: float = 0.0
 var _look_yaw: float = 0.0
 var _look_pitch: float = 0.0
 
@@ -2144,7 +2145,7 @@ func _process(delta: float) -> void:
 		var first_person_active = false
 		var local_p_idx = _human_ui_idx()
 		
-		# Ensure correct head scaling and shadow attachments for all avatars
+		# Ensure correct head/neck scaling and cleanup shadow attachments for all avatars
 		for p_idx in player_avatars:
 			var avatar = player_avatars[p_idx]
 			if is_instance_valid(avatar):
@@ -2152,39 +2153,28 @@ func _process(delta: float) -> void:
 				if skeleton:
 					var head_idx = skeleton.find_bone("mixamorig_Head")
 					var neck_idx = skeleton.find_bone("mixamorig_Neck")
-					if p_idx == local_p_idx:
-						# Local player: hide head/neck to prevent clipping, and add shadow helper
-						if head_idx != -1:
-							skeleton.set_bone_pose_scale(head_idx, Vector3(0.0001, 0.0001, 0.0001))
-						if neck_idx != -1:
-							skeleton.set_bone_pose_scale(neck_idx, Vector3(0.0001, 0.0001, 0.0001))
-						
-						if not skeleton.has_node("HeadShadowAttachment"):
-							var attachment = BoneAttachment3D.new()
-							attachment.name = "HeadShadowAttachment"
-							attachment.bone_name = "mixamorig_Spine2"
-							skeleton.add_child(attachment)
-							
-							var shadow_mesh = MeshInstance3D.new()
-							shadow_mesh.name = "HeadShadowMesh"
-							var sphere = SphereMesh.new()
-							sphere.radius = 0.22
-							sphere.height = 0.44
-							shadow_mesh.mesh = sphere
-							shadow_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
-							# Position where the head should be relative to the chest bone
-							shadow_mesh.position = Vector3(0.0, 0.45, 0.0)
-							attachment.add_child(shadow_mesh)
-					else:
-						# Remote players: restore head/neck visibility, remove shadow helper
-						if head_idx != -1:
-							skeleton.set_bone_pose_scale(head_idx, Vector3(1.0, 1.0, 1.0))
-						if neck_idx != -1:
-							skeleton.set_bone_pose_scale(neck_idx, Vector3(1.0, 1.0, 1.0))
-						
-						var attachment = skeleton.get_node_or_null("HeadShadowAttachment")
-						if attachment:
-							attachment.queue_free()
+					
+					# Head and neck mesh are kept active (exists) at scale Vector3(1,1,1)
+					if head_idx != -1:
+						skeleton.set_bone_pose_scale(head_idx, Vector3(1.0, 1.0, 1.0))
+						# Shift the head bone position slightly backwards in local space to prevent clipping with camera
+						var head_pos = skeleton.get_bone_pose_position(head_idx)
+						head_pos.z = 3.74789 - 2.0 # Shift backwards by 2.0 units in bone space
+						skeleton.set_bone_pose_position(head_idx, head_pos)
+					if neck_idx != -1:
+						skeleton.set_bone_pose_scale(neck_idx, Vector3(1.0, 1.0, 1.0))
+					
+					# Force hips Y position to stay at the idle height (-1.822579) to prevent rising during take animation
+					var hips_idx = skeleton.find_bone("mixamorig_Hips")
+					if hips_idx != -1:
+						var hips_pos = skeleton.get_bone_pose_position(hips_idx)
+						hips_pos.y = -1.822579
+						skeleton.set_bone_pose_position(hips_idx, hips_pos)
+					
+					# Clean up shadows-only mesh helpers from previous worktree versions
+					var attachment = skeleton.get_node_or_null("HeadShadowAttachment")
+					if attachment:
+						attachment.queue_free()
 
 		if player_avatars.has(local_p_idx) and is_instance_valid(player_avatars[local_p_idx]):
 			var avatar = player_avatars[local_p_idx]
@@ -2194,13 +2184,13 @@ func _process(delta: float) -> void:
 				if head_idx != -1:
 					first_person_active = true
 					
-					# Rotate body Y (yaw) based on camera Y rotation with 70% damping (clamped to -60 to 60)
+					# Rotate body Y (yaw) based on camera Y rotation with 70% damping (clamped to -85 to +85 degrees)
 					var smooth_yaw = camera.rotation.y - _base_camera_rotation.y
 					var smooth_pitch = camera.rotation.x - _base_camera_rotation.x
-					var body_yaw = clamp(smooth_yaw * 0.7, deg_to_rad(-60.0), deg_to_rad(60.0))
+					var body_yaw = clamp(smooth_yaw * 0.7, deg_to_rad(-85.0), deg_to_rad(85.0))
 					avatar.rotation.y = deg_to_rad(90.0) + body_yaw
 					
-					# Rotate head bone relative to the body's yaw rotation and pitch
+					# Rotate head bone relative to the body's yaw rotation and pitch.
 					var head_local_yaw = smooth_yaw - body_yaw
 					var head_rot = Quaternion.from_euler(Vector3(-smooth_pitch, -head_local_yaw, 0.0))
 					skeleton.set_bone_pose_rotation(head_idx, head_rot)
@@ -2208,17 +2198,28 @@ func _process(delta: float) -> void:
 					# Force skeleton update to get correct global bone pose in the same frame
 					skeleton.force_update_all_bone_transforms()
 					
-					# Align camera with the head bone + eye offset + shake (near clip = 0.05 to avoid card clipping)
+					# Align camera with the head bone + eye offset + shake
 					if is_instance_valid(camera):
-						camera.near = 0.05
+						# Use 0.15m near clip (since head is shifted back and camera is shifted forward)
+						camera.near = 0.15
 						var head_global_pos = skeleton.global_transform * skeleton.get_bone_global_pose(head_idx).origin
+						
+						if not _camera_initialized:
+							_base_head_y = head_global_pos.y
+							_camera_initialized = true
+						
 						var forward = Vector3(-sin(camera.rotation.y), 0.0, -cos(camera.rotation.y)).normalized()
-						var up = Vector3.UP
-						var target_camera_pos = head_global_pos + forward * 0.16 + up * 0.14 + shake_offset
+						
+						# Lock camera vertical height to base head position + offset (0.26m up, 0.32m forward)
+						# This prevents the camera from bobbing/rising when the character plays the "take" animation.
+						var target_camera_pos = Vector3(
+							head_global_pos.x + forward.x * 0.32,
+							_base_head_y + 0.26,
+							head_global_pos.z + forward.z * 0.32
+						) + shake_offset
 						
 						# Direct assignment to prevent relative lag
 						camera.global_position = target_camera_pos
-						_camera_initialized = true
 
 		if not first_person_active and is_instance_valid(camera):
 			camera.near = 0.05 # Restore default near clip
@@ -2446,9 +2447,9 @@ func _input(event: InputEvent) -> void:
 			_look_yaw -= event.relative.x * 0.0025
 			_look_pitch -= event.relative.y * 0.0025
 			
-			# Clamp yaw to -65 to +65 degrees (cabinet-to-cabinet view limit)
+			# Clamp yaw to -95 to +95 degrees (cabinet-to-cabinet view limit, with 15 deg extra)
 			# Clamp pitch to -50 (up) and +22 (down, just enough to see cards)
-			_look_yaw = clamp(_look_yaw, deg_to_rad(-65.0), deg_to_rad(65.0))
+			_look_yaw = clamp(_look_yaw, deg_to_rad(-95.0), deg_to_rad(95.0))
 			_look_pitch = clamp(_look_pitch, deg_to_rad(-50.0), deg_to_rad(22.0))
 
 func _on_jack_swap_resolved(p1: int, c1: int, p2: int, c2: int) -> void:
