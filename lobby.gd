@@ -59,6 +59,13 @@ func _ready():
 		code_edit.text = saved_code
 	name_edit.grab_focus()
 
+func _input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		if DevConsole and DevConsole.window.is_visible():
+			return
+		_on_back_pressed()
+		get_viewport().set_input_as_handled()
+
 func _clear_status() -> void:
 	status_label.text = ""
 
@@ -209,7 +216,7 @@ func _on_start_pressed():
 	NetworkManager.start_match.rpc(total, deck_seed)
 
 func _on_game_started():
-	get_tree().change_scene_to_file("res://game_board_3d.tscn")
+	SceneLoader.change_scene("res://game_board_3d.tscn")
 
 func _on_server_disconnected():
 	NetworkManager.mp_log("ui.lobby", "server_disconnected signal", {})
@@ -242,4 +249,6 @@ func _on_back_pressed():
 	_clear_status()
 	NetworkManager.mp_log("ui.lobby", "back pressed", {})
 	NetworkManager.leave_game()
+	setup_panel.show()
+	active_lobby_panel.hide()
 	get_tree().change_scene_to_file("res://main_menu.tscn")

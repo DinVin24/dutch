@@ -53,7 +53,7 @@ theme_override_constants/margin_top = 40
 
 [node name="VBox" type="VBoxContainer" parent="LeftMargin"]
 layout_mode = 2
-size_flags_vertical = 4
+size_flags_vertical = 3
 theme_override_constants/separation = 28
 
 [node name="Title" type="Label" parent="LeftMargin/VBox"]
@@ -134,12 +134,10 @@ text = ""
 [node name="ActiveLobbyPanel" type="VBoxContainer" parent="LeftMargin/VBox"]
 visible = false
 layout_mode = 2
-size_flags_vertical = 3
 theme_override_constants/separation = 16
 
 [node name="HBoxContainer" type="HBoxContainer" parent="LeftMargin/VBox/ActiveLobbyPanel"]
 layout_mode = 2
-size_flags_vertical = 3
 theme_override_constants/separation = 36
 
 [node name="PlayersList" type="VBoxContainer" parent="LeftMargin/VBox/ActiveLobbyPanel/HBoxContainer"]
@@ -156,7 +154,6 @@ text = "> CONNECTED"
 [node name="ItemList" type="ItemList" parent="LeftMargin/VBox/ActiveLobbyPanel/HBoxContainer/PlayersList"]
 custom_minimum_size = Vector2(0, 120)
 layout_mode = 2
-size_flags_vertical = 3
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="Settings" type="VBoxContainer" parent="LeftMargin/VBox/ActiveLobbyPanel/HBoxContainer"]
@@ -254,8 +251,14 @@ text = "> START_MATCH <"
 flat = true
 alignment = 0
 
+[node name="BottomSpacer" type="Control" parent="LeftMargin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+
 [node name="BackButton" type="Button" parent="LeftMargin/VBox"]
 layout_mode = 2
+custom_minimum_size = Vector2(0, 44)
 theme_override_colors/font_hover_color = Color(1, 0, 1, 1)
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 24

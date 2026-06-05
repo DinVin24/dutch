@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3 uid="uid://ddl1yxpwkhf8v"]
+[gd_scene load_steps=3 format=3 uid="uid://ddl1yxpwkhf8v"]
 
 [ext_resource type="Script" path="res://settings_menu.gd" id="1_def"]
+[ext_resource type="Script" uid="uid://dxi8we5qx2ilr" path="res://glitch_sound_gen.gd" id="2_sfx"]
 
 [node name="SettingsMenu" type="Control"]
 layout_mode = 3
@@ -16,319 +17,421 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-color = Color(0.02, 0.0, 0.06, 0.93)
-
-[node name="Panel" type="VBoxContainer" parent="."]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -310.0
-offset_top = -330.0
-offset_right = 310.0
-offset_bottom = 330.0
 grow_horizontal = 2
 grow_vertical = 2
+color = Color(0.02, 0.0, 0.06, 0.93)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="OuterMargin" type="MarginContainer" parent="Center"]
+custom_minimum_size = Vector2(640, 680)
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="PanelShell" type="PanelContainer" parent="Center/OuterMargin"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="InnerMargin" type="MarginContainer" parent="Center/OuterMargin/PanelShell"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 16
+
+[node name="Panel" type="VBoxContainer" parent="Center/OuterMargin/PanelShell/InnerMargin"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
 theme_override_constants/separation = 12
 
-[node name="TitleBar" type="HBoxContainer" parent="Panel"]
+[node name="TitleBar" type="HBoxContainer" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel"]
 layout_mode = 2
 theme_override_constants/separation = 0
 
-[node name="TitleAccent" type="ColorRect" parent="Panel/TitleBar"]
+[node name="TitleAccent" type="ColorRect" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/TitleBar"]
 layout_mode = 2
 custom_minimum_size = Vector2(4, 0)
 size_flags_vertical = 3
 color = Color(1.0, 0.1, 0.6, 1.0)
 
-[node name="TitleLabel" type="Label" parent="Panel/TitleBar"]
+[node name="TitleVBox" type="VBoxContainer" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/TitleBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="TitleLabel" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/TitleBar/TitleVBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.9, 0.9, 0.9, 1.0)
 theme_override_colors/font_outline_color = Color(1.0, 0.1, 0.6, 1.0)
 theme_override_constants/outline_size = 2
-theme_override_font_sizes/font_size = 38
-theme_override_constants/margin_left = 12
+theme_override_font_sizes/font_size = 34
 text = "// SYSTEM_CONFIG"
-horizontal_alignment = 0
 
-[node name="Spacer" type="Control" parent="Panel/TitleBar"]
+[node name="SubtitleLabel" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/TitleBar/TitleVBox"]
 layout_mode = 2
-size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.45, 0.45, 0.55, 1.0)
+theme_override_font_sizes/font_size = 13
+text = "display · audio · controls"
 
-[node name="GlitchLine" type="ColorRect" parent="Panel"]
+[node name="GlitchLine" type="ColorRect" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 2)
 color = Color(1.0, 0.1, 0.6, 0.7)
 
-[node name="Tabs" type="TabContainer" parent="Panel"]
+[node name="Tabs" type="TabContainer" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel"]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_colors/font_selected_color = Color(0.0, 1.0, 1.0, 1.0)
 theme_override_colors/font_unselected_color = Color(0.5, 0.5, 0.6, 1.0)
 theme_override_colors/font_hovered_color = Color(1.0, 0.1, 0.6, 1.0)
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 16
 
-[node name="DISPLAY" type="ScrollContainer" parent="Panel/Tabs"]
+[node name="DISPLAY" type="ScrollContainer" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs"]
 layout_mode = 2
 size_flags_vertical = 3
+horizontal_scroll_mode = 0
 
-[node name="DisplayGrid" type="GridContainer" parent="Panel/Tabs/DISPLAY"]
+[node name="DisplayMargin" type="MarginContainer" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/DISPLAY"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/h_separation = 24
-theme_override_constants/v_separation = 16
-columns = 2
+theme_override_constants/margin_left = 4
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 4
+theme_override_constants/margin_bottom = 8
 
-[node name="ResLabel" type="Label" parent="Panel/Tabs/DISPLAY/DisplayGrid"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
-theme_override_font_sizes/font_size = 18
-text = "Resolution"
-
-[node name="ResolutionOption" type="OptionButton" parent="Panel/Tabs/DISPLAY/DisplayGrid"]
+[node name="DisplayVBox" type="VBoxContainer" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/DISPLAY/DisplayMargin"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
-theme_override_font_sizes/font_size = 18
+theme_override_constants/separation = 14
 
-[node name="WinLabel" type="Label" parent="Panel/Tabs/DISPLAY/DisplayGrid"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
-theme_override_font_sizes/font_size = 18
-text = "Window Mode"
-
-[node name="WindowModeOption" type="OptionButton" parent="Panel/Tabs/DISPLAY/DisplayGrid"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
-theme_override_font_sizes/font_size = 18
-
-[node name="AUDIO" type="ScrollContainer" parent="Panel/Tabs"]
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="AudioGrid" type="GridContainer" parent="Panel/Tabs/AUDIO"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/h_separation = 24
-theme_override_constants/v_separation = 16
-columns = 2
-
-[node name="MusicLabel" type="Label" parent="Panel/Tabs/AUDIO/AudioGrid"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
-theme_override_font_sizes/font_size = 18
-text = "Music Volume"
-
-[node name="MusicSlider" type="HSlider" parent="Panel/Tabs/AUDIO/AudioGrid"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 4
-max_value = 1.0
-step = 0.05
-value = 1.0
-
-[node name="SFXLabel" type="Label" parent="Panel/Tabs/AUDIO/AudioGrid"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
-theme_override_font_sizes/font_size = 18
-text = "SFX Volume"
-
-[node name="SFXSlider" type="HSlider" parent="Panel/Tabs/AUDIO/AudioGrid"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 4
-max_value = 1.0
-step = 0.05
-value = 1.0
-
-[node name="CONTROLS" type="ScrollContainer" parent="Panel/Tabs"]
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="ControlsVBox" type="VBoxContainer" parent="Panel/Tabs/CONTROLS"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 10
-
-[node name="DevConsoleRow" type="HBoxContainer" parent="Panel/Tabs/CONTROLS/ControlsVBox"]
-layout_mode = 2
-theme_override_constants/separation = 12
-
-[node name="DevConsoleLabel" type="Label" parent="Panel/Tabs/CONTROLS/ControlsVBox/DevConsoleRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
-theme_override_font_sizes/font_size = 18
-text = "Dev Console"
-
-[node name="DevConsoleCheck" type="CheckBox" parent="Panel/Tabs/CONTROLS/ControlsVBox/DevConsoleRow"]
-layout_mode = 2
-button_pressed = true
-theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
-
-[node name="KeybindDivider" type="HSeparator" parent="Panel/Tabs/CONTROLS/ControlsVBox"]
-layout_mode = 2
-self_modulate = Color(1.0, 0.1, 0.6, 0.5)
-
-[node name="KeybindHeader" type="Label" parent="Panel/Tabs/CONTROLS/ControlsVBox"]
+[node name="SectionHeader" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/DISPLAY/DisplayMargin/DisplayVBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1.0, 0.1, 0.6, 1.0)
-theme_override_font_sizes/font_size = 16
-text = "> KEYBINDS — click a binding to remap"
+theme_override_font_sizes/font_size = 14
+text = "> VIDEO_OUTPUT"
 
-[node name="KeybindsGrid" type="GridContainer" parent="Panel/Tabs/CONTROLS/ControlsVBox"]
+[node name="DisplayGrid" type="GridContainer" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/DISPLAY/DisplayMargin/DisplayVBox"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/h_separation = 20
-theme_override_constants/v_separation = 8
+theme_override_constants/v_separation = 14
 columns = 2
 
-[node name="EndTurnLabel" type="Label" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
+[node name="ResLabel" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/DISPLAY/DisplayMargin/DisplayVBox/DisplayGrid"]
 layout_mode = 2
+size_flags_vertical = 4
 theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
 theme_override_font_sizes/font_size = 17
+text = "Resolution"
+
+[node name="ResolutionOption" type="OptionButton" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/DISPLAY/DisplayMargin/DisplayVBox/DisplayGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="WinLabel" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/DISPLAY/DisplayMargin/DisplayVBox/DisplayGrid"]
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
+theme_override_font_sizes/font_size = 17
+text = "Window Mode"
+
+[node name="WindowModeOption" type="OptionButton" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/DISPLAY/DisplayMargin/DisplayVBox/DisplayGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="AUDIO" type="ScrollContainer" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="AudioMargin" type="MarginContainer" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/AUDIO"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_left = 4
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 4
+theme_override_constants/margin_bottom = 8
+
+[node name="AudioVBox" type="VBoxContainer" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/AUDIO/AudioMargin"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 14
+
+[node name="SectionHeader" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/AUDIO/AudioMargin/AudioVBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1.0, 0.1, 0.6, 1.0)
+theme_override_font_sizes/font_size = 14
+text = "> AUDIO_MIXER"
+
+[node name="AudioGrid" type="GridContainer" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/AUDIO/AudioMargin/AudioVBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 20
+theme_override_constants/v_separation = 18
+columns = 3
+
+[node name="MusicLabel" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/AUDIO/AudioMargin/AudioVBox/AudioGrid"]
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
+theme_override_font_sizes/font_size = 17
+text = "Music Volume"
+
+[node name="MusicSlider" type="HSlider" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/AUDIO/AudioMargin/AudioVBox/AudioGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 1.0
+step = 0.05
+value = 1.0
+
+[node name="MusicValueLabel" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/AUDIO/AudioMargin/AudioVBox/AudioGrid"]
+layout_mode = 2
+custom_minimum_size = Vector2(48, 0)
+size_flags_vertical = 4
+theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
+theme_override_font_sizes/font_size = 16
+text = "100%"
+horizontal_alignment = 2
+
+[node name="SFXLabel" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/AUDIO/AudioMargin/AudioVBox/AudioGrid"]
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
+theme_override_font_sizes/font_size = 17
+text = "SFX Volume"
+
+[node name="SFXSlider" type="HSlider" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/AUDIO/AudioMargin/AudioVBox/AudioGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 1.0
+step = 0.05
+value = 1.0
+
+[node name="SFXValueLabel" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/AUDIO/AudioMargin/AudioVBox/AudioGrid"]
+layout_mode = 2
+custom_minimum_size = Vector2(48, 0)
+size_flags_vertical = 4
+theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
+theme_override_font_sizes/font_size = 16
+text = "100%"
+horizontal_alignment = 2
+
+[node name="CONTROLS" type="ScrollContainer" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="ControlsMargin" type="MarginContainer" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_left = 4
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 4
+theme_override_constants/margin_bottom = 8
+
+[node name="ControlsVBox" type="VBoxContainer" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="SectionHeader" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1.0, 0.1, 0.6, 1.0)
+theme_override_font_sizes/font_size = 14
+text = "> INPUT_DEVICES"
+
+[node name="DevConsoleRow" type="HBoxContainer" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="DevConsoleLabel" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/DevConsoleRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
+theme_override_font_sizes/font_size = 17
+text = "Dev Console"
+
+[node name="DevConsoleCheck" type="CheckBox" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/DevConsoleRow"]
+layout_mode = 2
+button_pressed = true
+
+[node name="KeybindDivider" type="ColorRect" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 1)
+color = Color(1.0, 0.1, 0.6, 0.35)
+
+[node name="KeybindHeader" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1.0, 0.1, 0.6, 1.0)
+theme_override_font_sizes/font_size = 14
+text = "> KEYBINDS — click a binding to remap"
+
+[node name="KeybindsGrid" type="GridContainer" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 10
+columns = 2
+
+[node name="EndTurnLabel" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid"]
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
+theme_override_font_sizes/font_size = 16
 text = "End Turn"
 
-[node name="EndTurnBind" type="Button" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
+[node name="EndTurnBind" type="Button" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
-flat = true
 text = "Enter"
 
-[node name="JumpInLabel" type="Label" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
+[node name="JumpInLabel" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
+size_flags_vertical = 4
 theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
-theme_override_font_sizes/font_size = 17
+theme_override_font_sizes/font_size = 16
 text = "Jump In"
 
-[node name="JumpInBind" type="Button" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
+[node name="JumpInBind" type="Button" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
-flat = true
 text = "Space"
 
-[node name="CallDutchLabel" type="Label" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
+[node name="CallDutchLabel" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
+size_flags_vertical = 4
 theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
-theme_override_font_sizes/font_size = 17
+theme_override_font_sizes/font_size = 16
 text = "Call Dutch"
 
-[node name="CallDutchBind" type="Button" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
+[node name="CallDutchBind" type="Button" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
-flat = true
 text = "D"
 
-[node name="DrawCardLabel" type="Label" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
+[node name="DrawCardLabel" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
+size_flags_vertical = 4
 theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
-theme_override_font_sizes/font_size = 17
+theme_override_font_sizes/font_size = 16
 text = "Draw Card"
 
-[node name="DrawCardBind" type="Button" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
+[node name="DrawCardBind" type="Button" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
-flat = true
 text = "R"
 
-[node name="SelectLeftLabel" type="Label" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
+[node name="SelectLeftLabel" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
+size_flags_vertical = 4
 theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
-theme_override_font_sizes/font_size = 17
+theme_override_font_sizes/font_size = 16
 text = "Select Card Left"
 
-[node name="SelectLeftBind" type="Button" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
+[node name="SelectLeftBind" type="Button" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
-flat = true
 text = "A"
 
-[node name="SelectRightLabel" type="Label" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
+[node name="SelectRightLabel" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
+size_flags_vertical = 4
 theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
-theme_override_font_sizes/font_size = 17
+theme_override_font_sizes/font_size = 16
 text = "Select Card Right"
 
-[node name="SelectRightBind" type="Button" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
+[node name="SelectRightBind" type="Button" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
-flat = true
 text = "E"
 
-[node name="ConfirmCardLabel" type="Label" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
+[node name="ConfirmCardLabel" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
+size_flags_vertical = 4
 theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
-theme_override_font_sizes/font_size = 17
+theme_override_font_sizes/font_size = 16
 text = "Confirm Card"
 
-[node name="ConfirmCardBind" type="Button" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
+[node name="ConfirmCardBind" type="Button" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
-flat = true
 text = "Q"
 
-[node name="DiscardDrawnLabel" type="Label" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
+[node name="DiscardDrawnLabel" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
+size_flags_vertical = 4
 theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
-theme_override_font_sizes/font_size = 17
+theme_override_font_sizes/font_size = 16
 text = "Discard Drawn Card"
 
-[node name="DiscardDrawnBind" type="Button" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
+[node name="DiscardDrawnBind" type="Button" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
-flat = true
 text = "X"
 
-[node name="ForfeitDutchLabel" type="Label" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
+[node name="ForfeitDutchLabel" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
+size_flags_vertical = 4
 theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
-theme_override_font_sizes/font_size = 17
+theme_override_font_sizes/font_size = 16
 text = "Forfeit Dutch"
 
-[node name="ForfeitDutchBind" type="Button" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
+[node name="ForfeitDutchBind" type="Button" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
-flat = true
 text = "4"
 
-[node name="FooterLine" type="ColorRect" parent="Panel"]
+[node name="FooterLine" type="ColorRect" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 2)
 color = Color(1.0, 0.1, 0.6, 0.4)
 
-[node name="BackButton" type="Button" parent="Panel"]
+[node name="FooterRow" type="HBoxContainer" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9, 0.9, 0.9, 1.0)
-theme_override_colors/font_hover_color = Color(1.0, 0.1, 0.6, 1.0)
-theme_override_font_sizes/font_size = 22
-flat = true
+theme_override_constants/separation = 8
+
+[node name="EscHint" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/FooterRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.4, 0.4, 0.48, 1.0)
+theme_override_font_sizes/font_size = 13
+text = "ESC — save & close"
+vertical_alignment = 1
+
+[node name="BackButton" type="Button" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/FooterRow"]
+layout_mode = 2
 text = "[ BACK ]"
 alignment = 2
 
-[connection signal="item_selected" from="Panel/Tabs/DISPLAY/DisplayGrid/ResolutionOption" to="." method="_on_resolution_selected"]
-[connection signal="item_selected" from="Panel/Tabs/DISPLAY/DisplayGrid/WindowModeOption" to="." method="_on_window_mode_selected"]
-[connection signal="value_changed" from="Panel/Tabs/AUDIO/AudioGrid/MusicSlider" to="." method="_on_music_value_changed"]
-[connection signal="value_changed" from="Panel/Tabs/AUDIO/AudioGrid/SFXSlider" to="." method="_on_sfx_value_changed"]
-[connection signal="toggled" from="Panel/Tabs/CONTROLS/ControlsVBox/DevConsoleRow/DevConsoleCheck" to="." method="_on_dev_console_toggled"]
-[connection signal="pressed" from="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/EndTurnBind" to="." method="_on_keybind_button_pressed" binds= ["game_end_turn", "Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/EndTurnBind"]]
-[connection signal="pressed" from="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/JumpInBind" to="." method="_on_keybind_button_pressed" binds= ["game_jump_in", "Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/JumpInBind"]]
-[connection signal="pressed" from="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/CallDutchBind" to="." method="_on_keybind_button_pressed" binds= ["game_call_dutch", "Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/CallDutchBind"]]
-[connection signal="pressed" from="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/DrawCardBind" to="." method="_on_keybind_button_pressed" binds= ["game_draw_card", "Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/DrawCardBind"]]
-[connection signal="pressed" from="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/SelectLeftBind" to="." method="_on_keybind_button_pressed" binds= ["game_select_left", "Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/SelectLeftBind"]]
-[connection signal="pressed" from="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/SelectRightBind" to="." method="_on_keybind_button_pressed" binds= ["game_select_right", "Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/SelectRightBind"]]
-[connection signal="pressed" from="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/ConfirmCardBind" to="." method="_on_keybind_button_pressed" binds= ["game_confirm_card", "Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/ConfirmCardBind"]]
-[connection signal="pressed" from="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/DiscardDrawnBind" to="." method="_on_keybind_button_pressed" binds= ["game_discard_drawn", "Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/DiscardDrawnBind"]]
-[connection signal="pressed" from="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/ForfeitDutchBind" to="." method="_on_keybind_button_pressed" binds= ["game_forfeit_dutch", "Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid/ForfeitDutchBind"]]
-[connection signal="pressed" from="Panel/BackButton" to="." method="_on_back_button_pressed"]
+[node name="GlitchSound" type="AudioStreamPlayer" parent="."]
+bus = &"SFX"
+script = ExtResource("2_sfx")
+
+[connection signal="item_selected" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/DISPLAY/DisplayMargin/DisplayVBox/DisplayGrid/ResolutionOption" to="." method="_on_resolution_selected"]
+[connection signal="item_selected" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/DISPLAY/DisplayMargin/DisplayVBox/DisplayGrid/WindowModeOption" to="." method="_on_window_mode_selected"]
+[connection signal="value_changed" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/AUDIO/AudioMargin/AudioVBox/AudioGrid/MusicSlider" to="." method="_on_music_value_changed"]
+[connection signal="value_changed" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/AUDIO/AudioMargin/AudioVBox/AudioGrid/SFXSlider" to="." method="_on_sfx_value_changed"]
+[connection signal="toggled" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/DevConsoleRow/DevConsoleCheck" to="." method="_on_dev_console_toggled"]
+[connection signal="pressed" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/EndTurnBind" to="." method="_on_keybind_button_pressed" binds= ["game_end_turn", "Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/EndTurnBind"]]
+[connection signal="pressed" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/JumpInBind" to="." method="_on_keybind_button_pressed" binds= ["game_jump_in", "Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/JumpInBind"]]
+[connection signal="pressed" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/CallDutchBind" to="." method="_on_keybind_button_pressed" binds= ["game_call_dutch", "Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/CallDutchBind"]]
+[connection signal="pressed" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/DrawCardBind" to="." method="_on_keybind_button_pressed" binds= ["game_draw_card", "Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/DrawCardBind"]]
+[connection signal="pressed" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/SelectLeftBind" to="." method="_on_keybind_button_pressed" binds= ["game_select_left", "Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/SelectLeftBind"]]
+[connection signal="pressed" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/SelectRightBind" to="." method="_on_keybind_button_pressed" binds= ["game_select_right", "Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/SelectRightBind"]]
+[connection signal="pressed" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/ConfirmCardBind" to="." method="_on_keybind_button_pressed" binds= ["game_confirm_card", "Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/ConfirmCardBind"]]
+[connection signal="pressed" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/DiscardDrawnBind" to="." method="_on_keybind_button_pressed" binds= ["game_discard_drawn", "Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/DiscardDrawnBind"]]
+[connection signal="pressed" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/ForfeitDutchBind" to="." method="_on_keybind_button_pressed" binds= ["game_forfeit_dutch", "Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/ForfeitDutchBind"]]
+[connection signal="pressed" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/FooterRow/BackButton" to="." method="_on_back_button_pressed"]
