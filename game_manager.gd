@@ -94,6 +94,7 @@ var global_ability_counts: Dictionary = {
 	"perfect_match": 0,
 	"polarity_shift": 0
 }
+var last_ability_event: Dictionary = {}
 
 func _ready():
 	deck_manager = DeckManager.new()
@@ -723,7 +724,7 @@ func _clear_interrupt_state():
 
 ## Abilities API
 var state_before_ability: GameState = GameState.INITIALIZING
-signal ability_played(player_idx, ability_id)
+signal ability_played(player_idx, ability_id, target_idx)
 signal ability_finished
 
 func play_ability(player_idx: int, ability_id: String, target_idx: int = -1, slot_idx: int = -1) -> bool:
@@ -767,7 +768,8 @@ func play_ability(player_idx: int, ability_id: String, target_idx: int = -1, slo
 	if idx != -1:
 		players_info[player_idx].abilities[idx] = ""
 	
-	ability_played.emit(player_idx, ability_id)
+	last_ability_event = {"caster": player_idx, "id": ability_id, "target": target_idx}
+	ability_played.emit(player_idx, ability_id, target_idx)
 	ability_manager.execute(player_idx, ability_id, target_idx)
 	return true
 	
@@ -1185,7 +1187,8 @@ func _build_mp_sync_payload() -> Dictionary:
 		"players": players_arr,
 		"deck": deck_arr,
 		"discard": disc_arr,
-		"drawn": drawn_d
+		"drawn": drawn_d,
+		"last_ab": last_ability_event.duplicate()
 	}
 
 func _apply_mp_sync_payload(payload: Dictionary) -> void:
@@ -1212,6 +1215,7 @@ func _apply_mp_sync_payload(payload: Dictionary) -> void:
 	global_ability_counts = (payload.get("global_ab", {}) as Dictionary).duplicate()
 	easy_mode = bool(payload.get("easy", false))
 	tutorial_mode = bool(payload.get("tutorial", false))
+	last_ability_event = (payload.get("last_ab", {}) as Dictionary).duplicate()
 	peer_to_idx.clear()
 	idx_to_peer.clear()
 	for pair in payload.get("peers", []):

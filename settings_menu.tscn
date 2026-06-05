@@ -197,7 +197,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
 flat = true
-text = "Q"
+text = "Enter"
 
 [node name="JumpInLabel" type="Label" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
@@ -223,7 +223,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
 flat = true
-text = "E"
+text = "D"
 
 [node name="DrawCardLabel" type="Label" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
@@ -262,7 +262,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
 flat = true
-text = "D"
+text = "E"
 
 [node name="ConfirmCardLabel" type="Label" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
@@ -275,7 +275,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
 flat = true
-text = "Enter"
+text = "Q"
 
 [node name="DiscardDrawnLabel" type="Label" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
 layout_mode = 2
@@ -288,7 +288,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.0, 1.0, 1.0, 1.0)
 flat = true
-text = "F"
+text = "X"
 
 [node name="ForfeitDutchLabel" type="Label" parent="Panel/Tabs/CONTROLS/ControlsVBox/KeybindsGrid"]
 layout_mode = 2

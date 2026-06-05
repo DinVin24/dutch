@@ -44,7 +44,6 @@ func execute(player_idx: int, ability_id: String, target_idx: int = -1):
 				if p_card != null:
 					gm.players_info[target_idx].hand.append(p_card)
 					gm.hand_updated.emit(target_idx)
-				# Jumpscare signal can be added later for UI
 		"shuffle":
 			if target_idx != -1:
 				gm.players_info[target_idx].hand.shuffle()

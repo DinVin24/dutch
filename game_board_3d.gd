@@ -17,6 +17,7 @@ extends Node3D
 @onready var draw_arrow = $DeckArea/DrawIndicatorArrow
 var player_lights = {}
 var _bell_stream: AudioStreamWAV = null
+var _victory_fanfare_stream: AudioStreamWAV = null
 
 var bot_controller: BotController = null
 var action_panel: PanelContainer
@@ -132,6 +133,7 @@ func _ready():
 		if is_instance_valid(cab):
 			cab.set_meta("player_index", p_idx)
 	_bell_stream = _generate_bell_stream()
+	_victory_fanfare_stream = _generate_victory_fanfare_stream()
 	print("Game Board 3D: Ready. Connecting signals...")
 	GameManager.stop_menu_music()
 	GameManager.play_game_music()
@@ -342,11 +344,7 @@ func _on_multiplayer_sync_applied() -> void:
 		if old_b != -1 and cur_beers < old_b:
 			_on_player_drank_beer(pi, cur_beers)
 		else:
-			# Just silently update visibility
-			if pi < player_beers_nodes.size():
-				var beers_array = player_beers_nodes[pi]
-				for k in range(beers_array.size()):
-					beers_array[k].visible = (k < cur_beers)
+			_sync_beer_visuals(pi, cur_beers)
 	
 	# --- Bug 4: Detect ability changes and fire local visual feedback ---
 	# Only diff if we have a prior snapshot (skip the very first sync to avoid spurious events)
@@ -365,7 +363,11 @@ func _on_multiplayer_sync_applied() -> void:
 			# Ability disappeared from the list — player used it
 			for ab in old_filtered:
 				if not ab in new_filtered:
-					_on_ability_played(pi, ab)
+					var target_idx := -1
+					var evt = GameManager.last_ability_event
+					if evt.get("caster") == pi and evt.get("id") == ab:
+						target_idx = int(evt.get("target", -1))
+					_on_ability_played(pi, ab, target_idx)
 	
 	# Sync all player cabinets with their actual abilities
 	for pi in range(GameManager.num_players):
@@ -649,6 +651,8 @@ func _create_beer_placeholders():
 			var front_z := 1.35
 			var right_offset := b * beer_spacing
 			beer.position = Vector3(right_x_base + right_offset, beer_y_offset, front_z)
+			beer.set_meta("base_scale", beer.scale)
+			beer.set_meta("base_y", beer_y_offset)
 			pos_node.add_child(beer)
 			player_beers_nodes[i].append(beer)
 
@@ -952,14 +956,84 @@ func _on_player_area_input(_camera, event, _position, _normal, _shape_idx, playe
 
 func _on_player_drank_beer(player_idx, remaining):
 	play_take_animation(player_idx)
-	if player_idx < 0 or player_idx >= 4: return
+	if player_idx < 0 or player_idx >= 4:
+		return
+	var beers_array = player_beers_nodes[player_idx]
+	var prev_remaining = _last_sync_diag.get("beers", [3, 3, 3, 3])[player_idx] if player_idx < _last_sync_diag.get("beers", []).size() else 3
+	for i in range(beers_array.size()):
+		if i < remaining:
+			_set_beer_fill(beers_array[i], 1.0, false)
+			beers_array[i].visible = true
+		elif beers_array[i].visible and i >= remaining:
+			_animate_beer_emptying(beers_array[i])
+		else:
+			beers_array[i].visible = false
+	if remaining < prev_remaining:
+		shake(0.2, 0.3)
+	elif remaining > prev_remaining:
+		_animate_beer_refill(beers_array, remaining)
+
+func _sync_beer_visuals(player_idx: int, remaining: int) -> void:
+	if player_idx < 0 or player_idx >= player_beers_nodes.size():
+		return
 	var beers_array = player_beers_nodes[player_idx]
 	for i in range(beers_array.size()):
-		var is_drinking = beers_array[i].visible and (i >= remaining)
-		if is_drinking:
-			spawn_particles("beer_drink", beers_array[i].global_position + Vector3(0, 0.2, 0))
-		beers_array[i].visible = (i < remaining)
-	shake(0.2, 0.3)
+		if i < remaining:
+			_set_beer_fill(beers_array[i], 1.0, false)
+			beers_array[i].visible = true
+		else:
+			beers_array[i].visible = false
+
+func _set_beer_fill(beer_node: Node3D, fill_ratio: float, animate: bool) -> void:
+	if not is_instance_valid(beer_node):
+		return
+	var base_scale: Vector3 = beer_node.get_meta("base_scale", beer_scale)
+	var base_y: float = beer_node.get_meta("base_y", beer_y_offset)
+	var target_scale := Vector3(base_scale.x, base_scale.y * fill_ratio, base_scale.z)
+	var target_y := base_y - (base_scale.y * (1.0 - fill_ratio) * 0.35)
+	if animate:
+		var tween = create_tween().set_parallel(true)
+		tween.tween_property(beer_node, "scale", target_scale, 0.25).set_trans(Tween.TRANS_QUAD)
+		tween.tween_property(beer_node, "position:y", target_y, 0.25).set_trans(Tween.TRANS_QUAD)
+	else:
+		beer_node.scale = target_scale
+		beer_node.position.y = target_y
+	beer_node.rotation_degrees.z = 0.0
+
+func _animate_beer_emptying(beer_node: Node3D) -> void:
+	if not is_instance_valid(beer_node):
+		return
+	beer_node.visible = true
+	var base_scale: Vector3 = beer_node.get_meta("base_scale", beer_scale)
+	var spill_pos := beer_node.global_position + Vector3(0, 0.05, 0.1)
+	spawn_particles("beer_drink", beer_node.global_position + Vector3(0, 0.25, 0))
+	var tween = create_tween()
+	tween.tween_property(beer_node, "rotation_degrees:z", -18.0, 0.15).set_trans(Tween.TRANS_QUAD)
+	tween.parallel().tween_property(beer_node, "scale", Vector3(base_scale.x, base_scale.y * 0.5, base_scale.z), 0.2).set_trans(Tween.TRANS_QUAD)
+	tween.tween_callback(func(): spawn_particles("beer_spill", spill_pos))
+	tween.tween_property(beer_node, "scale", Vector3(base_scale.x, base_scale.y * 0.05, base_scale.z), 0.25).set_trans(Tween.TRANS_BACK)
+	tween.tween_callback(func():
+		if is_instance_valid(beer_node):
+			beer_node.visible = false
+			beer_node.scale = base_scale
+			beer_node.position.y = beer_node.get_meta("base_y", beer_y_offset)
+			beer_node.rotation_degrees.z = 0.0
+	)
+
+func _animate_beer_refill(beers_array: Array, remaining: int) -> void:
+	if remaining <= 0 or remaining > beers_array.size():
+		return
+	var beer_node = beers_array[remaining - 1]
+	if not is_instance_valid(beer_node):
+		return
+	beer_node.visible = true
+	var base_scale: Vector3 = beer_node.get_meta("base_scale", beer_scale)
+	beer_node.scale = Vector3(base_scale.x, base_scale.y * 0.05, base_scale.z)
+	beer_node.position.y = beer_node.get_meta("base_y", beer_y_offset)
+	var tween = create_tween()
+	tween.tween_property(beer_node, "scale", Vector3(base_scale.x, base_scale.y * 0.5, base_scale.z), 0.2).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(beer_node, "scale", base_scale, 0.25).set_trans(Tween.TRANS_BACK)
+	spawn_particles("beer_drink", beer_node.global_position + Vector3(0, 0.2, 0))
 
 func _on_player_eliminated(player_idx):
 	_show_message(GameManager.players_info[player_idx].name + " PASSED OUT!")
@@ -968,10 +1042,12 @@ func _on_player_gained_money(player_idx, _amount, total):
 	if player_idx == _human_ui_idx() and money_labels.size() > 0:
 		money_labels[0].text = "$" + str(total)
 
-func _on_ability_played(player_idx, ability_id):
+func _on_ability_played(player_idx, ability_id, target_idx: int = -1):
 	play_take_animation(player_idx)
 	var p_name = GameManager.players_info[player_idx].name
 	_show_message(p_name + " used " + ability_id.capitalize() + "!")
+	if ability_id == "jumpscare" and target_idx >= 0:
+		_on_jumpscare_triggered(player_idx, target_idx)
 	# Reset any hammer hover state when an ability is consumed
 	if _hovered_hammer_cabinet != null and _hovered_hammer_idx_board >= 0:
 		if is_instance_valid(_hovered_hammer_cabinet):
@@ -1790,16 +1866,25 @@ func _on_discard_clicked():
 
 func _on_scores_ready(results):
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	GameManager.play_sfx(_victory_fanfare_stream)
+	shake(0.35, 0.9)
+	trigger_glitch(0.45, 1.2)
+	if results.size() > 0 and player_pos_nodes.has(results[0].id):
+		spawn_particles("card_flip", player_pos_nodes[results[0].id].global_position + Vector3(0, 1.2, 0))
 	var overlay = CanvasLayer.new()
+	overlay.layer = 110
 	add_child(overlay)
 
 	var bg = ColorRect.new()
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.color = Color(0, 0, 0, 0.85)
+	bg.color = Color(0, 0, 0, 0.0)
 	overlay.add_child(bg)
+	var bg_tween = create_tween()
+	bg_tween.tween_property(bg, "color:a", 0.85, 0.5)
 
 	var center = CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.modulate.a = 0.0
 	overlay.add_child(center)
 
 	var vbox = VBoxContainer.new()
@@ -1807,10 +1892,16 @@ func _on_scores_ready(results):
 	center.add_child(vbox)
 
 	var title = Label.new()
-	title.text = "GAME OVER"
+	var winner_name = results[0].name if results.size() > 0 else "Nobody"
+	title.text = winner_name.to_upper() + " WINS!"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 64)
+	title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.2))
 	vbox.add_child(title)
+	var title_tween = create_tween()
+	title_tween.tween_property(center, "modulate:a", 1.0, 0.6).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	title.scale = Vector2(0.6, 0.6)
+	title_tween.parallel().tween_property(title, "scale", Vector2.ONE, 0.6).set_trans(Tween.TRANS_BACK)
 	var win_mode = Label.new()
 	var mode_text = "Lowest Score Wins" if GameManager.win_condition_lowest_wins else "Highest Score Wins"
 	win_mode.text = "(" + mode_text + ")"
@@ -1962,7 +2053,7 @@ func _unhandled_input(event):
 	_handle_game_keyboard_input(event)
 
 func _handle_game_keyboard_input(event: InputEvent) -> void:
-	# Q — end turn OR confirm dutch (states are mutually exclusive)
+	# Enter — end turn; C — confirm dutch (mutually exclusive states)
 	if event.is_action("game_end_turn") and end_turn_btn.visible and not end_turn_btn.disabled:
 		_on_end_turn_pressed()
 		get_viewport().set_input_as_handled()
@@ -1971,7 +2062,7 @@ func _handle_game_keyboard_input(event: InputEvent) -> void:
 		_on_confirm_dutch_pressed()
 		get_viewport().set_input_as_handled()
 
-	# forfeit dutch OR call dutch (states are mutually exclusive)
+	# F — forfeit dutch; D — call dutch (mutually exclusive states)
 	elif event.is_action("game_forfeit_dutch") and forfeit_dutch_btn.visible and not forfeit_dutch_btn.disabled:
 		_on_cancel_dutch_pressed()
 		get_viewport().set_input_as_handled()
@@ -2482,12 +2573,56 @@ func _on_jack_swap_resolved(p1: int, c1: int, p2: int, c2: int) -> void:
 
 
 func _on_all_cards_revealed():
-	# Flip all cards face-up for game over
 	_update_turn_lights(-1, true)
+	_play_victory_reveal_sequence()
+
+func _play_victory_reveal_sequence() -> void:
+	var cards_to_flip: Array = []
 	for pos_node in player_pos_nodes.values():
 		for c3d in pos_node.get_children():
 			if c3d is Card3D:
-				c3d.animate_flip(true)
+				cards_to_flip.append(c3d)
+	if cards_to_flip.is_empty():
+		return
+	Engine.time_scale = 0.35
+	for c3d in cards_to_flip:
+		if not is_instance_valid(c3d):
+			continue
+		c3d.animate_flip(true)
+		spawn_particles("card_flip", c3d.global_position)
+		await get_tree().create_timer(0.14, true, false, true).timeout
+	await get_tree().create_timer(0.35, true, false, true).timeout
+	Engine.time_scale = 1.0
+
+func _on_jumpscare_triggered(_caster_idx: int, target_idx: int) -> void:
+	var target_name = GameManager.players_info[target_idx].name if target_idx < GameManager.players_info.size() else "Player"
+	_show_message("JUMPSCARE! " + target_name + " got spooked!")
+	_play_jumpscare_vfx(target_idx)
+
+func _play_jumpscare_vfx(target_idx: int) -> void:
+	var flash_layer = CanvasLayer.new()
+	flash_layer.layer = 120
+	add_child(flash_layer)
+	var flash = ColorRect.new()
+	flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	flash.color = Color(1.0, 1.0, 1.0, 0.95)
+	flash_layer.add_child(flash)
+	var flash_tween = create_tween()
+	flash_tween.tween_property(flash, "color:a", 0.0, 0.12).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	flash_tween.tween_callback(flash_layer.queue_free)
+	shake(0.65, 0.45)
+	trigger_glitch(1.0, 0.9)
+	if player_pos_nodes.has(target_idx) and is_instance_valid(player_pos_nodes[target_idx]):
+		spawn_particles("jumpscare", player_pos_nodes[target_idx].global_position + Vector3(0, 1.0, 0))
+		var hand = player_hands[target_idx] if target_idx < player_hands.size() else []
+		if not hand.is_empty():
+			var scare_card = hand[randi() % hand.size()]
+			if is_instance_valid(scare_card):
+				scare_card.animate_flip(true)
+				await get_tree().create_timer(0.6).timeout
+				if is_instance_valid(scare_card):
+					scare_card.animate_flip(false)
 
 func _on_dutch_called(player_idx: int):
 	var player_name = GameManager.players_info[player_idx].name
@@ -2656,6 +2791,31 @@ func spawn_particles(type: String, global_pos: Vector3):
 			grad.set_color(0, Color(0.95, 0.9, 0.7, 0.9))
 			grad.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
 			mesh.size = Vector2(0.12, 0.12)
+
+		"beer_spill":
+			particles.amount = 45
+			particles.lifetime = 1.0
+			particles.spread = 70.0
+			particles.direction = Vector3(0, -0.3, 0.6)
+			particles.gravity = Vector3(0, -2.5, 0)
+			particles.initial_velocity_min = 0.8
+			particles.initial_velocity_max = 2.2
+			particles.color = Color(0.85, 0.65, 0.15, 0.85)
+			grad.set_color(0, Color(0.9, 0.7, 0.2, 0.9))
+			grad.set_color(1, Color(0.5, 0.35, 0.05, 0.0))
+			mesh.size = Vector2(0.1, 0.1)
+
+		"jumpscare":
+			particles.amount = 55
+			particles.lifetime = 0.5
+			particles.spread = 180.0
+			particles.gravity = Vector3(0, -1.5, 0)
+			particles.initial_velocity_min = 3.0
+			particles.initial_velocity_max = 7.0
+			particles.color = Color(1.0, 0.15, 0.15, 1.0)
+			grad.set_color(0, Color(1.0, 0.2, 0.2, 1.0))
+			grad.set_color(1, Color(0.3, 0.0, 0.0, 0.0))
+			mesh.size = Vector2(0.16, 0.16)
 			
 		"ability_buy":
 			particles.amount = 20
@@ -2749,6 +2909,43 @@ func _generate_bell_stream() -> AudioStreamWAV:
 		var val = int(sample * 32767.0)
 		byte_array.encode_s16(s * 2, val)
 		
+	stream.data = byte_array
+	return stream
+
+func _generate_victory_fanfare_stream() -> AudioStreamWAV:
+	var stream = AudioStreamWAV.new()
+	stream.mix_rate = 44100
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.stereo = false
+
+	var mix_rate = 44100.0
+	var duration = 2.4
+	var total_samples = int(mix_rate * duration)
+	var byte_array = PackedByteArray()
+	byte_array.resize(total_samples * 2)
+
+	var notes = [
+		{"freq": 523.25, "start": 0.0, "len": 0.35, "amp": 0.4},
+		{"freq": 659.25, "start": 0.28, "len": 0.35, "amp": 0.42},
+		{"freq": 783.99, "start": 0.56, "len": 0.45, "amp": 0.45},
+		{"freq": 1046.5, "start": 0.95, "len": 0.9, "amp": 0.5},
+		{"freq": 1318.5, "start": 1.55, "len": 0.7, "amp": 0.38},
+	]
+
+	for s in range(total_samples):
+		var t = s / mix_rate
+		var sample = 0.0
+		for note in notes:
+			var note_t = t - note.start
+			if note_t >= 0.0 and note_t < note.len:
+				var env = exp(-3.5 * note_t) * (1.0 - note_t / note.len)
+				sample += note.amp * sin(2.0 * PI * note.freq * note_t) * env
+				sample += note.amp * 0.25 * sin(2.0 * PI * note.freq * 2.0 * note_t) * env
+		if t > duration - 0.2:
+			sample *= (duration - t) / 0.2
+		sample = clamp(sample, -1.0, 1.0)
+		byte_array.encode_s16(s * 2, int(sample * 32767.0))
+
 	stream.data = byte_array
 	return stream
 
