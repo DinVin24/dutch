@@ -45,21 +45,10 @@ func _ready() -> void:
 	_gold_mat.roughness = 0.3
 	_gold_mat.metallic = 0.9
 
-	# Find the main mesh group inside the instantiated GLB
-	var mesh_group = find_child("Simple Wooden Drawer Table Type B Wood 01_0", true, false)
-	if not mesh_group:
-		push_error("Cabinet3D: Could not find main wood mesh group!")
+	_shelves = _resolve_shelves()
+	if _shelves.is_empty():
+		push_error("Cabinet3D: Could not find drawer shelves in cabinet model!")
 		return
-
-	var r1 = mesh_group.get_node_or_null("raft1")
-	var r2 = mesh_group.get_node_or_null("raft2")
-	var r3 = mesh_group.get_node_or_null("raft3")
-
-	if not (r1 and r2 and r3):
-		push_error("Cabinet3D: One or more drawer mesh instances were not found!")
-		return
-
-	_shelves = [r1, r2, r3]
 
 	for i in range(3):
 		var shelf = _shelves[i]
@@ -78,6 +67,26 @@ func _ready() -> void:
 		col_shape.position = Vector3(0.0, 0.006, -0.117)
 		area.add_child(col_shape)
 		area.set_meta("shelf_index", i)
+
+func _resolve_shelves() -> Array[Node3D]:
+	var mesh_group := find_child("Simple Wooden Drawer Table Type B Wood 01_0", true, false)
+	if mesh_group == null:
+		for child in get_children():
+			if "Wood 01" in child.name:
+				mesh_group = child
+				break
+	if mesh_group == null:
+		return []
+
+	var shelves: Array[Node3D] = []
+	for shelf_name in ["raft1", "raft2", "raft3"]:
+		var shelf: Node3D = mesh_group.get_node_or_null(shelf_name) as Node3D
+		if shelf == null:
+			shelf = find_child(shelf_name, true, false) as Node3D
+		if shelf == null:
+			return []
+		shelves.append(shelf)
+	return shelves
 
 ## Returns true if the shelf at the given index is open
 func is_shelf_open(index: int) -> bool:
@@ -243,7 +252,7 @@ func update_hammers(abilities: Array, p_idx: int = -1) -> void:
 	if _shelves.size() < 3:
 		return
 
-	var hammer_scene = load("res://assets/models/medium_poly_hammer.glb")
+	var hammer_scene = load("res://assets/models/puteri/medium_poly_hammer.glb")
 	if not hammer_scene:
 		push_error("Cabinet3D: Could not load hammer model!")
 		return

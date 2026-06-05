@@ -162,6 +162,7 @@ func _ready():
 		var cab = _cabinets[p_idx]
 		if is_instance_valid(cab):
 			cab.set_meta("player_index", p_idx)
+	_attach_cabinets_to_seats()
 	_bell_stream = _generate_bell_stream()
 	_victory_fanfare_stream = _generate_victory_fanfare_stream()
 	print("Game Board 3D: Ready. Connecting signals...")
@@ -304,12 +305,43 @@ func _apply_local_player_seat_rotation() -> void:
 	if is_instance_valid(camera):
 		camera.position = _effective_camera_base_local()
 
+func _attach_cabinets_to_seats() -> void:
+	# Cabinets were placed behind the camera; anchor each one beside its player seat.
+	const OFFSETS := {
+		0: Vector3(-2.5, -1.1, 0.9),
+		1: Vector3(0.9, -1.1, -2.5),
+		2: Vector3(2.5, -1.1, -0.9),
+		3: Vector3(-0.9, -1.1, 2.5),
+	}
+	const LOCAL_SCALE := Vector3(4.5, 4.0, 5.0)
+	const LOCAL_ROT := Vector3(0.0, 90.0, 0.0)
+
+	for p_idx in _cabinets:
+		var cab: Node3D = _cabinets[p_idx]
+		var seat: Node3D = player_pos_nodes.get(p_idx)
+		if not is_instance_valid(cab):
+			push_warning("GameBoard3D: cabinet missing for P%d" % p_idx)
+			continue
+		if not is_instance_valid(seat):
+			continue
+		if cab.get_parent() != seat:
+			seat.add_child(cab)
+		cab.position = OFFSETS.get(p_idx, Vector3.ZERO)
+		cab.rotation_degrees = LOCAL_ROT
+		cab.scale = LOCAL_SCALE
+		cab.visible = true
+
 func _configure_visible_player_seats(n: int) -> void:
+	var visible_count := clampi(n, 1, 4)
 	for seat in range(4):
+		var is_active := seat < visible_count
 		if player_pos_nodes.has(seat):
-			player_pos_nodes[seat].visible = seat < clampi(n, 1, 4)
+			player_pos_nodes[seat].visible = is_active
 		if player_avatars.has(seat) and is_instance_valid(player_avatars[seat]):
-			player_avatars[seat].visible = seat < clampi(n, 1, 4)
+			player_avatars[seat].visible = is_active
+		var cab: Node3D = _cabinets.get(seat)
+		if is_instance_valid(cab):
+			cab.visible = is_active
 
 func _on_multiplayer_sync_applied() -> void:
 	var new_state: int = int(GameManager.current_state)
