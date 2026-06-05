@@ -2143,6 +2143,49 @@ func _process(delta: float) -> void:
 		# First-Person Camera and Head tracking for the local human player
 		var first_person_active = false
 		var local_p_idx = _human_ui_idx()
+		
+		# Ensure correct head scaling and shadow attachments for all avatars
+		for p_idx in player_avatars:
+			var avatar = player_avatars[p_idx]
+			if is_instance_valid(avatar):
+				var skeleton = avatar.get_node_or_null("Armature/Skeleton3D") as Skeleton3D
+				if skeleton:
+					var head_idx = skeleton.find_bone("mixamorig_Head")
+					var neck_idx = skeleton.find_bone("mixamorig_Neck")
+					if p_idx == local_p_idx:
+						# Local player: hide head/neck to prevent clipping, and add shadow helper
+						if head_idx != -1:
+							skeleton.set_bone_pose_scale(head_idx, Vector3(0.0001, 0.0001, 0.0001))
+						if neck_idx != -1:
+							skeleton.set_bone_pose_scale(neck_idx, Vector3(0.0001, 0.0001, 0.0001))
+						
+						if not skeleton.has_node("HeadShadowAttachment"):
+							var attachment = BoneAttachment3D.new()
+							attachment.name = "HeadShadowAttachment"
+							attachment.bone_name = "mixamorig_Spine2"
+							skeleton.add_child(attachment)
+							
+							var shadow_mesh = MeshInstance3D.new()
+							shadow_mesh.name = "HeadShadowMesh"
+							var sphere = SphereMesh.new()
+							sphere.radius = 0.22
+							sphere.height = 0.44
+							shadow_mesh.mesh = sphere
+							shadow_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+							# Position where the head should be relative to the chest bone
+							shadow_mesh.position = Vector3(0.0, 0.45, 0.0)
+							attachment.add_child(shadow_mesh)
+					else:
+						# Remote players: restore head/neck visibility, remove shadow helper
+						if head_idx != -1:
+							skeleton.set_bone_pose_scale(head_idx, Vector3(1.0, 1.0, 1.0))
+						if neck_idx != -1:
+							skeleton.set_bone_pose_scale(neck_idx, Vector3(1.0, 1.0, 1.0))
+						
+						var attachment = skeleton.get_node_or_null("HeadShadowAttachment")
+						if attachment:
+							attachment.queue_free()
+
 		if player_avatars.has(local_p_idx) and is_instance_valid(player_avatars[local_p_idx]):
 			var avatar = player_avatars[local_p_idx]
 			var skeleton = avatar.get_node_or_null("Armature/Skeleton3D") as Skeleton3D
@@ -2150,17 +2193,14 @@ func _process(delta: float) -> void:
 				var head_idx = skeleton.find_bone("mixamorig_Head")
 				if head_idx != -1:
 					first_person_active = true
-					# 1. Keep local player's head visible (scale Vector3(1,1,1))
-					skeleton.set_bone_pose_scale(head_idx, Vector3(1.0, 1.0, 1.0))
 					
-					# 2. Rotate body stanga-dreapta based on camera yaw (smooth_yaw)
-					# Damp body rotation to 30% of camera yaw (clamped to -20 to +20 degrees) so the body turns less
+					# Rotate body Y (yaw) based on camera Y rotation with 70% damping (clamped to -60 to 60)
 					var smooth_yaw = camera.rotation.y - _base_camera_rotation.y
 					var smooth_pitch = camera.rotation.x - _base_camera_rotation.x
-					var body_yaw = clamp(smooth_yaw * 0.3, deg_to_rad(-20.0), deg_to_rad(20.0))
+					var body_yaw = clamp(smooth_yaw * 0.7, deg_to_rad(-60.0), deg_to_rad(60.0))
 					avatar.rotation.y = deg_to_rad(90.0) + body_yaw
 					
-					# 3. Rotate head to follow camera look direction (relative to body)
+					# Rotate head bone relative to the body's yaw rotation and pitch
 					var head_local_yaw = smooth_yaw - body_yaw
 					var head_rot = Quaternion.from_euler(Vector3(-smooth_pitch, -head_local_yaw, 0.0))
 					skeleton.set_bone_pose_rotation(head_idx, head_rot)
@@ -2168,15 +2208,15 @@ func _process(delta: float) -> void:
 					# Force skeleton update to get correct global bone pose in the same frame
 					skeleton.force_update_all_bone_transforms()
 					
-					# 4. Align camera with the head bone, offset forward (0.32) and up (0.08) + shake
+					# Align camera with the head bone + eye offset + shake (near clip = 0.05 to avoid card clipping)
 					if is_instance_valid(camera):
-						camera.near = 0.25 # Clip out local player's head/face meshes
+						camera.near = 0.05
 						var head_global_pos = skeleton.global_transform * skeleton.get_bone_global_pose(head_idx).origin
-						var forward = -camera.global_transform.basis.z.normalized()
-						var up = camera.global_transform.basis.y.normalized()
-						var target_camera_pos = head_global_pos + forward * 0.32 + up * 0.08 + shake_offset
+						var forward = Vector3(-sin(camera.rotation.y), 0.0, -cos(camera.rotation.y)).normalized()
+						var up = Vector3.UP
+						var target_camera_pos = head_global_pos + forward * 0.05 + up * 0.05 + shake_offset
 						
-						# Direct assignment to prevent lag between camera and head bone, eliminating skull clipping
+						# Direct assignment to prevent relative lag
 						camera.global_position = target_camera_pos
 						_camera_initialized = true
 
