@@ -18,6 +18,16 @@ extends Node3D
 var player_lights = {}
 var _bell_stream: AudioStreamWAV = null
 var _victory_fanfare_stream: AudioStreamWAV = null
+var _victory_results_pending: Array = []
+var _victory_cinematic_active: bool = false
+var _victory_overlay_layer: CanvasLayer = null
+
+const VICTORY_EMOTES := [
+	{"id": "gg", "label": "GG"},
+	{"id": "laugh", "label": ":)"},
+	{"id": "shock", "label": ":O"},
+	{"id": "chicken", "label": "Chicken"},
+]
 
 var bot_controller: BotController = null
 var action_panel: PanelContainer
@@ -1995,15 +2005,50 @@ func _on_discard_clicked():
 		play_take_animation(GameManager.local_player_idx)
 		_send_action("discard_drawn")
 
-func _on_scores_ready(results):
+func _on_scores_ready(results: Array) -> void:
+	_victory_results_pending = results
+	if not _victory_cinematic_active:
+		_run_victory_cinematic()
+
+func _run_victory_cinematic() -> void:
+	if _victory_cinematic_active:
+		return
+	_victory_cinematic_active = true
+	_victory_cinematic_async()
+
+func _victory_cinematic_async() -> void:
+	for _i in range(60):
+		if not _victory_results_pending.is_empty():
+			break
+		await get_tree().process_frame
+
+	var winner_id: int = 0
+	if _victory_results_pending.size() > 0:
+		winner_id = int(_victory_results_pending[0].id)
+
+	await _play_victory_reveal_sequence(winner_id)
+
+	if not _victory_results_pending.is_empty():
+		_show_victory_overlay(_victory_results_pending)
+
+	_victory_cinematic_active = false
+
+func _show_victory_overlay(results: Array) -> void:
+	if is_instance_valid(_victory_overlay_layer):
+		_victory_overlay_layer.queue_free()
+	_victory_overlay_layer = null
+
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	GameManager.play_sfx(_victory_fanfare_stream)
 	shake(0.35, 0.9)
 	trigger_glitch(0.45, 1.2)
-	if results.size() > 0 and player_pos_nodes.has(results[0].id):
-		spawn_particles("card_flip", player_pos_nodes[results[0].id].global_position + Vector3(0, 1.2, 0))
+	var winner_id: int = int(results[0].id) if results.size() > 0 else 0
+	if player_pos_nodes.has(winner_id):
+		spawn_particles("card_flip", player_pos_nodes[winner_id].global_position + Vector3(0, 1.2, 0))
+		play_take_animation(winner_id)
+
 	var overlay = CanvasLayer.new()
 	overlay.layer = 110
+	_victory_overlay_layer = overlay
 	add_child(overlay)
 
 	var bg = ColorRect.new()
@@ -2040,6 +2085,24 @@ func _on_scores_ready(results):
 	win_mode.add_theme_font_size_override("font_size", 32)
 	win_mode.modulate = Color(1.0, 0.8, 0.0) # Golden yellow
 	vbox.add_child(win_mode)
+
+	var emote_hint := Label.new()
+	emote_hint.text = "Celebrate!"
+	emote_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	emote_hint.add_theme_font_size_override("font_size", 22)
+	emote_hint.modulate = Color(0.7, 0.95, 1.0)
+	vbox.add_child(emote_hint)
+
+	var emote_row := HBoxContainer.new()
+	emote_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	emote_row.add_theme_constant_override("separation", 14)
+	vbox.add_child(emote_row)
+	for emote in VICTORY_EMOTES:
+		var emote_btn := Button.new()
+		emote_btn.text = emote.label
+		emote_btn.pressed.connect(_play_victory_emote.bind(winner_id, emote.id))
+		emote_row.add_child(emote_btn)
+
 	for i in range(results.size()):
 		var entry = results[i]
 		var l = Label.new()
@@ -2712,27 +2775,81 @@ func _on_jack_swap_resolved(p1: int, c1: int, p2: int, c2: int) -> void:
 	_update_hand_visuals(p2)
 
 
-func _on_all_cards_revealed():
+func _on_all_cards_revealed() -> void:
 	_update_turn_lights(-1, true)
-	_play_victory_reveal_sequence()
+	if not _victory_cinematic_active:
+		_run_victory_cinematic()
 
-func _play_victory_reveal_sequence() -> void:
-	var cards_to_flip: Array = []
-	for pos_node in player_pos_nodes.values():
-		for c3d in pos_node.get_children():
-			if c3d is Card3D:
-				cards_to_flip.append(c3d)
+func _build_victory_reveal_queue(winner_id: int) -> Array:
+	var others: Array = []
+	var winner_cards: Array = []
+	for p_idx in range(GameManager.num_players):
+		if p_idx >= player_hands.size():
+			continue
+		for c3d in player_hands[p_idx]:
+			if not is_instance_valid(c3d) or not (c3d is Card3D):
+				continue
+			if c3d.data != null and c3d.data.is_face_up:
+				continue
+			if p_idx == winner_id:
+				winner_cards.append(c3d)
+			else:
+				others.append(c3d)
+	if others.is_empty() and winner_cards.is_empty():
+		for pos_node in player_pos_nodes.values():
+			for c3d in pos_node.get_children():
+				if c3d is Card3D and (c3d.data == null or not c3d.data.is_face_up):
+					others.append(c3d)
+	return others + winner_cards
+
+func _play_victory_reveal_sequence(winner_id: int = 0) -> void:
+	var cards_to_flip: Array = _build_victory_reveal_queue(winner_id)
 	if cards_to_flip.is_empty():
+		Engine.time_scale = 1.0
 		return
-	Engine.time_scale = 0.35
-	for c3d in cards_to_flip:
+
+	Engine.time_scale = 0.4
+	var last_idx: int = cards_to_flip.size() - 1
+	for i in range(cards_to_flip.size()):
+		var c3d: Card3D = cards_to_flip[i]
 		if not is_instance_valid(c3d):
 			continue
+		var is_climax := i == last_idx
+		if is_climax:
+			Engine.time_scale = 0.12
+			GameManager.play_sfx(_victory_fanfare_stream)
+			shake(0.25, 0.55)
+			trigger_glitch(0.35, 0.8)
+			if player_pos_nodes.has(winner_id):
+				spawn_particles("dutch", player_pos_nodes[winner_id].global_position + Vector3(0, 1.0, 0))
+		c3d.is_being_peeked = true
 		c3d.animate_flip(true)
-		spawn_particles("card_flip", c3d.global_position)
-		await get_tree().create_timer(0.14, true, false, true).timeout
-	await get_tree().create_timer(0.35, true, false, true).timeout
+		spawn_particles("card_flip", c3d.global_position + Vector3(0, 0.15, 0))
+		var delay := 0.55 if is_climax else 0.16
+		await get_tree().create_timer(delay, true, false, true).timeout
+		c3d.is_being_peeked = false
+
+	await get_tree().create_timer(0.45, true, false, true).timeout
 	Engine.time_scale = 1.0
+
+func _play_victory_emote(winner_id: int, emote_id: String) -> void:
+	if winner_id < 0 or winner_id >= 4:
+		return
+	play_take_animation(winner_id)
+	var seat := _get_safe_player_pos(winner_id)
+	if seat:
+		var burst_pos := seat.global_position + Vector3(0, 1.0, 0)
+		match emote_id:
+			"chicken":
+				spawn_particles("ability_buy", burst_pos)
+			"shock":
+				spawn_particles("jumpscare", burst_pos)
+				trigger_glitch(0.2, 0.25)
+			"laugh":
+				spawn_particles("beer_drink", burst_pos)
+			_:
+				spawn_particles("turn_change", burst_pos)
+	shake(0.12, 0.2)
 
 func _on_jumpscare_triggered(_caster_idx: int, target_idx: int) -> void:
 	var target_name = GameManager.players_info[target_idx].name if target_idx < GameManager.players_info.size() else "Player"
@@ -3079,11 +3196,13 @@ func _generate_victory_fanfare_stream() -> AudioStreamWAV:
 	byte_array.resize(total_samples * 2)
 
 	var notes = [
+		{"freq": 392.0, "start": 0.0, "len": 0.3, "amp": 0.28},
 		{"freq": 523.25, "start": 0.0, "len": 0.35, "amp": 0.4},
 		{"freq": 659.25, "start": 0.28, "len": 0.35, "amp": 0.42},
 		{"freq": 783.99, "start": 0.56, "len": 0.45, "amp": 0.45},
-		{"freq": 1046.5, "start": 0.95, "len": 0.9, "amp": 0.5},
-		{"freq": 1318.5, "start": 1.55, "len": 0.7, "amp": 0.38},
+		{"freq": 1046.5, "start": 0.95, "len": 0.95, "amp": 0.52},
+		{"freq": 1318.5, "start": 1.55, "len": 0.75, "amp": 0.4},
+		{"freq": 1568.0, "start": 1.85, "len": 0.45, "amp": 0.32},
 	]
 
 	for s in range(total_samples):

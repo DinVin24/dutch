@@ -145,10 +145,8 @@ func _verify_victory() -> void:
 	_log("[ACTION] trigger victory reveal + score overlay (game over flow)")
 	var results: Array = gm._calculate_scores()
 	gm.all_cards_revealed.emit()
-	await _board._play_victory_reveal_sequence()
-	gm.play_sfx(_board._victory_fanfare_stream)
-	_board._on_scores_ready(results)
-	await create_timer(1.0).timeout
+	gm.scores_ready.emit(results)
+	await create_timer(3.5).timeout
 
 	var overlay_found := false
 	var winner_label := ""
@@ -179,6 +177,17 @@ func _verify_victory() -> void:
 		_pass("slow-mo restored after reveal")
 	else:
 		_fail("slow_mo_restore", "time_scale=%s" % str(Engine.time_scale))
+
+	var emote_found := false
+	if _board._victory_overlay_layer:
+		for node in _flatten_controls(_board._victory_overlay_layer):
+			if node is Button and node.text == "GG":
+				emote_found = true
+				break
+	if emote_found:
+		_pass("victory emote slot visible")
+	else:
+		_fail("victory_emote", "no emote buttons on overlay")
 
 func _flatten_controls(node: Node) -> Array:
 	var out: Array = []
