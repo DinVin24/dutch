@@ -81,6 +81,7 @@ var _mp_initial_peek_done: Dictionary = {}
 var _mp_sync_seq: int = 0
 var _mp_last_applied_sync_seq: int = -1
 var _mp_game_over_scores_applied: bool = false
+var _mp_sync_prev_cur: int = -1
 var mp_sync_lag_ms: int = 0
 var mp_connection_status: String = "ok"
 var turn_direction: int = 1 # 1 for clockwise, -1 for counter-clockwise (Uno Reverse)
@@ -228,6 +229,7 @@ func initialize_game(p_count: int = 4):
 	_mp_sync_seq = 0
 	_mp_last_applied_sync_seq = -1
 	_mp_game_over_scores_applied = false
+	_mp_sync_prev_cur = -1
 	mp_sync_lag_ms = 0
 	mp_connection_status = "ok"
 	players_info.clear()
@@ -1213,6 +1215,8 @@ func _apply_mp_sync_payload(payload: Dictionary) -> void:
 		if _mp_last_applied_sync_seq != -1 and incoming_seq > _mp_last_applied_sync_seq + 1:
 			print("GameManager: Sync sequence gap detected prev=%d new=%d" % [_mp_last_applied_sync_seq, incoming_seq])
 		_mp_last_applied_sync_seq = incoming_seq
+	var prev_cur_before_apply := current_player_index
+	var prev_state_before_apply := current_state
 	num_players = int(payload.get("num", 4))
 	current_state = int(payload.get("state", 0)) as GameState
 	current_player_index = int(payload.get("cur", 0))
@@ -1292,8 +1296,12 @@ func _apply_mp_sync_payload(payload: Dictionary) -> void:
 			var winner_id: int = synced_scores[0].get("id", -1) if synced_scores[0] is Dictionary else -1
 			game_over.emit(winner_id)
 			scores_ready.emit(synced_scores)
-	if current_state == GameState.TURN_START_DRAW:
+	elif current_state != GameState.GAME_OVER and (
+		current_player_index != prev_cur_before_apply
+		or (current_state == GameState.TURN_START_DRAW and prev_state_before_apply != GameState.TURN_START_DRAW)
+	):
 		turn_started.emit(current_player_index)
+	_mp_sync_prev_cur = current_player_index
 
 func _update_mp_connection_status() -> void:
 	if not is_multiplayer:

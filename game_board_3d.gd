@@ -133,7 +133,8 @@ var _last_sync_diag := {
 	"pending": false,
 	"dutch_i": -1,
 	"abilities": [[], [], [], []],
-	"beers": [3, 3, 3, 3]
+	"beers": [3, 3, 3, 3],
+	"hand_sizes": [0, 0, 0, 0]
 }
 
 func _ready():
@@ -359,15 +360,26 @@ func _on_multiplayer_sync_applied() -> void:
 		if money_labels.size() > 0:
 			money_labels[0].text = "$" + str(GameManager.players_info[local_idx].money)
 	
-	# --- Bug fix: Synchronize beers and play drinking effect if decreased ---
+	# --- Synchronize beers: drink / refill animations on all peers ---
 	var prev_beers: Array = _last_sync_diag.get("beers", [3, 3, 3, 3])
 	for pi in range(GameManager.num_players):
 		var cur_beers = GameManager.players_info[pi].beers
 		var old_b = prev_beers[pi] if pi < prev_beers.size() else 3
 		if old_b != -1 and cur_beers < old_b:
 			_on_player_drank_beer(pi, cur_beers)
+		elif old_b != -1 and cur_beers > old_b:
+			var beers_array = player_beers_nodes[pi] if pi < player_beers_nodes.size() else []
+			_animate_beer_refill(beers_array, cur_beers)
 		else:
 			_sync_beer_visuals(pi, cur_beers)
+
+	# --- Penalty/jump-in hand growth: force relayout on clients ---
+	var prev_hand_sizes: Array = _last_sync_diag.get("hand_sizes", [0, 0, 0, 0])
+	for pi in range(GameManager.num_players):
+		var new_size: int = GameManager.players_info[pi].hand.size()
+		var old_size: int = prev_hand_sizes[pi] if pi < prev_hand_sizes.size() else 0
+		if new_size > old_size and old_size > 0:
+			_schedule_hand_relayout(pi)
 	
 	# --- Bug 4: Detect ability changes and fire local visual feedback ---
 	# Only diff if we have a prior snapshot (skip the very first sync to avoid spurious events)
@@ -421,6 +433,13 @@ func _on_multiplayer_sync_applied() -> void:
 		else:
 			beers_snapshot.append(3)
 	_last_sync_diag["beers"] = beers_snapshot
+	var hand_sizes_snapshot: Array = []
+	for pi in range(4):
+		if pi < GameManager.players_info.size():
+			hand_sizes_snapshot.append(GameManager.players_info[pi].hand.size())
+		else:
+			hand_sizes_snapshot.append(0)
+	_last_sync_diag["hand_sizes"] = hand_sizes_snapshot
 	_update_draw_arrow_visibility()
 
 func _create_hud_ui():
@@ -1189,8 +1208,8 @@ func _play_turn_transition_vfx(player_idx: int) -> void:
 		av_tween.tween_property(avatar, "scale", av_scale, 0.35).set_trans(Tween.TRANS_ELASTIC)
 
 	trigger_glitch(0.2, 0.45)
-	if not GameManager.is_multiplayer:
-		shake(0.08, 0.25)
+	var shake_amp := 0.06 if GameManager.is_multiplayer else 0.08
+	shake(shake_amp, 0.25)
 
 func _update_draw_arrow_visibility():
 	if is_instance_valid(draw_arrow):
@@ -2022,6 +2041,11 @@ func _victory_cinematic_async() -> void:
 			break
 		await get_tree().process_frame
 
+	# Let multiplayer_sync_applied finish hand visuals before the reveal.
+	if GameManager.is_multiplayer:
+		await get_tree().process_frame
+		await get_tree().process_frame
+
 	var winner_id: int = 0
 	if _victory_results_pending.size() > 0:
 		winner_id = int(_victory_results_pending[0].id)
@@ -2788,8 +2812,6 @@ func _build_victory_reveal_queue(winner_id: int) -> Array:
 			continue
 		for c3d in player_hands[p_idx]:
 			if not is_instance_valid(c3d) or not (c3d is Card3D):
-				continue
-			if c3d.data != null and c3d.data.is_face_up:
 				continue
 			if p_idx == winner_id:
 				winner_cards.append(c3d)
