@@ -4,7 +4,11 @@
 [ext_resource type="Shader" uid="uid://chcpger88sefc" path="res://shaders/crt_glitch.gdshader" id="2_shader"]
 [ext_resource type="PackedScene" uid="uid://dwowse5ksiil0" path="res://assets/models/table.glb" id="3_table"]
 [ext_resource type="PackedScene" uid="uid://dmsi4kgr88r2u" path="res://assets/models/background.glb" id="4_background"]
-[ext_resource type="Shader" path="res://shaders/turn_indicator.gdshader" id="5_turn_indicator_shader"]
+[ext_resource type="Shader" uid="uid://3pi0jmdhmstq" path="res://shaders/turn_indicator.gdshader" id="5_turn_indicator_shader"]
+[ext_resource type="Script" uid="uid://d3y5qchx75t4t" path="res://cabinet_3d.gd" id="6_cabinet_script"]
+[ext_resource type="PackedScene" uid="uid://cijucteykpjh8" path="res://assets/models/wooden_chair.glb" id="7_3uego"]
+[ext_resource type="PackedScene" uid="uid://dklfyff4gtih" path="res://assets/models/dulapu_la_proiect.glb" id="7_5jmpy"]
+[ext_resource type="PackedScene" uid="uid://goi1s477w7ob" path="res://assets/models/puteri/medium_poly_hammer.glb" id="9_64ibd"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -25,28 +29,6 @@ volumetric_fog_albedo = Color(0.05, 0.05, 0.05, 1)
 [sub_resource type="BoxShape3D" id="BoxShape3D_Deck"]
 size = Vector3(1.2, 0.5, 1.6)
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_CRT"]
-shader = ExtResource("2_shader")
-shader_parameter/scanline_count = 360.0
-shader_parameter/scanline_intensity = 0.05
-shader_parameter/aberration_amount = 0.4
-shader_parameter/vignette_intensity = 0.3
-shader_parameter/curvature = 1.8
-shader_parameter/glitch_intensity = 0.0
-shader_parameter/time = 0.0
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_TurnIndicator"]
-shader = ExtResource("5_turn_indicator_shader")
-shader_parameter/active_player_index = -1
-shader_parameter/active_color = Color(0.9, 0.1, 0.1, 0.95)
-shader_parameter/inactive_color = Color(0.08, 0.08, 0.1, 0.4)
-shader_parameter/inner_radius = 0.25
-shader_parameter/outer_radius = 0.85
-
-[sub_resource type="PlaneMesh" id="PlaneMesh_TurnIndicator"]
-material = SubResource("ShaderMaterial_TurnIndicator")
-size = Vector2(2.0, 2.0)
-
 [sub_resource type="StandardMaterial3D" id="StandardMaterial_ArrowNeon"]
 shading_mode = 2
 albedo_color = Color(0, 1, 1, 1)
@@ -65,6 +47,28 @@ bottom_radius = 0.12
 height = 0.25
 radial_segments = 16
 
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_TurnIndicator"]
+render_priority = 0
+shader = ExtResource("5_turn_indicator_shader")
+shader_parameter/active_player_index = -1
+shader_parameter/active_color = Color(0.9, 0.1, 0.1, 0.95)
+shader_parameter/inactive_color = Color(0.08, 0.08, 0.1, 0.4)
+shader_parameter/inner_radius = 0.25
+shader_parameter/outer_radius = 0.85
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_TurnIndicator"]
+material = SubResource("ShaderMaterial_TurnIndicator")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_CRT"]
+shader = ExtResource("2_shader")
+shader_parameter/scanline_count = 360.0
+shader_parameter/scanline_intensity = 0.05
+shader_parameter/aberration_amount = 0.4
+shader_parameter/vignette_intensity = 0.3
+shader_parameter/curvature = 1.8
+shader_parameter/glitch_intensity = 0.0
+shader_parameter/time = 0.0
+
 [node name="GameBoard3D" type="Node3D" unique_id=1162522278]
 script = ExtResource("1_script")
 beer_scale = Vector3(4.5, 4.5, 4.5)
@@ -75,37 +79,37 @@ beer_y_offset = 0.75
 environment = SubResource("Environment_1")
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=701076918]
-transform = Transform3D(1, 0, 0, 0, 0.6354183, 0.77216816, 0, -0.77216816, 0.6354183, 0, 7.8, 8.5)
+transform = Transform3D(1, 0, 0, 0, 0.91904604, 0.3941503, 0, -0.3941503, 0.91904604, 0, 3.6862063, 8.394507)
 fov = 60.0
 
 [node name="Table" parent="." unique_id=1261982012 instance=ExtResource("3_table")]
-transform = Transform3D(24.131344, 0, 0, 0, 3.0000007, 0, 0, 0, 24.131344, 0, -1.6886296, 0)
+transform = Transform3D(19, 0, 0, 0, 2.362, 0, 0, 0, 19, 0, -1.6886296, 0)
 
 [node name="Background" parent="." unique_id=2000000000 instance=ExtResource("4_background")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
 
 [node name="DeckArea" type="Node3D" parent="." unique_id=650630562]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0.1, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, -0.3, 0)
 
 [node name="Area3D" type="Area3D" parent="DeckArea" unique_id=2027730407]
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="DeckArea/Area3D" unique_id=213724805]
 shape = SubResource("BoxShape3D_Deck")
 
-[node name="DrawIndicatorArrow" type="Node3D" parent="DeckArea"]
+[node name="DrawIndicatorArrow" type="Node3D" parent="DeckArea" unique_id=1930883092]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
 visible = false
 
-[node name="Shaft" type="MeshInstance3D" parent="DeckArea/DrawIndicatorArrow"]
+[node name="Shaft" type="MeshInstance3D" parent="DeckArea/DrawIndicatorArrow" unique_id=645215501]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 0)
 mesh = SubResource("CylinderMesh_ArrowShaft")
 
-[node name="Head" type="MeshInstance3D" parent="DeckArea/DrawIndicatorArrow"]
+[node name="Head" type="MeshInstance3D" parent="DeckArea/DrawIndicatorArrow" unique_id=9331443]
 transform = Transform3D(1, 0, 0, 0, -1, 8.74228e-08, 0, -8.74228e-08, -1, 0, -0.125, 0)
 mesh = SubResource("CylinderMesh_ArrowHead")
 
 [node name="DiscardArea" type="Node3D" parent="." unique_id=453331196]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0.1, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, -0.3, 0)
 
 [node name="Area3D" type="Area3D" parent="DiscardArea" unique_id=1736436075]
 
@@ -115,20 +119,20 @@ shape = SubResource("BoxShape3D_Deck")
 [node name="PlayerPositions" type="Node3D" parent="." unique_id=556924132]
 
 [node name="TurnIndicatorCircle" type="MeshInstance3D" parent="PlayerPositions" unique_id=987654321]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.102, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.298, 0)
 mesh = SubResource("PlaneMesh_TurnIndicator")
 
 [node name="Bottom" type="Node3D" parent="PlayerPositions" unique_id=1640482197]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 6.0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 4.724)
 
 [node name="Top" type="Node3D" parent="PlayerPositions" unique_id=1531237525]
-transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 0, 0.1, -6.0)
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 0, -0.3, -4.724)
 
 [node name="Left" type="Node3D" parent="PlayerPositions" unique_id=346409451]
-transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -6.0, 0.1, 0)
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -4.724, -0.3, 0)
 
 [node name="Right" type="Node3D" parent="PlayerPositions" unique_id=1342769357]
-transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 6.0, 0.1, 0)
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 4.724, -0.3, 0)
 
 [node name="GameUI" type="CanvasLayer" parent="." unique_id=322047825]
 
@@ -176,3 +180,34 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 color = Color(0, 0, 0, 0)
+
+[node name="Sketchfab_Scene" parent="." unique_id=1101568271 instance=ExtResource("7_3uego")]
+transform = Transform3D(-1.8795897e-06, 0, 43, 0, 43, 0, -43, 0, -1.8795897e-06, -0.16356874, -2.46139, 8.8513365)
+
+[node name="dulapu_la_proiect" parent="." unique_id=357679735 instance=ExtResource("7_5jmpy")]
+transform = Transform3D(-2.489695e-07, 0, 4.9602423, 0, 4.042696, 0, -5.695758, 0, -2.1681909e-07, -2.6933734, -2.0051105, 8.529235)
+script = ExtResource("6_cabinet_script")
+
+[node name="Sketchfab_Scene3" parent="." unique_id=1819785665 instance=ExtResource("7_3uego")]
+transform = Transform3D(-1.8795897e-06, 0, -43, 0, 43, 0, 43, 0, -1.8795897e-06, -0.006077051, -2.46139, -9.511496)
+
+[node name="dulapu_la_proiect3" parent="." unique_id=93192859 instance=ExtResource("7_5jmpy")]
+transform = Transform3D(-2.4896949e-07, 0, -4.9602427, 0, 4.042696, 0, 5.695758, 0, -2.168191e-07, 2.430442, -2.0051105, -8.758478)
+script = ExtResource("6_cabinet_script")
+
+[node name="Sketchfab_Scene2" parent="." unique_id=339082664 instance=ExtResource("7_3uego")]
+transform = Transform3D(-43.000004, 0, 3.7591797e-06, 0, 43, 0, -3.7591797e-06, 0, -43.000004, 8.828511, -2.46139, 0.026433706)
+
+[node name="dulapu_la_proiect2" parent="." unique_id=2137540444 instance=ExtResource("7_5jmpy")]
+transform = Transform3D(-5.695759, 0, 4.336382e-07, 0, 4.042696, 0, -4.97939e-07, 0, -4.9602427, 8.663405, -2.0051105, 2.5713112)
+script = ExtResource("6_cabinet_script")
+
+[node name="Sketchfab_Scene4" parent="." unique_id=2134752619 instance=ExtResource("7_3uego")]
+transform = Transform3D(43.000004, 0, 0, 0, 43, 0, 0, 0, 43.000004, -8.836208, -2.46139, -0.010982513)
+
+[node name="dulapu_la_proiect4" parent="." unique_id=1746470796 instance=ExtResource("7_5jmpy")]
+transform = Transform3D(5.695759, 0, 0, 0, 4.042696, 0, 0, 0, 4.960243, -8.709095, -2.0051105, -2.5580406)
+script = ExtResource("6_cabinet_script")
+
+[node name="Sketchfab_Scene5" parent="." unique_id=1963775032 instance=ExtResource("9_64ibd")]
+transform = Transform3D(0.005133525, -0.006135709, 2.6820038e-10, 0, -3.496911e-10, -0.008, 0.006135709, 0.005133525, -2.2439352e-10, 0.1699071, 0.26671845, 11.837555)

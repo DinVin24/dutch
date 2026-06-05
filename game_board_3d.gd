@@ -75,6 +75,19 @@ var player_beers_nodes: Array = [[], [], [], []]
 var money_labels: Array = []
 var _chicken_node: Node3D = null
 var _chicken_zoom_active: bool = false
+var _hovered_shelf_index: int = -1
+var _hovered_cabinet_node: Node = null
+var _hovered_hammer_idx_board: int = -1
+var _hovered_hammer_cabinet: Node = null
+var _cabinets: Dictionary = {}
+var _cabinet_prompt_label: Label = null
+var _ability_desc_panel: PanelContainer = null
+var player_avatars: Dictionary = {}
+var avatar_arm_weights: Dictionary = {}
+var _camera_initialized: bool = false
+var _base_head_y: float = 0.0
+var _look_yaw: float = 0.0
+var _look_pitch: float = 0.0
 
 @onready var camera = $Camera3D
 var _current_ability_message: String = ""
@@ -106,6 +119,18 @@ func _ready():
 		return
 
 	player_hands = [[], [], [], []]
+
+	# Map cabinet nodes to player indices dynamically
+	_cabinets = {
+		0: get_node_or_null("dulapu_la_proiect"),
+		1: get_node_or_null("dulapu_la_proiect4"),
+		2: get_node_or_null("dulapu_la_proiect3"),
+		3: get_node_or_null("dulapu_la_proiect2")
+	}
+	for p_idx in _cabinets:
+		var cab = _cabinets[p_idx]
+		if is_instance_valid(cab):
+			cab.set_meta("player_index", p_idx)
 	_bell_stream = _generate_bell_stream()
 	print("Game Board 3D: Ready. Connecting signals...")
 	GameManager.stop_menu_music()
@@ -174,8 +199,14 @@ func _ready():
 	_create_discard_indicator()
 	_create_beer_placeholders()
 	_create_chicken_placeholder()
+	_create_crosshair()
 	$DeckArea/Area3D.input_event.connect(_on_deck_input_event)
 	$DiscardArea/Area3D.input_event.connect(_on_discard_input_event)
+	
+	# Lock mouse for central gameplay crosshair raycasting and look-around
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+	_spawn_player_avatars()
 
 	bot_controller = BotController.new()
 	bot_controller.gm = GameManager
@@ -244,6 +275,8 @@ func _configure_visible_player_seats(n: int) -> void:
 	for seat in range(4):
 		if player_pos_nodes.has(seat):
 			player_pos_nodes[seat].visible = seat < clampi(n, 1, 4)
+		if player_avatars.has(seat) and is_instance_valid(player_avatars[seat]):
+			player_avatars[seat].visible = seat < clampi(n, 1, 4)
 
 func _on_multiplayer_sync_applied() -> void:
 	var new_state: int = int(GameManager.current_state)
@@ -288,6 +321,7 @@ func _on_multiplayer_sync_applied() -> void:
 		pending_card.card_clicked.connect(_on_card_clicked)
 		pending_card.position = deck_area.position + Vector3(0, 0.6, 0.5)
 		pending_card.rotation_degrees = Vector3(90, 0, 0)
+		pending_card.scale = Vector3(1.5, 1.5, 1.5)
 		pending_card.set_interactive(true)
 	
 	# --- Bug 5: Detect Dutch call and show feedback on client ---
@@ -320,14 +354,22 @@ func _on_multiplayer_sync_applied() -> void:
 		for pi in range(GameManager.num_players):
 			var new_abs: Array = GameManager.players_info[pi].abilities
 			var old_abs: Array = prev_abilities[pi] if pi < prev_abilities.size() else []
+			
+			var new_filtered = new_abs.filter(func(a): return a != "")
+			var old_filtered = old_abs.filter(func(a): return a != "")
+			
 			# Ability appeared in the new list — player gained it
-			for ab in new_abs:
-				if not ab in old_abs:
+			for ab in new_filtered:
+				if not ab in old_filtered:
 					_on_ability_unlocked(pi, ab)
 			# Ability disappeared from the list — player used it
-			for ab in old_abs:
-				if not ab in new_abs:
+			for ab in old_filtered:
+				if not ab in new_filtered:
 					_on_ability_played(pi, ab)
+	
+	# Sync all player cabinets with their actual abilities
+	for pi in range(GameManager.num_players):
+		_update_ability_visuals(pi)
 	
 	if state_changed:
 		_on_game_state_changed(GameManager.current_state)
@@ -396,17 +438,18 @@ func _create_hud_ui():
 	action_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	action_panel.add_child(action_container)
 
-	# Standard HUD buttons
-	end_turn_btn = _create_button(action_container, "> END_TURN <", Color(0.0, 1.0, 1.0))
-	jump_in_btn = _create_button(action_container, "> JUMP_IN <", Color(0.0, 1.0, 1.0))
-	call_dutch_btn = _create_button(action_container, "> CALL_DUTCH <", Color(1.0, 0.0, 0.8))
-	confirm_dutch_btn = _create_button(action_container, "> CONFIRM_DUTCH <", Color(0.0, 1.0, 1.0))
-	forfeit_dutch_btn = _create_button(action_container, "> FORFEIT_DUTCH <", Color(1.0, 0.0, 0.8))
+	# Standard HUD buttons — labels are dynamically populated from InputMap keybinds
+	end_turn_btn = _create_button(action_container, "", Color(0.0, 1.0, 1.0))
+	jump_in_btn = _create_button(action_container, "", Color(0.0, 1.0, 1.0))
+	call_dutch_btn = _create_button(action_container, "", Color(1.0, 0.0, 0.8))
+	confirm_dutch_btn = _create_button(action_container, "", Color(0.0, 1.0, 1.0))
+	forfeit_dutch_btn = _create_button(action_container, "", Color(1.0, 0.0, 0.8))
 	end_turn_btn.pressed.connect(_on_end_turn_pressed)
 	jump_in_btn.pressed.connect(_on_jump_in_pressed)
 	call_dutch_btn.pressed.connect(_on_call_dutch_pressed)
 	confirm_dutch_btn.pressed.connect(_on_confirm_dutch_pressed)
 	forfeit_dutch_btn.pressed.connect(_on_cancel_dutch_pressed)
+	_update_action_button_labels()
 	
 	# Restyle the TurnLabel
 	turn_label.add_theme_color_override("font_color", Color(0.0, 1.0, 1.0))
@@ -424,6 +467,62 @@ func _create_hud_ui():
 	l.add_theme_constant_override("shadow_offset_y", 2)
 	$GameUI/MainHUD/TopLeft.add_child(l)
 	money_labels.append(l)
+
+	# Cabinet Interaction HUD Prompt
+	_cabinet_prompt_label = Label.new()
+	_cabinet_prompt_label.name = "CabinetPrompt"
+	_cabinet_prompt_label.add_theme_font_size_override("font_size", 28)
+	_cabinet_prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_cabinet_prompt_label.add_theme_color_override("font_color", Color(1.0, 0.0, 0.8))
+	_cabinet_prompt_label.add_theme_color_override("font_shadow_color", Color(1.0, 0.0, 0.8, 0.5))
+	_cabinet_prompt_label.add_theme_constant_override("shadow_offset_x", 0)
+	_cabinet_prompt_label.add_theme_constant_override("shadow_offset_y", 2)
+	_cabinet_prompt_label.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_cabinet_prompt_label.offset_left = -300
+	_cabinet_prompt_label.offset_right = 300
+	_cabinet_prompt_label.offset_top = -100
+	_cabinet_prompt_label.offset_bottom = -50
+	_cabinet_prompt_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_cabinet_prompt_label.text = ""
+	_cabinet_prompt_label.hide()
+	$GameUI/MainHUD.add_child(_cabinet_prompt_label)
+
+	# Cabinet Ability Description HUD (Bottom-Right corner)
+	_ability_desc_panel = PanelContainer.new()
+	_ability_desc_panel.name = "AbilityDescPanel"
+	_ability_desc_panel.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_ability_desc_panel.offset_left = -350
+	_ability_desc_panel.offset_right = -20
+	_ability_desc_panel.offset_top = -180
+	_ability_desc_panel.offset_bottom = -20
+	_ability_desc_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	
+	var desc_style = StyleBoxFlat.new()
+	desc_style.bg_color = Color(0.04, 0.04, 0.06, 0.75)
+	desc_style.border_width_left = 2
+	desc_style.border_width_right = 2
+	desc_style.border_width_top = 2
+	desc_style.border_width_bottom = 2
+	desc_style.border_color = Color(1.0, 0.75, 0.1, 0.6)
+	desc_style.corner_radius_top_left = 8
+	desc_style.corner_radius_top_right = 8
+	desc_style.corner_radius_bottom_left = 8
+	desc_style.corner_radius_bottom_right = 8
+	desc_style.content_margin_left = 12
+	desc_style.content_margin_right = 12
+	desc_style.content_margin_top = 12
+	desc_style.content_margin_bottom = 12
+	
+	_ability_desc_panel.add_theme_stylebox_override("panel", desc_style)
+	$GameUI/MainHUD.add_child(_ability_desc_panel)
+	
+	var desc_label = Label.new()
+	desc_label.name = "DescLabel"
+	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_label.add_theme_font_size_override("font_size", 18)
+	desc_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95))
+	_ability_desc_panel.add_child(desc_label)
+	_ability_desc_panel.hide()
 
 func _create_button(parent: Node, text: String, color: Color) -> Button:
 	var btn = Button.new()
@@ -481,6 +580,7 @@ func _update_deck_visual():
 		card.setup(CardData.new("Ace", "Clubs"))
 		card.rotation_degrees = Vector3(90, 0, 0)
 		card.position = Vector3(0, i * 0.02, 0)
+		card.scale = Vector3(1.5, 1.5, 1.5)
 		card.set_interactive(false)
 
 func _update_discard_visual():
@@ -497,6 +597,7 @@ func _update_discard_visual():
 		card_node.data.is_face_up = true
 		card_node.rotation_degrees = Vector3(90, 0, 0)
 		card_node.position = Vector3.ZERO
+		card_node.scale = Vector3(1.5, 1.5, 1.5)
 		card_node.set_interactive(false)
 		if discard_indicator: discard_indicator.hide()
 	else:
@@ -505,7 +606,7 @@ func _update_discard_visual():
 func _create_discard_indicator():
 	discard_indicator = MeshInstance3D.new()
 	var mesh = PlaneMesh.new()
-	mesh.size = Vector2(0.8, 1.1) # Slightly larger than a card
+	mesh.size = Vector2(0.8, 1.1) * 1.5 # Scaled to match 1.5x card size
 	discard_indicator.mesh = mesh
 
 	var mat = StandardMaterial3D.new()
@@ -589,7 +690,7 @@ func _apply_emission_to_meshes(node: Node, energy: float):
 
 func _create_chicken_placeholder():
 	var chicken = preload("res://assets/models/chick.glb").instantiate()
-	chicken.position = Vector3(4.0, 1.2, -3.5)
+	chicken.position = Vector3(3.2, 0.58, -2.8)
 	# Scale down the model (GLBs can be very large)
 	chicken.scale = Vector3(0.05, 0.05, 0.05)
 	# Rotate 180 on Y to face player
@@ -620,6 +721,25 @@ func _create_chicken_placeholder():
 	area.input_event.connect(_on_chicken_clicked)
 	GameManager.ability_unlocked.connect(_on_ability_unlocked)
 
+func _create_crosshair() -> void:
+	var dot = PanelContainer.new()
+	dot.name = "CrosshairDot"
+	dot.set_anchors_preset(Control.PRESET_CENTER)
+	dot.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	dot.grow_vertical = Control.GROW_DIRECTION_BOTH
+	dot.custom_minimum_size = Vector2(6, 6)
+	
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.4, 0.4, 0.4, 0.9) # more opaque gray
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_left = 3
+	style.corner_radius_bottom_right = 3
+	style.shadow_size = 0
+	dot.add_theme_stylebox_override("panel", style)
+	
+	$GameUI/MainHUD.add_child(dot)
+
 func _on_ability_unlocked(p_idx: int, ab: String):
 	_drop_egg_for(p_idx, ab)
 
@@ -629,23 +749,24 @@ func _on_chicken_clicked(_camera, event, _position, _normal, _shape_idx):
 			_try_buy_ability(GameManager.local_player_idx)
 
 func _try_buy_ability(p_idx: int):
-	if GameManager.players_info[p_idx].abilities.size() >= 8:
-		_show_message("Inventory Full! (Max 8)")
+	var active_abilities = GameManager.players_info[p_idx].abilities.filter(func(a): return a != "")
+	if active_abilities.size() >= 6:
+		_show_message("Inventory Full! (Max 6)")
 		return
 		
 	_send_action("buy_ability")
 
 func _drop_egg_for(p_idx: int, ab: String):
 	if p_idx == _human_ui_idx():
-		_show_message("You got: " + ab.capitalize() + "!")
+		_show_message("You got: " + ab.capitalize() + "! (Check your cabinet)")
 	else:
-		_show_message(GameManager.players_info[p_idx].name + " got an egg!")
+		_show_message(GameManager.players_info[p_idx].name + " bought an ability!")
 	
 	if is_instance_valid(_chicken_node):
 		spawn_particles("ability_buy", _chicken_node.global_position)
 		var tween = create_tween()
-		tween.tween_property(_chicken_node, "position:y", 2.0, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		tween.tween_property(_chicken_node, "position:y", 1.2, 0.2).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+		tween.tween_property(_chicken_node, "position:y", 1.38, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.tween_property(_chicken_node, "position:y", 0.58, 0.2).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
 
 		# Camera cinematic zoom - GUARD against re-entry
 		if not _chicken_zoom_active:
@@ -667,49 +788,17 @@ func _drop_egg_for(p_idx: int, ab: String):
 				camera.position = restore_cam_local
 				_chicken_zoom_active = false
 			)
-	# authoritative inventory is now managed in GameManager.buy_ability
-	print("BOARD: sync ability visuals for P", p_idx)
-	_update_ability_visuals(p_idx)
-	
-	# Spawn ability token visually
-	var token_scene = load("res://ability_token_3d.tscn")
-	var token = token_scene.instantiate()
-	player_pos_nodes[p_idx].add_child(token)
-	token.setup(ab)
-	token.token_clicked.connect(_on_ability_token_clicked)
-	
-	# Spawn at the chicken's global position, then beautifully tween into the grid
-	# Rotation 180 on Y fixes the upside-down question mark
-	token.rotation_degrees = Vector3(90, 180, 0) 
-	token.global_position = Vector3(0, 2.0, 0) 
-	
-	# REVEAL ON RECEIPT: Show for 2 seconds then flip down
-	token.set_face_up(true)
-	get_tree().create_timer(2.0, false).timeout.connect(func():
-		if is_instance_valid(token):
-			token.animate_flip(false)
-	)
-	
+	# Spawn hammer in the player's cabinet
+	print("BOARD: syncing ability hammers for P", p_idx)
 	_update_ability_visuals(p_idx)
 	
 func _update_ability_visuals(p_idx: int):
-	var tokens = []
-	for c in player_pos_nodes[p_idx].get_children():
-		if "ability_id" in c and not c.is_queued_for_deletion():
-			tokens.append(c)
-			
-	for i in range(tokens.size()):
-		var t = tokens[i]
-		var cols = i % 4
-		var rows = floori(i / 4.0)
-		
-		# Clean, perfect 4x4 matrix centered right next to the hand
-		# x spacing: 0.8, z spacing: 0.8 (for 0.65m tokens)
-		var target_pos = Vector3(3.5 + (cols * 0.8), 0.1, (rows * 0.8) - 0.4)
-		
-		# Snappy, satisfying placement animation
-		var tween = create_tween()
-		tween.tween_property(t, "position", target_pos, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	# Abilities are now represented exclusively by hammers in the cabinet.
+	# Use the authoritative GameManager abilities array as the source of truth.
+	var cab = _cabinets.get(p_idx)
+	if is_instance_valid(cab):
+		var abilities = GameManager.players_info[p_idx].abilities
+		cab.update_hammers(abilities, p_idx)
 	
 func _on_ability_token_clicked(token):
 	var p_idx = -1
@@ -751,11 +840,57 @@ func _on_ability_token_clicked(token):
 	else:
 		_show_message("Not your turn to play abilities!")
 
+## Called when the player clicks on a hammer in their cabinet drawer.
+func _use_hovered_hammer() -> void:
+	if _hovered_hammer_idx_board < 0 or not is_instance_valid(_hovered_hammer_cabinet):
+		return
+	var p_idx = GameManager.local_player_idx
+	# Only the current player may use abilities
+	if p_idx != GameManager.current_player_index:
+		_show_message("Not your turn to play abilities!")
+		return
+	if _is_preparing_ability or _is_waiting_for_target:
+		return
+	var h_idx: int = _hovered_hammer_idx_board
+	var abilities: Array = GameManager.players_info[p_idx].abilities
+	if h_idx < 0 or h_idx >= abilities.size():
+		_show_message("Invalid ability slot!")
+		return
+	var ability_id: String = abilities[h_idx]
+	if ability_id == "":
+		return
+	var targeting_abilities = ["bottoms_up", "boulder", "skip", "inflation", "half_off", "shuffle", "jumpscare"]
+	if ability_id in targeting_abilities:
+		print("BOARD: Hammer ability ", ability_id, " requires target selection.")
+		_is_waiting_for_target = true
+		_set_targeting_areas_enabled(true)
+		_highlight_selectable_cards(true)
+		_update_turn_lights(-1, true)
+		_pending_ability = {
+			"id": ability_id,
+			"token": null,
+			"activator": p_idx,
+			"slot_idx": h_idx
+		}
+		_show_message("SELECT TARGET PLAYER (click their cards or zone)")
+	else:
+		_send_action("play_ability", {"ability_id": ability_id, "target_idx": p_idx, "slot_idx": h_idx})
+
+## hammer_collider: the Area3D Area3D that was clicked (has "hammer_index" meta).
+func _on_hammer_clicked(hammer_collider: Area3D) -> void:
+	var h_idx: int = hammer_collider.get_meta("hammer_index", -1)
+	if h_idx >= 0:
+		_hovered_hammer_idx_board = h_idx
+		_hovered_hammer_cabinet = _cabinets.get(GameManager.local_player_idx)
+		_use_hovered_hammer()
+
 func _create_player_targeting_areas():
 	for i in range(4):
+
 		var area = Area3D.new()
 		area.name = "TargetArea"
 		var col = CollisionShape3D.new()
+		col.name = "CollisionShape3D"
 		var shape = BoxShape3D.new()
 		shape.size = Vector3(4.0, 1.0, 4.0) # Larger area
 		col.shape = shape
@@ -766,10 +901,12 @@ func _create_player_targeting_areas():
 		
 		# DEBUG FIX: non-pickable by default so we don't block cards
 		area.input_ray_pickable = false
+		col.disabled = true
 		area.collision_layer = 1
 		area.collision_mask = 1
 		
 		area.input_event.connect(_on_player_area_input.bind(i))
+		area.set_meta("player_index", i)
 		print("DEBUG: Created TargetArea for player ", i)
 
 func _set_targeting_areas_enabled(enabled: bool):
@@ -778,7 +915,10 @@ func _set_targeting_areas_enabled(enabled: bool):
 		var area = player_pos_nodes[i].find_child("TargetArea")
 		if area:
 			area.input_ray_pickable = enabled
-			print("  - Player ", i, " area pickable: ", area.input_ray_pickable)
+			var col = area.find_child("CollisionShape3D")
+			if col:
+				col.disabled = !enabled
+			print("  - Player ", i, " area pickable: ", area.input_ray_pickable, " shape disabled: ", col.disabled if col else "no shape")
 
 func _on_player_area_input(_camera, event, _position, _normal, _shape_idx, player_idx: int):
 	if not _is_waiting_for_target: return
@@ -794,10 +934,11 @@ func _on_player_area_input(_camera, event, _position, _normal, _shape_idx, playe
 
 		var ab_id = _pending_ability.id
 		var activator = _pending_ability.activator
+		var slot_idx = _pending_ability.get("slot_idx", -1)
 
-		print("[DEBUG] Requesting play_ability: ", ab_id, " by P", activator, " on P", player_idx)
+		print("[DEBUG] Requesting play_ability: ", ab_id, " by P", activator, " on P", player_idx, " from slot ", slot_idx)
 		
-		_send_action("play_ability", {"ability_id": ab_id, "target_idx": player_idx})
+		_send_action("play_ability", {"ability_id": ab_id, "target_idx": player_idx, "slot_idx": slot_idx})
 		_is_waiting_for_target = false
 		_set_targeting_areas_enabled(false)
 		_clear_all_highlights()
@@ -810,6 +951,7 @@ func _on_player_area_input(_camera, event, _position, _normal, _shape_idx, playe
 		_update_ability_visuals(activator)
 
 func _on_player_drank_beer(player_idx, remaining):
+	play_take_animation(player_idx)
 	if player_idx < 0 or player_idx >= 4: return
 	var beers_array = player_beers_nodes[player_idx]
 	for i in range(beers_array.size()):
@@ -827,29 +969,17 @@ func _on_player_gained_money(player_idx, _amount, total):
 		money_labels[0].text = "$" + str(total)
 
 func _on_ability_played(player_idx, ability_id):
+	play_take_animation(player_idx)
 	var p_name = GameManager.players_info[player_idx].name
 	_show_message(p_name + " used " + ability_id.capitalize() + "!")
-	
-	# CENTRALIZED VISUAL CLEANUP: Find and remove the 3D token
-	var pos_node = player_pos_nodes[player_idx]
-	var token_node: AbilityToken3D = null
-	for child in pos_node.get_children():
-		if "ability_id" in child and child.ability_id == ability_id:
-			token_node = child
-			break
-	
-	if token_node:
-		spawn_particles("ability_use", token_node.global_position)
-		# If it's a bot (p_idx != 0), we want to reveal the card for 2s too
-		# if it's not already face up (the human reveal handles p_idx=0)
-		if player_idx != _human_ui_idx():
-			token_node.animate_flip(true)
-			await get_tree().create_timer(2.0, false).timeout
-		
-		if is_instance_valid(token_node):
-			token_node.queue_free()
-	
-	# Re-layout remaining tokens for this player
+	# Reset any hammer hover state when an ability is consumed
+	if _hovered_hammer_cabinet != null and _hovered_hammer_idx_board >= 0:
+		if is_instance_valid(_hovered_hammer_cabinet):
+			_hovered_hammer_cabinet.unhover_hammer(_hovered_hammer_idx_board)
+		_hovered_hammer_idx_board = -1
+		_hovered_hammer_cabinet = null
+	spawn_particles("ability_use", player_pos_nodes[player_idx].global_position + Vector3(0, 0.5, 0))
+	# Wait one frame so GameManager has already removed the ability from the array
 	await get_tree().process_frame
 	_update_ability_visuals(player_idx)
 
@@ -925,6 +1055,7 @@ func _get_glitch_string(base: String) -> String:
 	return result
 
 func _on_card_drawn_to_pending(player_idx, card_data):
+	play_take_animation(player_idx)
 	if pending_card: pending_card.queue_free()
 
 	_update_deck_visual()
@@ -942,6 +1073,7 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	# Move slightly higher and CLOSER TO CAMERA (Z offset) to ensure it's not blocked by DeckArea
 	pending_card.position = deck_area.position + Vector3(0, 0.6, 0.5)
 	pending_card.rotation_degrees = Vector3(90, 0, 0) # Start face down on the table
+	pending_card.scale = Vector3(1.5, 1.5, 1.5)
 	pending_card.set_interactive(player_idx == _human_ui_idx())
 	spawn_particles("default", deck_area.global_position)
 
@@ -951,6 +1083,7 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	_update_deck_visual() # Refresh deck after drawing
 
 func _on_card_discarded(player_idx, card_data):
+	play_take_animation(player_idx)
 	_update_action_buttons_state()
 	
 	print("GameBoard3D: Card Discarded. Player: ", player_idx, " Data: ", card_data.rank, " of ", card_data.suit)
@@ -1059,25 +1192,32 @@ func _update_action_buttons_state():
 	var can_jump_in = GameManager.can_player_start_jump_in(local_idx) or GameManager.should_human_show_jump_in_button(local_idx)
 	var can_call_dutch = GameManager.can_player_call_dutch(local_idx)
 
+	# Confirm Dutch and Forfeit Dutch are only shown in TURN_CONFIRM_DUTCH state
+	var is_confirm_dutch_state = GameManager.current_state == GameManager.GameState.TURN_CONFIRM_DUTCH
+	var can_confirm = GameManager.can_player_confirm_dutch(local_idx)
+
 	# Set button disabled states (disabled = not allowed)
 	end_turn_btn.disabled = not can_end_turn
 	jump_in_btn.disabled = not can_jump_in
 	call_dutch_btn.disabled = not can_call_dutch
 
-	# The three core actions are always visible inside the action panel
-	end_turn_btn.visible = true
+	# The core actions: end_turn is replaced by confirm_dutch in confirm state.
+	# call_dutch and jump_in are still visible.
+	end_turn_btn.visible = not is_confirm_dutch_state
 	jump_in_btn.visible = true
 	call_dutch_btn.visible = true
-
-	# Confirm Dutch and Forfeit Dutch are only shown in TURN_CONFIRM_DUTCH state
-	var is_confirm_dutch_state = GameManager.current_state == GameManager.GameState.TURN_CONFIRM_DUTCH
-	var can_confirm = GameManager.can_player_confirm_dutch(local_idx)
 	
 	confirm_dutch_btn.visible = is_confirm_dutch_state
 	confirm_dutch_btn.disabled = not can_confirm
 	
 	forfeit_dutch_btn.visible = is_confirm_dutch_state
 	forfeit_dutch_btn.disabled = not can_confirm
+
+	# Size action panel taller if forfeit_dutch is visible
+	if is_confirm_dutch_state:
+		action_panel.offset_top = -280
+	else:
+		action_panel.offset_top = -220
 
 	# Update the action panel's pulsing/glowing style
 	_update_action_panel_style()
@@ -1112,6 +1252,17 @@ func _update_action_panel_style():
 func _on_game_state_changed(new_state):
 	_hide_message()
 	_update_draw_arrow_visibility()
+
+	# Manage mouse capture/visibility based on game state
+	if new_state == GameManager.GameState.TURN_CONFIRM_DUTCH:
+		if GameManager.can_player_confirm_dutch(_human_ui_idx()):
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	elif new_state == GameManager.GameState.GAME_OVER:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	else:
+		if not noclip_enabled:
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
 
 	var is_active_turn_state = new_state in [
 		GameManager.GameState.TURN_START_DRAW,
@@ -1452,6 +1603,15 @@ func _update_hand_visuals(player_idx: int):
 			var tween = create_tween().set_parallel(true)
 			tween.tween_property(card_node, "position", target_pos, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT).set_delay(delay)
 			tween.tween_property(card_node, "quaternion", target_quat, duration).set_delay(delay)
+			# Shrink back to normal hand size if the card came from the draw pile (1.5x)
+			if card_node.scale != Vector3.ONE:
+				tween.tween_property(card_node, "scale", Vector3.ONE, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT).set_delay(delay)
+			# After a swap-in tween completes, re-evaluate interactivity so the
+			# card can immediately be clicked/jumped-in (it was set_interactive(false)
+			# when consumed from pending_card, before the state-change highlight
+			# refresh fired).
+			if delay > 0.0:
+				tween.chain().tween_callback(_refresh_human_interactivity)
 
 func _handle_initial_deal():
 	print("GameBoard3D: _handle_initial_deal started")
@@ -1508,6 +1668,7 @@ func _start_peek_phase():
 
 var peeked_cards: Array = []
 func _on_card_clicked(node, data):
+	play_take_animation(_human_ui_idx())
 	if not is_instance_valid(node): return
 	
 	var is_pending: bool = (node == pending_card or node.name == "PendingCard")
@@ -1619,13 +1780,16 @@ func _on_discard_input_event(_camera, event, _position, _normal, _shape_idx):
 
 func _on_deck_clicked():
 	if GameManager.can_player_draw(GameManager.local_player_idx):
+		play_take_animation(GameManager.local_player_idx)
 		_send_action("draw_card")
 
 func _on_discard_clicked():
 	if GameManager.can_player_discard_drawn_card(GameManager.local_player_idx):
+		play_take_animation(GameManager.local_player_idx)
 		_send_action("discard_drawn")
 
 func _on_scores_ready(results):
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	var overlay = CanvasLayer.new()
 	add_child(overlay)
 
@@ -1702,17 +1866,94 @@ func _unhandled_input(event):
 			_on_pause_resumed()
 		get_viewport().set_input_as_handled()
 
+	# --- BOARD CLICK INTERACTION WHEN MOUSE IS CAPTURED ---
+	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not noclip_enabled:
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			var viewport_size := get_viewport().get_visible_rect().size
+			var center := viewport_size / 2.0
+			var ray_origin = camera.project_ray_origin(center)
+			var ray_normal = camera.project_ray_normal(center)
+			
+			var space_state := get_world_3d().direct_space_state
+			var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
+			query.collision_mask = 1
+			query.collide_with_areas = true
+			query.collide_with_bodies = false
+			
+			var result := space_state.intersect_ray(query)
+			if result and result.collider:
+				var col = result.collider
+				var parent = col.get_parent()
+				
+				if parent is Card3D:
+					_on_card_clicked(parent, parent.data)
+					get_viewport().set_input_as_handled()
+					return
+				elif col.get_parent() == $DeckArea:
+					if $DeckArea/Area3D.input_ray_pickable:
+						_on_deck_clicked()
+						get_viewport().set_input_as_handled()
+						return
+				elif col.get_parent() == $DiscardArea:
+					if $DiscardArea/Area3D.input_ray_pickable:
+						_on_discard_clicked()
+						get_viewport().set_input_as_handled()
+						return
+				elif parent == _chicken_node:
+					if GameManager.current_player_index == GameManager.local_player_idx:
+						_try_buy_ability(GameManager.local_player_idx)
+						get_viewport().set_input_as_handled()
+						return
+				elif col.name == "TargetArea" and col.input_ray_pickable:
+					var player_idx = col.get_meta("player_index", -1)
+					if player_idx != -1:
+						_on_player_area_input(null, null, Vector3.ZERO, Vector3.ZERO, 0, player_idx)
+						get_viewport().set_input_as_handled()
+						return
+			
+			# Check layer 16 (hammers — dedicated layer, separate from drawer layer 8)
+			var query16 := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
+			query16.collision_mask = 16
+			query16.collide_with_areas = true
+			query16.collide_with_bodies = false
+			var result16 := space_state.intersect_ray(query16)
+			if result16 and result16.collider:
+				var col16 = result16.collider
+				if col16.has_meta("hammer_index"):
+					play_take_animation(_human_ui_idx())
+					_on_hammer_clicked(col16)
+					get_viewport().set_input_as_handled()
+					return
+
 	# DEBUG: Press L to toggle all face-down cards face-up.
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_L:
 			_toggle_debug_reveal()
 
 	# --- GAME KEYBOARD CONTROLS ---
-	# Priority Guard 1: Noclip is active — keys belong to the camera, not the game.
-	if noclip_enabled:
-		return
 	# Priority Guard 2: Dev console is open — keys belong to the text input, not the game.
 	if DevConsole and DevConsole.window.is_visible():
+		return
+
+	# Cabinet Hammer Interaction (intercept KEY_E if a hammer is hovered)
+	if _hovered_hammer_idx_board != -1 and is_instance_valid(_hovered_hammer_cabinet) and event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_E:
+			play_take_animation(_human_ui_idx())
+			_use_hovered_hammer()
+			get_viewport().set_input_as_handled()
+			return
+
+	# Cabinet Drawer Interaction (intercept keypress if hovered)
+	if _hovered_shelf_index != -1 and is_instance_valid(_hovered_cabinet_node) and event.is_pressed() and not event.is_echo():
+		if (event is InputEventKey and event.keycode == KEY_E) or event.is_action("game_call_dutch") or event.is_action("game_forfeit_dutch"):
+			play_take_animation(_human_ui_idx())
+			_hovered_cabinet_node.toggle_shelf(_hovered_shelf_index)
+			_update_cabinet_prompt()
+			get_viewport().set_input_as_handled()
+			return
+
+	# Priority Guard 1: Noclip is active — keys belong to the camera, not the game.
+	if noclip_enabled:
 		return
 
 	if not (event is InputEventKey and event.pressed and not event.echo):
@@ -1730,7 +1971,7 @@ func _handle_game_keyboard_input(event: InputEvent) -> void:
 		_on_confirm_dutch_pressed()
 		get_viewport().set_input_as_handled()
 
-	# E — call dutch OR forfeit dutch (states are mutually exclusive)
+	# forfeit dutch OR call dutch (states are mutually exclusive)
 	elif event.is_action("game_forfeit_dutch") and forfeit_dutch_btn.visible and not forfeit_dutch_btn.disabled:
 		_on_cancel_dutch_pressed()
 		get_viewport().set_input_as_handled()
@@ -1739,6 +1980,7 @@ func _handle_game_keyboard_input(event: InputEvent) -> void:
 		_on_call_dutch_pressed()
 		get_viewport().set_input_as_handled()
 
+	# Space — jump in
 	elif event.is_action("game_jump_in") and jump_in_btn.visible and not jump_in_btn.disabled:
 		_on_jump_in_pressed()
 		get_viewport().set_input_as_handled()
@@ -1797,6 +2039,7 @@ func _keyboard_confirm_card() -> void:
 
 func _pause_game():
 	if pause_menu_instance == null:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		pause_menu_instance = pause_menu_scene.instantiate()
 		add_child(pause_menu_instance)
 		pause_menu_instance.resumed.connect(_on_pause_resumed)
@@ -1808,6 +2051,9 @@ func _on_pause_resumed():
 		pause_menu_instance.queue_free()
 		pause_menu_instance = null
 	get_tree().paused = false
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	# Refresh button labels in case keybinds were changed in settings
+	_update_action_button_labels()
 
 func _on_pause_main_menu():
 	get_tree().paused = false
@@ -1872,36 +2118,292 @@ func _on_bot_action(message):
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint(): return
 	
+	_update_cabinet_hover()
+	_update_crosshair_raycast()
 	_update_action_buttons_state()
 	
 	if is_instance_valid(draw_arrow) and draw_arrow.visible:
 		draw_arrow.position.y = 1.2 + sin(Time.get_ticks_msec() * 0.005) * 0.15
 	
+	var shake_offset = Vector3.ZERO
 	if _shake_timer > 0:
 		_shake_timer -= delta
-		var offset = Vector3(
+		shake_offset = Vector3(
 			randf_range(-1, 1) * _shake_intensity,
 			randf_range(-1, 1) * _shake_intensity,
 			0
 		)
-		camera.position = _effective_camera_base_local() + offset
-		if _shake_timer <= 0:
-			camera.position = _effective_camera_base_local()
 
 	if noclip_enabled and not DevConsole.window.visible:
 		_handle_noclip_movement(delta)
 	elif not noclip_enabled:
-		var mouse_pos = get_viewport().get_mouse_position()
-		var vp_size = get_viewport().get_visible_rect().size
-		var nx = mouse_pos.x / float(vp_size.x)
-		var target_yaw = 0.0
+		# Rotate camera smoothly towards the look angles accumulated from mouse motion
+		camera.rotation.y = lerp_angle(camera.rotation.y, _base_camera_rotation.y + _look_yaw, delta * 12.0)
+		camera.rotation.x = lerp_angle(camera.rotation.x, _base_camera_rotation.x + _look_pitch, delta * 12.0)
+
+		# First-Person Camera and Head tracking for the local human player
+		var first_person_active = false
+		var local_p_idx = _human_ui_idx()
 		
-		if nx < 0.2:
-			target_yaw = deg_to_rad(12.0) * (0.2 - nx) / 0.2
-		elif nx > 0.8:
-			target_yaw = -deg_to_rad(12.0) * (nx - 0.8) / 0.2
-			
-		camera.rotation.y = lerp_angle(camera.rotation.y, _base_camera_rotation.y + target_yaw, delta * 4.0)
+		# Ensure correct head/neck scaling and cleanup shadow attachments for all avatars
+		for p_idx in player_avatars:
+			var avatar = player_avatars[p_idx]
+			if is_instance_valid(avatar):
+				var skeleton = avatar.get_node_or_null("Armature/Skeleton3D") as Skeleton3D
+				if skeleton:
+					var head_idx = skeleton.find_bone("mixamorig_Head")
+					var neck_idx = skeleton.find_bone("mixamorig_Neck")
+					
+					# Head and neck mesh are kept active (exists) at scale Vector3(1,1,1)
+					if head_idx != -1:
+						skeleton.set_bone_pose_scale(head_idx, Vector3(1.0, 1.0, 1.0))
+						# Shift the head bone position slightly backwards in local space to prevent clipping with camera
+						var head_pos = skeleton.get_bone_pose_position(head_idx)
+						if p_idx == local_p_idx:
+							head_pos.z = 3.74789 - 1.8 # Shift local player's head backward by 1.8 units in bone space
+						else:
+							head_pos.z = 3.74789 # Remote players: keep head at default position
+						skeleton.set_bone_pose_position(head_idx, head_pos)
+					if neck_idx != -1:
+						skeleton.set_bone_pose_scale(neck_idx, Vector3(1.0, 1.0, 1.0))
+					
+					# Lock hips translation completely to rest position to prevent rising/shifting during take animation
+					var hips_idx = skeleton.find_bone("mixamorig_Hips")
+					if hips_idx != -1:
+						skeleton.set_bone_pose_position(hips_idx, Vector3(0.043546, -1.822579, -44.87878))
+					
+					# Clean up shadows-only mesh helpers from previous worktree versions
+					var attachment = skeleton.get_node_or_null("HeadShadowAttachment")
+					if attachment:
+						attachment.queue_free()
+
+		if player_avatars.has(local_p_idx) and is_instance_valid(player_avatars[local_p_idx]):
+			var avatar = player_avatars[local_p_idx]
+			var skeleton = avatar.get_node_or_null("Armature/Skeleton3D") as Skeleton3D
+			if skeleton:
+				var head_idx = skeleton.find_bone("mixamorig_Head")
+				if head_idx != -1:
+					first_person_active = true
+					
+					# Rotate body Y (yaw) based on camera Y rotation with 35% damping (clamped to -50 to +50 degrees)
+					var smooth_yaw = camera.rotation.y - _base_camera_rotation.y
+					var smooth_pitch = camera.rotation.x - _base_camera_rotation.x
+					var body_yaw = clamp(smooth_yaw * 0.35, deg_to_rad(-50.0), deg_to_rad(50.0))
+					avatar.rotation.y = deg_to_rad(90.0) + body_yaw
+					
+					# Rotate head bone to look exactly where the camera is looking in 3D world space
+					var cam_basis = camera.global_transform.basis
+					var target_basis = cam_basis * Basis.from_euler(Vector3(0, PI, 0)) # Rotate 180 on Y because head faces +Z, camera looks -Z
+					var target_global_quat = target_basis.get_rotation_quaternion()
+					var parent_idx = skeleton.get_bone_parent(head_idx)
+					if parent_idx != -1:
+						var parent_global_pose = skeleton.global_transform * skeleton.get_bone_global_pose(parent_idx)
+						var parent_global_quat = parent_global_pose.basis.get_rotation_quaternion()
+						var local_quat = parent_global_quat.inverse() * target_global_quat
+						skeleton.set_bone_pose_rotation(head_idx, local_quat)
+					
+					# Force skeleton update to get correct global bone pose in the same frame
+					skeleton.force_update_all_bone_transforms()
+					
+					# Align camera with the head bone + eye offset + shake
+					if is_instance_valid(camera):
+						# Use 0.08m near clip (since head is shifted back and camera is in front of the eyes)
+						camera.near = 0.08
+						var head_global_pos = skeleton.global_transform * skeleton.get_bone_global_pose(head_idx).origin
+						
+						if not _camera_initialized:
+							_base_head_y = head_global_pos.y
+							_camera_initialized = true
+						
+						var forward = Vector3(-sin(camera.rotation.y), 0.0, -cos(camera.rotation.y)).normalized()
+						
+						# Lock camera vertical height to base head position + offset (0.10m up to eye level, 0.24m forward in front of the eyes)
+						# This prevents the camera from bobbing/rising when the character plays the "take" animation.
+						var target_camera_pos = Vector3(
+							head_global_pos.x + forward.x * 0.24,
+							_base_head_y + 0.10,
+							head_global_pos.z + forward.z * 0.24
+						) + shake_offset
+						
+						# Direct assignment to prevent relative lag
+						camera.global_position = target_camera_pos
+
+		if not first_person_active and is_instance_valid(camera):
+			camera.near = 0.05 # Restore default near clip
+			camera.position = _effective_camera_base_local() + shake_offset
+
+		# Apply idle arm adjustments (hands down) for all spawned player avatars during idle animation
+		for p_idx in player_avatars:
+			var avatar = player_avatars[p_idx]
+			if is_instance_valid(avatar) and avatar.visible:
+				var skeleton = avatar.get_node_or_null("Armature/Skeleton3D") as Skeleton3D
+				var ap = avatar.get_node_or_null("AnimationPlayer") as AnimationPlayer
+				if skeleton and ap:
+					if not avatar_arm_weights.has(p_idx):
+						avatar_arm_weights[p_idx] = 1.0
+					
+					var target_w = 1.0 if ap.current_animation == "idle" else 0.0
+					avatar_arm_weights[p_idx] = move_toward(avatar_arm_weights[p_idx], target_w, delta * 3.33)
+					
+					var w = avatar_arm_weights[p_idx]
+					if w > 0.0:
+						var left_arm = skeleton.find_bone("mixamorig_LeftArm")
+						var left_forearm = skeleton.find_bone("mixamorig_LeftForeArm")
+						var right_arm = skeleton.find_bone("mixamorig_RightArm")
+						var right_forearm = skeleton.find_bone("mixamorig_RightForeArm")
+						
+						if left_arm != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(left_arm)
+							var target_rot = Quaternion.from_euler(Vector3(0.0, deg_to_rad(60.0), deg_to_rad(60.0)))
+							skeleton.set_bone_pose_rotation(left_arm, anim_rot.slerp(target_rot, w))
+						if left_forearm != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(left_forearm)
+							skeleton.set_bone_pose_rotation(left_forearm, anim_rot.slerp(Quaternion.IDENTITY, w))
+						if right_arm != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(right_arm)
+							var target_rot = Quaternion.from_euler(Vector3(0.0, deg_to_rad(-60.0), deg_to_rad(-60.0)))
+							skeleton.set_bone_pose_rotation(right_arm, anim_rot.slerp(target_rot, w))
+						if right_forearm != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(right_forearm)
+							skeleton.set_bone_pose_rotation(right_forearm, anim_rot.slerp(Quaternion.IDENTITY, w))
+
+func _update_cabinet_hover() -> void:
+	if not is_instance_valid(camera):
+		return
+	
+	var viewport_size := get_viewport().get_visible_rect().size
+	var center := viewport_size / 2.0
+	var ray_origin = camera.project_ray_origin(center)
+	var ray_normal = camera.project_ray_normal(center)
+	var space_state := get_world_3d().direct_space_state
+	
+	# --- PASS 1: Hammer detection on layer 16 ---
+	# Layer 16 is ONLY for hammers. The shelf Area3D (layer 8) is invisible to this raycast,
+	# so the ray passes through the shelf box and hits the hammer Area3D directly.
+	var q_hammer := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
+	q_hammer.collision_mask = 16
+	q_hammer.collide_with_areas = true
+	q_hammer.collide_with_bodies = false
+	var r_hammer := space_state.intersect_ray(q_hammer)
+	
+	if r_hammer and r_hammer.collider:
+		var collider = r_hammer.collider
+		if collider.has_meta("hammer_index"):
+			var h_idx: int = collider.get_meta("hammer_index")
+			var h_player_idx: int = collider.get_meta("player_index", -1)
+			# Only local player can hover/click their own hammers
+			if h_player_idx == GameManager.local_player_idx:
+				var cab_node = _cabinets.get(h_player_idx)
+				if is_instance_valid(cab_node):
+					if _hovered_hammer_idx_board != h_idx or _hovered_hammer_cabinet != cab_node:
+						if _hovered_hammer_cabinet != null and is_instance_valid(_hovered_hammer_cabinet):
+							_hovered_hammer_cabinet.unhover_hammer(_hovered_hammer_idx_board)
+						_hovered_hammer_idx_board = h_idx
+						_hovered_hammer_cabinet = cab_node
+						cab_node.hover_hammer(h_idx)
+					
+					var abilities = GameManager.players_info[h_player_idx].abilities
+					var ab_id = abilities[h_idx] if h_idx < abilities.size() else ""
+					
+					# Show ability name in prompt
+					if is_instance_valid(_cabinet_prompt_label) and ab_id != "":
+						var ab_name = ab_id.capitalize().replace("_", " ")
+						_cabinet_prompt_label.text = "[E] / [CLICK] Use %s" % ab_name
+						_cabinet_prompt_label.show()
+						
+					# Show description in the bottom-right corner
+					if is_instance_valid(_ability_desc_panel) and ab_id != "":
+						var desc_label = _ability_desc_panel.get_node_or_null("DescLabel")
+						if desc_label:
+							desc_label.text = _get_ability_desc(ab_id)
+						_ability_desc_panel.show()
+						
+					return  # Hammer handled; skip drawer detection this frame
+	
+	# Not hovering a hammer this frame — unhover if we were before
+	if _hovered_hammer_idx_board >= 0 and is_instance_valid(_hovered_hammer_cabinet):
+		_hovered_hammer_cabinet.unhover_hammer(_hovered_hammer_idx_board)
+		_hovered_hammer_idx_board = -1
+		_hovered_hammer_cabinet = null
+		if is_instance_valid(_cabinet_prompt_label):
+			_cabinet_prompt_label.hide()
+		if is_instance_valid(_ability_desc_panel):
+			_ability_desc_panel.hide()
+	
+	# --- PASS 2: Drawer detection on layer 8 ---
+	var q_drawer := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
+	q_drawer.collision_mask = 8
+	q_drawer.collide_with_areas = true
+	q_drawer.collide_with_bodies = false
+	var r_drawer := space_state.intersect_ray(q_drawer)
+	
+	var new_hover_idx := -1
+	var new_hover_cabinet: Node = null
+	
+	if r_drawer and r_drawer.collider:
+		var collider = r_drawer.collider
+		var hit_dist: float = ray_origin.distance_to(r_drawer.position as Vector3)
+		if collider.has_meta("shelf_index"):
+			var candidate_idx: int = collider.get_meta("shelf_index")
+			var candidate_cab: Node = null
+			var node = collider
+			while node:
+				if node.has_method("toggle_shelf"):
+					candidate_cab = node
+					break
+				node = node.get_parent()
+			# Determine owner of this cabinet
+			var cab_owner := -1
+			for pi in _cabinets:
+				if _cabinets[pi] == candidate_cab:
+					cab_owner = pi
+					break
+			# Own cabinet: always reachable. Others: 4.5m limit.
+			if cab_owner == GameManager.local_player_idx or hit_dist <= 4.5:
+				new_hover_idx = candidate_idx
+				new_hover_cabinet = candidate_cab
+	
+	if new_hover_idx != _hovered_shelf_index or new_hover_cabinet != _hovered_cabinet_node:
+		_hovered_shelf_index = new_hover_idx
+		_hovered_cabinet_node = new_hover_cabinet
+		_update_cabinet_prompt()
+
+func _update_cabinet_prompt() -> void:
+	if not is_instance_valid(_cabinet_prompt_label):
+		return
+		
+	if _hovered_shelf_index == -1 or not is_instance_valid(_hovered_cabinet_node):
+		_cabinet_prompt_label.hide()
+		return
+		
+	if is_instance_valid(_ability_desc_panel):
+		_ability_desc_panel.hide()
+		
+	var is_open = _hovered_cabinet_node.is_shelf_open(_hovered_shelf_index)
+	var shelf_name = _hovered_cabinet_node.get_shelf_name(_hovered_shelf_index)
+	var action_text = "Close" if is_open else "Open"
+	_cabinet_prompt_label.text = "[E] %s %s" % [action_text, shelf_name]
+	
+	_cabinet_prompt_label.show()
+	_cabinet_prompt_label.modulate.a = 0.0
+	var tween = create_tween()
+	tween.tween_property(_cabinet_prompt_label, "modulate:a", 1.0, 0.15)
+
+func _get_ability_desc(ab: String) -> String:
+	match ab:
+		"bottoms_up": return "Bottoms Up:\nForces the target player to drink a beer."
+		"refuel": return "Refuel:\nGives you 1 beer back (up to max 3)."
+		"trim_off": return "Trim Off:\nDiscards the highest value card from your own hand (earns money)."
+		"boulder": return "Boulder:\nTakes the highest value card from the deck and adds it to the target's hand."
+		"reverse": return "Reverse:\nReverses the direction of player turns."
+		"skip": return "Skip:\nSkips the target player's next turn."
+		"perfect_match": return "Perfect Match:\nResets the round, deals Ace, 2, 3, 4 to you, deals 4 cards to everyone else, and restarts peeking."
+		"inflation": return "Inflation:\nMultiplies the point value of all cards in the target's hand by 2.0."
+		"half_off": return "Half Off:\nDivides the point value of all cards in the target's hand by 2.0."
+		"jumpscare": return "Jumpscare:\nDraws a card from the deck and adds it to the target's hand."
+		"shuffle": return "Shuffle:\nShuffles the order of cards in the target's hand."
+		"polarity_shift": return "Polarity Shift:\nFlips the win condition (toggles between Lowest Wins and Highest Wins)."
+	return ""
 
 func shake(intensity: float, duration: float):
 	_shake_intensity = intensity
@@ -1930,21 +2432,35 @@ func _handle_noclip_movement(delta: float) -> void:
 	if Input.is_key_pressed(KEY_S): move_dir += camera.global_transform.basis.z
 	if Input.is_key_pressed(KEY_A): move_dir -= camera.global_transform.basis.x
 	if Input.is_key_pressed(KEY_D): move_dir += camera.global_transform.basis.x
-	if Input.is_key_pressed(KEY_E): move_dir += Vector3.UP
+	if Input.is_key_pressed(KEY_E) and _hovered_shelf_index == -1: move_dir += Vector3.UP
 	if Input.is_key_pressed(KEY_Q): move_dir += Vector3.DOWN
 
 	camera.global_position += move_dir.normalized() * 10.0 * delta
 
 func _input(event: InputEvent) -> void:
-	if noclip_enabled and not DevConsole.window.visible and event is InputEventMouseMotion:
-		camera_rot_y -= event.relative.x * 0.005
-		camera_rot_x -= event.relative.y * 0.005
-		camera_rot_x = clamp(camera_rot_x, -PI / 2, PI / 2)
-		camera.basis = Basis() # Reset
-		camera.rotate_y(camera_rot_y)
-		camera.rotate_object_local(Vector3.RIGHT, camera_rot_x)
+	if DevConsole and DevConsole.window.visible:
+		return
+		
+	if event is InputEventMouseMotion:
+		if noclip_enabled:
+			camera_rot_y -= event.relative.x * 0.005
+			camera_rot_x -= event.relative.y * 0.005
+			camera_rot_x = clamp(camera_rot_x, -PI / 2, PI / 2)
+			camera.basis = Basis() # Reset
+			camera.rotate_y(camera_rot_y)
+			camera.rotate_object_local(Vector3.RIGHT, camera_rot_x)
+		else:
+			# Accumulate mouse rotation relative to base rotation
+			_look_yaw -= event.relative.x * 0.0025
+			_look_pitch -= event.relative.y * 0.0025
+			
+			# Clamp yaw to -105 to +105 degrees (cabinet-to-cabinet view limit, with 25 deg extra)
+			# Clamp pitch to -50 (up) and +22 (down, just enough to see cards)
+			_look_yaw = clamp(_look_yaw, deg_to_rad(-105.0), deg_to_rad(105.0))
+			_look_pitch = clamp(_look_pitch, deg_to_rad(-50.0), deg_to_rad(22.0))
 
 func _on_jack_swap_resolved(p1: int, c1: int, p2: int, c2: int) -> void:
+	play_take_animation(GameManager.current_player_index)
 	if c1 >= player_hands[p1].size() or c2 >= player_hands[p2].size():
 		return
 	var node1 = player_hands[p1][c1]
@@ -1993,9 +2509,13 @@ func toggle_noclip() -> bool:
 		camera_rot_x = camera.rotation.x
 		camera_rot_y = camera.rotation.y
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		if is_instance_valid(camera):
+			camera.near = 0.05
 	else:
 		camera.global_transform = base_camera_transform
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		_look_yaw = 0.0
+		_look_pitch = 0.0
 	return noclip_enabled
 
 func is_noclip_active() -> bool:
@@ -2231,3 +2751,152 @@ func _generate_bell_stream() -> AudioStreamWAV:
 		
 	stream.data = byte_array
 	return stream
+
+var _hovered_board_card: Card3D = null
+
+func _update_crosshair_raycast() -> void:
+	if not is_instance_valid(camera) or noclip_enabled or Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		if is_instance_valid(_hovered_board_card):
+			_on_card_hover_exit(_hovered_board_card)
+			_hovered_board_card = null
+		return
+		
+	var viewport_size := get_viewport().get_visible_rect().size
+	var center := viewport_size / 2.0
+	var ray_origin = camera.project_ray_origin(center)
+	var ray_normal = camera.project_ray_normal(center)
+	
+	var space_state := get_world_3d().direct_space_state
+	var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
+	query.collision_mask = 1
+	query.collide_with_areas = true
+	query.collide_with_bodies = false
+	
+	var result := space_state.intersect_ray(query)
+	var hit_card: Card3D = null
+	
+	if result and result.collider:
+		var col = result.collider
+		var parent = col.get_parent()
+		if parent is Card3D:
+			hit_card = parent
+			
+	if hit_card != _hovered_board_card:
+		if is_instance_valid(_hovered_board_card):
+			_on_card_hover_exit(_hovered_board_card)
+		_hovered_board_card = hit_card
+		if is_instance_valid(_hovered_board_card):
+			_on_card_hover_enter(_hovered_board_card)
+
+func _spawn_player_avatars() -> void:
+	var char_scene = load("res://assets/models/animatii/idle.glb")
+	var take_scene = load("res://assets/models/animatii/take.glb")
+	if not char_scene or not take_scene:
+		push_error("GameBoard3D: Could not load character/take animation model!")
+		return
+
+	var take_inst = take_scene.instantiate()
+	var take_ap: AnimationPlayer = take_inst.get_node("AnimationPlayer")
+	var take_anim = take_ap.get_animation("Armature|mixamo_com|Layer0_001")
+	if not take_anim:
+		push_error("GameBoard3D: Take animation not found in take.glb!")
+		take_inst.queue_free()
+		return
+
+	var chairs = {
+		0: get_node_or_null("Sketchfab_Scene"),  # Bottom (Player 0)
+		1: get_node_or_null("Sketchfab_Scene4"), # Left (Player 1)
+		2: get_node_or_null("Sketchfab_Scene3"), # Top (Player 2)
+		3: get_node_or_null("Sketchfab_Scene2")  # Right (Player 3)
+	}
+
+	# Move the chairs slightly further back from the table to accommodate first-person view spacing
+	if is_instance_valid(chairs[0]): chairs[0].position.z += 0.5
+	if is_instance_valid(chairs[1]): chairs[1].position.x -= 0.5
+	if is_instance_valid(chairs[2]): chairs[2].position.z -= 0.5
+	if is_instance_valid(chairs[3]): chairs[3].position.x += 0.5
+
+	var chair_rotations = {
+		0: 90.0,
+		1: 90.0,
+		2: 90.0,
+		3: 90.0
+	}
+
+	for i in range(4):
+		var chair = chairs[i]
+		if not is_instance_valid(chair):
+			continue
+
+		var char_node = char_scene.instantiate()
+		chair.add_child(char_node)
+
+		# Position character on the seat:
+		# At scale 4.5, local Y = 0.025 raises the character by 2.0m globally to sit at a natural table height
+		char_node.position = Vector3(0.0, 0.025, 0.0)
+		char_node.scale = Vector3(4.5/43.0, 4.5/43.0, 4.5/43.0)
+		char_node.rotation_degrees = Vector3(0.0, chair_rotations[i], 0.0)
+
+		# Set up AnimationPlayer
+		var ap: AnimationPlayer = char_node.get_node("AnimationPlayer")
+		if ap:
+			var lib = ap.get_animation_library("")
+			if lib:
+				# Add the "take" animation
+				lib.add_animation("take", take_anim)
+
+				# Rename original Mixamo animation to "idle" and set to loop
+				var idle_orig = "Armature|mixamo_com|Layer0"
+				if lib.has_animation(idle_orig):
+					var idle_anim = lib.get_animation(idle_orig)
+					idle_anim.loop_mode = Animation.LOOP_LINEAR
+					lib.add_animation("idle", idle_anim)
+					lib.remove_animation(idle_orig)
+
+			# Play the idle animation initially
+			ap.play("idle")
+			ap.set_blend_time("idle", "take", 0.3)
+			ap.set_blend_time("take", "idle", 0.3)
+
+		player_avatars[i] = char_node
+		avatar_arm_weights[i] = 1.0
+
+	take_inst.queue_free()
+
+func play_take_animation(player_idx: int) -> void:
+	if player_avatars.has(player_idx) and is_instance_valid(player_avatars[player_idx]):
+		var char_node = player_avatars[player_idx]
+		var ap: AnimationPlayer = char_node.get_node("AnimationPlayer")
+		if ap:
+			if ap.current_animation == "take":
+				ap.seek(0.0, true)
+			else:
+				ap.play("take")
+			ap.queue("idle")
+
+## Reads the configured keybind for each game action from InputMap and updates
+## all HUD button labels to show e.g. "> END_TURN (Q) <" or "> JUMP_IN (Space) <".
+## Call this after _create_hud_ui() and again whenever settings may have changed.
+func _update_action_button_labels() -> void:
+	if is_instance_valid(end_turn_btn):
+		end_turn_btn.text = "> END_TURN (%s) <" % _get_action_key_string("game_end_turn")
+	if is_instance_valid(jump_in_btn):
+		jump_in_btn.text = "> JUMP_IN (%s) <" % _get_action_key_string("game_jump_in")
+	if is_instance_valid(call_dutch_btn):
+		call_dutch_btn.text = "> CALL_DUTCH (%s) <" % _get_action_key_string("game_call_dutch")
+	if is_instance_valid(confirm_dutch_btn):
+		confirm_dutch_btn.text = "> CONFIRM_DUTCH (%s) <" % _get_action_key_string("game_confirm_dutch")
+	if is_instance_valid(forfeit_dutch_btn):
+		forfeit_dutch_btn.text = "> FORFEIT_DUTCH (%s) <" % _get_action_key_string("game_forfeit_dutch")
+
+## Returns the human-readable key name for the first keyboard event bound to [action],
+## e.g. "Space", "Q", "Y". Falls back to "—" if no key is mapped.
+func _get_action_key_string(action: String) -> String:
+	if not InputMap.has_action(action):
+		return "—"
+	var events = InputMap.action_get_events(action)
+	for e in events:
+		if e is InputEventKey:
+			var keycode = e.physical_keycode if e.physical_keycode != KEY_NONE else e.keycode
+			return OS.get_keycode_string(keycode)
+	return "—"

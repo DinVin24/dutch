@@ -176,12 +176,10 @@ func stop_menu_music() -> void:
 	if menu_music_p2.playing: menu_music_p2.stop()
 
 func play_game_music() -> void:
-	stop_menu_music()
-	if is_game_music_active: return
-	is_game_music_active = true
-	if not current_game_player.playing:
-		current_game_player.volume_db = 0.0
-		current_game_player.play()
+	# Use the main-menu track in-game (game_music.wav is disabled)
+	if is_menu_music_active:
+		return # Already playing
+	play_menu_music()
 
 func stop_game_music() -> void:
 	is_game_music_active = false
@@ -282,7 +280,7 @@ func initialize_game(p_count: int = 4):
 			"can_call_dutch": true,
 			"beers": NetworkManager.match_settings["beers"] if is_multiplayer else 3,
 			"money": 0,
-			"abilities": [],
+			"abilities": ["", "", "", "", "", ""],
 			"is_eliminated": false,
 			"is_skipped": false,
 			"is_bot": is_bot,
@@ -416,7 +414,6 @@ func can_player_start_jump_in(player_idx: int) -> bool:
 			GameState.TURN_JUMP_IN_SELECTION,
 			GameState.TURN_PEEK_ABILITY,
 			GameState.TURN_SWAP_ABILITY,
-			GameState.TURN_CONFIRM_DUTCH,
 			GameState.GAME_OVER
 		]:
 			return false
@@ -729,8 +726,8 @@ var state_before_ability: GameState = GameState.INITIALIZING
 signal ability_played(player_idx, ability_id)
 signal ability_finished
 
-func play_ability(player_idx: int, ability_id: String, target_idx: int = -1) -> bool:
-	print("[GM DEBUG] play_ability request: P", player_idx, " using ", ability_id, " on T", target_idx, " | State: ", GameState.keys()[current_state])
+func play_ability(player_idx: int, ability_id: String, target_idx: int = -1, slot_idx: int = -1) -> bool:
+	print("[GM DEBUG] play_ability request: P", player_idx, " using ", ability_id, " on T", target_idx, " from slot ", slot_idx, " | State: ", GameState.keys()[current_state])
 	
 	if current_player_index != player_idx:
 		print("[GM DEBUG] REJECTED: Not player's turn (Turn: ", current_player_index, ", Activator: ", player_idx, ")")
@@ -762,10 +759,13 @@ func play_ability(player_idx: int, ability_id: String, target_idx: int = -1) -> 
 	change_state(GameState.STATE_PLAYING_ABILITY)
 	print("[GM DEBUG] ACCEPTED. State -> PLAYING_ABILITY. Executing manager...")
 	
-	# Centralized removal from inventory
-	var idx = players_info[player_idx].abilities.find(ability_id)
+	# Centralized removal from inventory by slot index or first occurrence
+	var idx = slot_idx
+	if idx < 0 or idx >= players_info[player_idx].abilities.size() or players_info[player_idx].abilities[idx] != ability_id:
+		idx = players_info[player_idx].abilities.find(ability_id)
+		
 	if idx != -1:
-		players_info[player_idx].abilities.remove_at(idx)
+		players_info[player_idx].abilities[idx] = ""
 	
 	ability_played.emit(player_idx, ability_id)
 	ability_manager.execute(player_idx, ability_id, target_idx)
@@ -1057,9 +1057,13 @@ func buy_ability(p_idx: int) -> bool:
 	"""Centralized purchase logic for both Human UI and Bot Controller."""
 	var cost = 50
 	
-	# Hard cap: Max 8 abilities
-	if players_info[p_idx].abilities.size() >= 8:
-		print("GM: Player ", p_idx, " is at max capacity (8 abilities).")
+	# Hard cap: Max 6 active abilities
+	var active_count = 0
+	for ab_name in players_info[p_idx].abilities:
+		if ab_name != "":
+			active_count += 1
+	if active_count >= 6:
+		print("GM: Player ", p_idx, " is at max capacity (6 active abilities).")
 		return false
 		
 	if players_info[p_idx].money >= cost:
@@ -1081,7 +1085,13 @@ func buy_ability(p_idx: int) -> bool:
 		if ab in global_ability_counts:
 			global_ability_counts[ab] += 1
 			
-		players_info[p_idx].abilities.append(ab)
+		# Find the first empty slot to place the ability
+		var empty_slot = players_info[p_idx].abilities.find("")
+		if empty_slot != -1:
+			players_info[p_idx].abilities[empty_slot] = ab
+		else:
+			players_info[p_idx].abilities.append(ab)
+			
 		play_sfx(sfx_chicken)
 		ability_unlocked.emit(p_idx, ab)
 		print("GM: Player ", p_idx, " bought ability: ", ab, " (Limit Tracking: ", global_ability_counts, ")")
@@ -1220,15 +1230,22 @@ func _apply_mp_sync_payload(payload: Dictionary) -> void:
 			for hd in p.get("hand", []):
 				if hd is Dictionary:
 					hand.append(_dict_to_card(hd))
+			var p_abs = p.get("abilities", []) as Array
+			var final_abs = []
+			for k in range(6):
+				if k < p_abs.size():
+					final_abs.append(p_abs[k])
+				else:
+					final_abs.append("")
 			players_info.append({
 				"id": _pidx,
 				"name": str(p.get("name", "Player")),
-				"score": 0,
+				"score": int(p.get("score", 0)),
 				"hand": hand,
 				"can_call_dutch": bool(p.get("can_call_dutch", true)),
 				"beers": int(p.get("beers", 3)),
 				"money": int(p.get("money", 0)),
-				"abilities": (p.get("abilities", []) as Array).duplicate(),
+				"abilities": final_abs,
 				"is_eliminated": bool(p.get("is_eliminated", false)),
 				"is_skipped": bool(p.get("is_skipped", false)),
 				"is_bot": bool(p.get("is_bot", false)),

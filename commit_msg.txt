@@ -1,4 +1,4 @@
-feat(balance): limit game-breaking abilities to 2 per match
-feat(visuals): implement custom room and table models with full-bright lighting
+feat(avatar): shift camera slightly further forward to Z 0.24
 
-Agent: Executor (Antigravity)
+Agent: The Executor (Agent 2)
+- Slightly increased the horizontal camera forward offset to Z +0.24m (up from Z +0.20m) in front of the eyes.
