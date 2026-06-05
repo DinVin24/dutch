@@ -1,8 +1,7 @@
-feat(avatar): shift camera, clamp look yaw to 105, dampen body yaw, and align head rotation globally
+feat(avatar): lock hips translation, align camera to eye level, and shift head backward
 
 Agent: The Executor (Agent 2)
-- Shifted first-person Camera3D offset lower (+0.22m vertical height, down from +0.26m) and further forward (+0.36m, up from +0.32m).
-- Shifted local mixamorig_Head bone position 3.5 units backward in local bone space, while keeping remote players' heads at the standard rest position.
-- Expanded looking yaw clamp to [-105.0, 105.0] degrees (adding another 10 degrees).
-- Dampened avatar body yaw rotation to 35% of camera yaw and clamped it to [-50.0, 50.0] degrees.
-- Implemented global-basis head look alignment: calculated local pose rotation of head bone using inverse parent neck basis, making it align perfectly with camera world rotation (0 degrees angular offset).
+- Locked the entire 3D translation vector of mixamorig_Hips to the baseline rest position (Vector3(0.043546, -1.822579, -44.87878)) for all avatars to completely freeze translation during animations.
+- Positioned the Camera3D vertically at eye level (Y +0.10m, down from Y +0.22m) and horizontally in front of the eyes (Z +0.20m, down from Z +0.36m).
+- Shifted the local mixamorig_Head bone position 1.8 units backward in local space to prevent camera face-clipping.
+- Configured a safe Camera3D near clip distance of 0.08m.

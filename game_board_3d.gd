@@ -2160,19 +2160,17 @@ func _process(delta: float) -> void:
 						# Shift the head bone position slightly backwards in local space to prevent clipping with camera
 						var head_pos = skeleton.get_bone_pose_position(head_idx)
 						if p_idx == local_p_idx:
-							head_pos.z = 3.74789 - 3.5 # Shift local player's head backward by 3.5 units in bone space
+							head_pos.z = 3.74789 - 1.8 # Shift local player's head backward by 1.8 units in bone space
 						else:
 							head_pos.z = 3.74789 # Remote players: keep head at default position
 						skeleton.set_bone_pose_position(head_idx, head_pos)
 					if neck_idx != -1:
 						skeleton.set_bone_pose_scale(neck_idx, Vector3(1.0, 1.0, 1.0))
 					
-					# Force hips Y position to stay at the idle height (-1.822579) to prevent rising during take animation
+					# Lock hips translation completely to rest position to prevent rising/shifting during take animation
 					var hips_idx = skeleton.find_bone("mixamorig_Hips")
 					if hips_idx != -1:
-						var hips_pos = skeleton.get_bone_pose_position(hips_idx)
-						hips_pos.y = -1.822579
-						skeleton.set_bone_pose_position(hips_idx, hips_pos)
+						skeleton.set_bone_pose_position(hips_idx, Vector3(0.043546, -1.822579, -44.87878))
 					
 					# Clean up shadows-only mesh helpers from previous worktree versions
 					var attachment = skeleton.get_node_or_null("HeadShadowAttachment")
@@ -2209,8 +2207,8 @@ func _process(delta: float) -> void:
 					
 					# Align camera with the head bone + eye offset + shake
 					if is_instance_valid(camera):
-						# Use 0.15m near clip (since head is shifted back and camera is shifted forward)
-						camera.near = 0.15
+						# Use 0.08m near clip (since head is shifted back and camera is in front of the eyes)
+						camera.near = 0.08
 						var head_global_pos = skeleton.global_transform * skeleton.get_bone_global_pose(head_idx).origin
 						
 						if not _camera_initialized:
@@ -2219,12 +2217,12 @@ func _process(delta: float) -> void:
 						
 						var forward = Vector3(-sin(camera.rotation.y), 0.0, -cos(camera.rotation.y)).normalized()
 						
-						# Lock camera vertical height to base head position + offset (0.22m up, 0.36m forward)
+						# Lock camera vertical height to base head position + offset (0.10m up to eye level, 0.20m forward in front of the eyes)
 						# This prevents the camera from bobbing/rising when the character plays the "take" animation.
 						var target_camera_pos = Vector3(
-							head_global_pos.x + forward.x * 0.36,
-							_base_head_y + 0.22,
-							head_global_pos.z + forward.z * 0.36
+							head_global_pos.x + forward.x * 0.20,
+							_base_head_y + 0.10,
+							head_global_pos.z + forward.z * 0.20
 						) + shake_offset
 						
 						# Direct assignment to prevent relative lag
