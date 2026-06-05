@@ -100,6 +100,8 @@ var _base_camera_rotation: Vector3
 var _mp_camera_offset: Vector3 = Vector3.ZERO
 var _mp_connection_label: Label = null
 var _mp_status_poll_timer: float = 0.0
+var _last_turn_player_idx: int = -1
+var _turn_vfx_tween: Tween = null
 
 # Targeting state
 var _is_waiting_for_target: bool = false
@@ -1079,26 +1081,62 @@ func _on_ability_played(player_idx, ability_id, target_idx: int = -1):
 
 func _on_turn_started(player_idx):
 	var p_info = GameManager.players_info[player_idx]
+	var is_handoff: bool = _last_turn_player_idx != -1 and _last_turn_player_idx != player_idx
+	_last_turn_player_idx = player_idx
+
 	turn_label.text = "> " + p_info.name.to_upper() + "'S TURN"
 	_animate_glitch_text(turn_label)
-	_update_turn_lights(player_idx)
-	
+
 	if is_instance_valid(turn_indicator_circle):
 		var mat = turn_indicator_circle.get_active_material(0)
 		if mat is ShaderMaterial:
 			mat.set_shader_parameter("active_player_index", player_idx)
-			
+
+	if is_handoff:
+		_play_turn_transition_vfx(player_idx)
+		_update_turn_lights(player_idx, false, 0.65)
+	else:
+		_update_turn_lights(player_idx)
+
 	if player_idx == _human_ui_idx():
 		GameManager.play_sfx(_bell_stream)
 	else:
 		_show_message(p_info.name + " is thinking...")
 	_update_draw_arrow_visibility()
 
+func _play_turn_transition_vfx(player_idx: int) -> void:
+	var seat := _get_safe_player_pos(player_idx)
+	if seat:
+		spawn_particles("turn_change", seat.global_position + Vector3(0, 0.75, 0))
+
+	if is_instance_valid(turn_indicator_circle):
+		if _turn_vfx_tween and _turn_vfx_tween.is_valid():
+			_turn_vfx_tween.kill()
+		var base_scale: Vector3 = turn_indicator_circle.scale
+		_turn_vfx_tween = create_tween()
+		_turn_vfx_tween.tween_property(
+			turn_indicator_circle, "scale", base_scale * 1.1, 0.22
+		).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_turn_vfx_tween.tween_property(
+			turn_indicator_circle, "scale", base_scale, 0.4
+		).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+
+	if player_avatars.has(player_idx) and is_instance_valid(player_avatars[player_idx]):
+		var avatar: Node3D = player_avatars[player_idx]
+		var av_scale := avatar.scale
+		var av_tween := create_tween()
+		av_tween.tween_property(avatar, "scale", av_scale * 1.05, 0.18).set_trans(Tween.TRANS_BACK)
+		av_tween.tween_property(avatar, "scale", av_scale, 0.35).set_trans(Tween.TRANS_ELASTIC)
+
+	trigger_glitch(0.2, 0.45)
+	if not GameManager.is_multiplayer:
+		shake(0.08, 0.25)
+
 func _update_draw_arrow_visibility():
 	if is_instance_valid(draw_arrow):
 		draw_arrow.visible = GameManager.can_player_draw(_human_ui_idx())
 
-func _update_turn_lights(current_player: int, all_on: bool = false):
+func _update_turn_lights(current_player: int, all_on: bool = false, duration: float = 0.35):
 	for i in range(4):
 		var pl = player_lights.get(i)
 		if is_instance_valid(pl):
@@ -1111,7 +1149,7 @@ func _update_turn_lights(current_player: int, all_on: bool = false):
 				target_energy = 0.15 # Softer background neon ambience
 			
 			var tween = create_tween()
-			tween.tween_property(pl, "light_energy", target_energy, 0.35).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+			tween.tween_property(pl, "light_energy", target_energy, duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 func _setup_table_noise():
 	var table_mesh = $Table as MeshInstance3D
 	if not table_mesh: return
@@ -1231,9 +1269,12 @@ func _on_card_discarded(player_idx, card_data):
 				card_to_discard.queue_free()
 		)
 
-	# 5. REFRESH HAND (Always refresh, even if node wasn't found, to sync parity)
+	# 5. REFRESH HAND after discard tween so remaining cards settle correctly
 	if player_idx != -1:
-		_update_hand_visuals(player_idx)
+		get_tree().create_timer(0.5, false).timeout.connect(
+			func() -> void: _update_hand_visuals(player_idx),
+			CONNECT_ONE_SHOT
+		)
 
 func _show_message(text: String):
 	_current_ability_message = text
@@ -1545,7 +1586,7 @@ func _on_card_hover_exit(card_node: Node3D):
 			_update_hand_visuals(i)
 			break
 
-func _update_hand_visuals(player_idx: int):
+func _update_hand_visuals(player_idx: int, force_layout: bool = false):
 	if player_idx < 0 or player_idx >= 4: return
 	var hand_data = GameManager.players_info[player_idx].hand
 	var current_nodes = player_hands[player_idx]
@@ -1616,6 +1657,7 @@ func _update_hand_visuals(player_idx: int):
 			
 	player_hands[player_idx] = new_node_list
 	var nodes = new_node_list
+	var skipped_relayout := false
 	# REFINED HAND LAYOUT: Aggressive bundling and conditional spreading
 	var total_cards = nodes.size()
 	const BASE_SPACING = 1.05 # Near-touching spacing
@@ -1662,8 +1704,18 @@ func _update_hand_visuals(player_idx: int):
 			# Slightly higher Y step (0.01) to prevent Z-fighting in tight spots
 			var target_pos = Vector3(offset_x, 0.05 + i * 0.01, 0)
 			
-			# Skip if mid-flip or already there (performance)
-			if card_node.is_being_peeked or (card_node.is_flipping and not card_node.has_meta("is_swapping_in")): continue
+			# Skip if mid-flip/peek unless we are forcing a post-penalty relayout.
+			if not force_layout and (card_node.is_being_peeked or (card_node.is_flipping and not card_node.has_meta("is_swapping_in"))):
+				skipped_relayout = true
+				continue
+			if force_layout:
+				card_node.is_being_peeked = false
+				card_node.is_flipping = false
+				card_node.set_highlight(false)
+				if card_node.hover_tween and card_node.hover_tween.is_valid():
+					card_node.hover_tween.kill()
+				card_node.hover_lift = 0.0
+				card_node.hover_scale = 1.0
 			
 			# Special handling for hovered card Y (lift is handled locally in Card3D)
 			if card_node == _hovered_card_node:
@@ -1703,6 +1755,20 @@ func _update_hand_visuals(player_idx: int):
 			# refresh fired).
 			if delay > 0.0:
 				tween.chain().tween_callback(_refresh_human_interactivity)
+
+	if skipped_relayout:
+		_schedule_hand_relayout(player_idx)
+
+func _schedule_hand_relayout(player_idx: int) -> void:
+	var key := "hand_relayout_%d" % player_idx
+	if has_meta(key):
+		return
+	set_meta(key, true)
+	get_tree().create_timer(0.4, false).timeout.connect(func() -> void:
+		remove_meta(key)
+		if is_instance_valid(self):
+			_update_hand_visuals(player_idx, true)
+	, CONNECT_ONE_SHOT)
 
 func _handle_initial_deal():
 	print("GameBoard3D: _handle_initial_deal started")
@@ -2216,6 +2282,9 @@ func _on_jump_in_failed(player_idx, card_idx, _card_data):
 		
 		trigger_glitch(0.3, 0.4)
 		shake(0.2, 0.3)
+		if not (GameManager.easy_mode and player_idx == _human_ui_idx()):
+			await get_tree().create_timer(0.35, false).timeout
+		_update_hand_visuals(player_idx, true)
 
 
 func _on_bot_action(message):
@@ -2873,6 +2942,20 @@ func spawn_particles(type: String, global_pos: Vector3):
 			grad.set_color(0, Color(1.0, 0.1, 0.2, 1.0))
 			grad.set_color(1, Color(0.1, 0.0, 0.0, 0.0))
 			mesh.size = Vector2(0.14, 0.14)
+
+		"turn_change":
+			particles.amount = 50
+			particles.lifetime = 0.9
+			particles.spread = 160.0
+			particles.direction = Vector3.UP
+			particles.gravity = Vector3(0, -0.4, 0)
+			particles.initial_velocity_min = 1.5
+			particles.initial_velocity_max = 3.5
+			particles.color = Color(0.0, 1.0, 1.0)
+			grad.set_color(0, Color(0.2, 1.0, 1.0, 1.0))
+			grad.set_color(0.5, Color(0.9, 0.2, 1.0, 0.8))
+			grad.set_color(1, Color(0.1, 0.0, 0.4, 0.0))
+			mesh.size = Vector2(0.12, 0.12)
 			
 		_: # Default card trail spark
 			particles.amount = 15
