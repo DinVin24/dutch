@@ -44,6 +44,16 @@ func _wait_after_bot_action() -> void:
 	var pause := 0.35 if gm.is_multiplayer else SP_POST_ACTION_PAUSE
 	await gm.get_tree().create_timer(pause, false).timeout
 
+func _maybe_bot_emote(bot_idx: int, chance: float = 0.38) -> void:
+	if _is_headless(): return
+	if rng.randf() > chance:
+		return
+	await _wait(rng.randf_range(0.15, 0.45))
+	if bot_idx < 0 or bot_idx >= gm.num_players:
+		return
+	var emote_id: String = GameManager.EMOTE_IDS[rng.randi() % GameManager.EMOTE_IDS.size()]
+	gm.emit_player_emote(bot_idx, emote_id)
+
 # ─── Memory helpers ──────────────────────────────────────────
 
 ## Returns a bot's own card memory dict { card_idx: CardData }
@@ -182,6 +192,7 @@ func _try_jump_ins(card_data: CardData) -> void:
 			gm.bot_action.emit("Player %d jumped in with %s over %s." % [bot_idx, jumped_card.display_name(), over_str])
 			gm.start_jump_in(bot_idx)
 			gm.validate_jump_in(match_idx)
+			await _maybe_bot_emote(bot_idx, 0.55)
 			await _wait_after_bot_action()
 			break  # Only one jump-in per discard event
 
@@ -241,6 +252,7 @@ func _execute_resolve_drawn(bot_idx: int) -> void:
 			summary, drawn.display_name(), card_name, drawn.display_name()])
 		gm.bot_action.emit("Player %d drew %s. Discarded %s." % [bot_idx, drawn.display_name(), card_name])
 		gm.player_swap_drawn_card(worst_idx)
+		await _maybe_bot_emote(bot_idx, 0.25)
 		await _wait_after_bot_action()
 	else:
 		# Drawn card is no better — just discard it
@@ -248,6 +260,7 @@ func _execute_resolve_drawn(bot_idx: int) -> void:
 		print("%s\nDrew %s\nDiscarded %s" % [summary, drawn.display_name(), drawn.display_name()])
 		gm.bot_action.emit("Player %d drew %s. Discarded %s." % [bot_idx, drawn.display_name(), drawn.display_name()])
 		gm.player_discard_drawn_card()
+		await _maybe_bot_emote(bot_idx, 0.2)
 		await _wait_after_bot_action()
 
 ## QUEEN ABILITY: learn an unknown own card first; otherwise learn any card on the board.
@@ -362,9 +375,11 @@ func _execute_end_choice(bot_idx: int) -> void:
 		if score < 7 and gm.can_player_call_dutch(bot_idx):
 			gm.bot_action.emit("Player %d calls DUTCH! (score: %d)" % [bot_idx, score])
 			gm.call_dutch(bot_idx)
+			await _maybe_bot_emote(bot_idx, 0.7)
 			await _wait_after_bot_action()
 			return
 
+	await _maybe_bot_emote(bot_idx, 0.12)
 	await _wait_after_bot_action()
 	gm.end_turn()
 
@@ -438,6 +453,7 @@ func _get_leading_opponent_idx(bot_idx: int) -> int:
 func _execute_confirm_dutch(bot_idx: int) -> void:
 	await _wait(1.5)
 	if not gm.can_player_confirm_dutch(bot_idx): return
+	await _maybe_bot_emote(bot_idx, 0.9)
 	gm.confirm_dutch()
 
 # ─── Memory Utility ───────────────────────────────────────────

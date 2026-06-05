@@ -29,6 +29,7 @@ signal card_discarded(player_id, card_data)
 signal jump_in_penalty(player_idx, penalty_card_data)
 signal jump_in_failed(player_idx: int, card_idx: int, card_data: CardData) # Bug 2
 signal bot_action(message: String)
+signal player_emoted(player_idx: int, emote_id: String)
 signal memory_shift_required(player_idx, removed_card_idx)
 signal jack_swap_resolved(p1: int, c1: int, p2: int, c2: int)
 signal hand_updated(player_idx: int)
@@ -43,6 +44,9 @@ signal ability_unlocked(player_idx, ability_id)
 signal polarity_shifted(new_state: bool)
 signal multiplayer_sync_applied
 signal mp_connection_status_changed(lag_ms: int, status: String)
+
+const EMOTE_IDS: Array[String] = ["laugh", "shock", "gg", "chicken"]
+const EMOTE_COOLDOWN_SEC := 4.0
 
 var current_state: GameState = GameState.INITIALIZING
 var deck_manager: DeckManager
@@ -82,6 +86,7 @@ var _mp_sync_seq: int = 0
 var _mp_last_applied_sync_seq: int = -1
 var _mp_game_over_scores_applied: bool = false
 var _mp_sync_prev_cur: int = -1
+var _emote_cooldown_until: Dictionary = {}
 var mp_sync_lag_ms: int = 0
 var mp_connection_status: String = "ok"
 var turn_direction: int = 1 # 1 for clockwise, -1 for counter-clockwise (Uno Reverse)
@@ -230,6 +235,7 @@ func initialize_game(p_count: int = 4):
 	_mp_last_applied_sync_seq = -1
 	_mp_game_over_scores_applied = false
 	_mp_sync_prev_cur = -1
+	_emote_cooldown_until.clear()
 	mp_sync_lag_ms = 0
 	mp_connection_status = "ok"
 	players_info.clear()
@@ -1320,6 +1326,63 @@ func _update_mp_connection_status() -> void:
 
 func refresh_mp_connection_status() -> void:
 	_update_mp_connection_status()
+
+func is_valid_emote_id(emote_id: String) -> bool:
+	return EMOTE_IDS.has(emote_id)
+
+func get_emote_cooldown_remaining(player_idx: int) -> float:
+	if not _is_valid_player_index(player_idx):
+		return 0.0
+	var until: float = float(_emote_cooldown_until.get(player_idx, 0.0))
+	var now: float = Time.get_ticks_msec() / 1000.0
+	return maxf(0.0, until - now)
+
+func request_emote(emote_id: String) -> bool:
+	if not is_valid_emote_id(emote_id):
+		return false
+	if is_multiplayer:
+		if multiplayer.is_server():
+			return emit_player_emote(local_player_idx, emote_id)
+		request_player_emote.rpc_id(1, emote_id)
+		return true
+	return emit_player_emote(0, emote_id)
+
+func emit_player_emote(player_idx: int, emote_id: String, respect_cooldown: bool = true) -> bool:
+	if not is_valid_emote_id(emote_id) or not _is_valid_player_index(player_idx):
+		return false
+	if respect_cooldown and get_emote_cooldown_remaining(player_idx) > 0.0:
+		return false
+	if respect_cooldown:
+		_emote_cooldown_until[player_idx] = Time.get_ticks_msec() / 1000.0 + EMOTE_COOLDOWN_SEC
+	if is_multiplayer:
+		broadcast_player_emote.rpc(player_idx, emote_id)
+	else:
+		player_emoted.emit(player_idx, emote_id)
+	return true
+
+@rpc("any_peer", "call_local", "reliable")
+func request_player_emote(emote_id: String) -> void:
+	if not is_multiplayer or not multiplayer.is_server():
+		return
+	if not is_valid_emote_id(emote_id):
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = multiplayer.get_unique_id()
+	var player_idx: int = int(peer_to_idx.get(sender_id, -1))
+	if player_idx == -1:
+		return
+	emit_player_emote(player_idx, emote_id)
+
+@rpc("any_peer", "call_local", "reliable")
+func broadcast_player_emote(player_idx: int, emote_id: String) -> void:
+	if not is_valid_emote_id(emote_id) or not _is_valid_player_index(player_idx):
+		return
+	if is_multiplayer and multiplayer.is_server():
+		var sender_id := multiplayer.get_remote_sender_id()
+		if sender_id != 0 and int(peer_to_idx.get(sender_id, -1)) != player_idx:
+			return
+	player_emoted.emit(player_idx, emote_id)
 
 @rpc("authority", "call_local", "reliable")
 func sync_match_state(payload: Dictionary) -> void:

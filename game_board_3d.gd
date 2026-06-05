@@ -22,12 +22,13 @@ var _victory_results_pending: Array = []
 var _victory_cinematic_active: bool = false
 var _victory_overlay_layer: CanvasLayer = null
 
-const VICTORY_EMOTES := [
-	{"id": "gg", "label": "GG"},
-	{"id": "laugh", "label": ":)"},
-	{"id": "shock", "label": ":O"},
-	{"id": "chicken", "label": "Chicken"},
+const GAME_EMOTES := [
+	{"id": "laugh", "label": "Laugh", "glyph": ":)"},
+	{"id": "shock", "label": "Shock", "glyph": ":O"},
+	{"id": "gg", "label": "GG", "glyph": "GG"},
+	{"id": "chicken", "label": "Chicken", "glyph": "BOK"},
 ]
+const EMOTE_WHEEL_COLOR := Color(1.0, 0.85, 0.2)
 
 var bot_controller: BotController = null
 var action_panel: PanelContainer
@@ -58,6 +59,10 @@ var card_scene = preload("res://card_3d.tscn")
 var pause_menu_scene = preload("res://pause_menu.tscn")
 var beer_scene = preload("res://assets/models/bere.glb")
 var pause_menu_instance: Node = null
+var _emote_wheel_panel: PanelContainer = null
+var _emote_wheel_open: bool = false
+var _emote_cooldown_label: Label = null
+var _emote_buttons: Array[Button] = []
 var noclip_enabled: bool = false
 var base_camera_transform: Transform3D
 var camera_rot_x: float = 0.0
@@ -184,6 +189,7 @@ func _ready():
 	GameManager.pending_card_consumed.connect(_on_pending_card_consumed)
 	GameManager.multiplayer_sync_applied.connect(_on_multiplayer_sync_applied)
 	GameManager.mp_connection_status_changed.connect(_on_mp_connection_status_changed)
+	GameManager.player_emoted.connect(_on_player_emoted)
 	NetworkManager.play_again_votes_updated.connect(_on_play_again_votes_updated)
 	
 	# Dynamic Tavern Ambient & Spotlight Lighting
@@ -591,6 +597,68 @@ func _create_hud_ui():
 	desc_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95))
 	_ability_desc_panel.add_child(desc_label)
 	_ability_desc_panel.hide()
+
+	_create_emote_wheel_ui()
+
+func _create_emote_wheel_ui() -> void:
+	_emote_wheel_panel = PanelContainer.new()
+	_emote_wheel_panel.name = "EmoteWheel"
+	_emote_wheel_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_emote_wheel_panel.offset_left = 20.0
+	_emote_wheel_panel.offset_top = -220.0
+	_emote_wheel_panel.offset_right = 300.0
+	_emote_wheel_panel.offset_bottom = -20.0
+	_emote_wheel_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	_emote_wheel_panel.visible = false
+
+	var wheel_style := StyleBoxFlat.new()
+	wheel_style.bg_color = Color(0.04, 0.04, 0.06, 0.82)
+	wheel_style.border_width_left = 2
+	wheel_style.border_width_right = 2
+	wheel_style.border_width_top = 2
+	wheel_style.border_width_bottom = 2
+	wheel_style.border_color = Color(EMOTE_WHEEL_COLOR.r, EMOTE_WHEEL_COLOR.g, EMOTE_WHEEL_COLOR.b, 0.55)
+	wheel_style.corner_radius_top_left = 10
+	wheel_style.corner_radius_top_right = 10
+	wheel_style.corner_radius_bottom_left = 10
+	wheel_style.corner_radius_bottom_right = 10
+	wheel_style.content_margin_left = 12
+	wheel_style.content_margin_right = 12
+	wheel_style.content_margin_top = 10
+	wheel_style.content_margin_bottom = 10
+	_emote_wheel_panel.add_theme_stylebox_override("panel", wheel_style)
+	$GameUI/MainHUD.add_child(_emote_wheel_panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	_emote_wheel_panel.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "EMOTES (%s)" % _get_action_key_string("game_emote_wheel")
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 18)
+	title.add_theme_color_override("font_color", EMOTE_WHEEL_COLOR)
+	vbox.add_child(title)
+
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 8)
+	vbox.add_child(grid)
+
+	_emote_buttons.clear()
+	for i in range(GAME_EMOTES.size()):
+		var emote: Dictionary = GAME_EMOTES[i]
+		var btn := _create_button(grid, "%d) %s" % [i + 1, emote.label], EMOTE_WHEEL_COLOR)
+		btn.pressed.connect(_on_emote_wheel_pressed.bind(emote.id))
+		_emote_buttons.append(btn)
+
+	_emote_cooldown_label = Label.new()
+	_emote_cooldown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_emote_cooldown_label.add_theme_font_size_override("font_size", 14)
+	_emote_cooldown_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
+	_emote_cooldown_label.text = ""
+	vbox.add_child(_emote_cooldown_label)
 
 func _create_button(parent: Node, text: String, color: Color) -> Button:
 	var btn = Button.new()
@@ -2134,10 +2202,10 @@ func _show_victory_overlay(results: Array) -> void:
 	emote_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	emote_row.add_theme_constant_override("separation", 14)
 	vbox.add_child(emote_row)
-	for emote in VICTORY_EMOTES:
+	for emote in GAME_EMOTES:
 		var emote_btn := Button.new()
 		emote_btn.text = emote.label
-		emote_btn.pressed.connect(_play_victory_emote.bind(winner_id, emote.id))
+		emote_btn.pressed.connect(_on_victory_emote_pressed.bind(winner_id, emote.id))
 		emote_row.add_child(emote_btn)
 
 	for i in range(results.size()):
@@ -2330,6 +2398,16 @@ func _handle_game_keyboard_input(event: InputEvent) -> void:
 		_keyboard_confirm_card()
 		get_viewport().set_input_as_handled()
 
+	elif event.is_action("game_emote_wheel"):
+		_toggle_emote_wheel()
+		get_viewport().set_input_as_handled()
+
+	elif _emote_wheel_open and event.keycode >= KEY_1 and event.keycode <= KEY_4:
+		var emote_idx: int = event.keycode - KEY_1
+		if emote_idx < GAME_EMOTES.size():
+			_on_emote_wheel_pressed(GAME_EMOTES[emote_idx].id)
+			get_viewport().set_input_as_handled()
+
 func _keyboard_navigate_hand(direction: int) -> void:
 	var hand = player_hands[_human_ui_idx()]
 	if hand.is_empty(): return
@@ -2452,6 +2530,7 @@ func _process(delta: float) -> void:
 	_update_cabinet_hover()
 	_update_crosshair_raycast()
 	_update_action_buttons_state()
+	_update_emote_wheel_state()
 	
 	if is_instance_valid(draw_arrow) and draw_arrow.visible:
 		draw_arrow.position.y = 1.2 + sin(Time.get_ticks_msec() * 0.005) * 0.15
@@ -2867,11 +2946,79 @@ func _play_victory_reveal_sequence(winner_id: int = 0) -> void:
 	await get_tree().create_timer(0.45, true, false, true).timeout
 	Engine.time_scale = 1.0
 
-func _play_victory_emote(winner_id: int, emote_id: String) -> void:
-	if winner_id < 0 or winner_id >= 4:
+func _toggle_emote_wheel() -> void:
+	if pause_menu_instance != null:
 		return
-	play_take_animation(winner_id)
-	var seat := _get_safe_player_pos(winner_id)
+	if GameManager.current_state == GameManager.GameState.GAME_OVER:
+		return
+	_emote_wheel_open = not _emote_wheel_open
+	if is_instance_valid(_emote_wheel_panel):
+		_emote_wheel_panel.visible = _emote_wheel_open
+
+func _on_emote_wheel_pressed(emote_id: String) -> void:
+	if not GameManager.request_emote(emote_id):
+		return
+	_emote_wheel_open = false
+	if is_instance_valid(_emote_wheel_panel):
+		_emote_wheel_panel.visible = false
+
+func _on_victory_emote_pressed(winner_id: int, emote_id: String) -> void:
+	GameManager.emit_player_emote(winner_id, emote_id, false)
+
+func _on_player_emoted(player_idx: int, emote_id: String) -> void:
+	_play_player_emote(player_idx, emote_id)
+
+func _update_emote_wheel_state() -> void:
+	if not is_instance_valid(_emote_wheel_panel):
+		return
+	var in_game := GameManager.current_state != GameManager.GameState.GAME_OVER \
+			and GameManager.current_state != GameManager.GameState.INITIALIZING
+	if not in_game or pause_menu_instance != null:
+		_emote_wheel_open = false
+		_emote_wheel_panel.visible = false
+
+	var remaining := GameManager.get_emote_cooldown_remaining(_human_ui_idx())
+	var on_cooldown := remaining > 0.0
+	for btn in _emote_buttons:
+		if is_instance_valid(btn):
+			btn.disabled = on_cooldown
+	if is_instance_valid(_emote_cooldown_label):
+		if on_cooldown:
+			_emote_cooldown_label.text = "Cooldown %.1fs" % remaining
+		else:
+			_emote_cooldown_label.text = "Ready"
+
+func _emote_glyph(emote_id: String) -> String:
+	for emote in GAME_EMOTES:
+		if emote.id == emote_id:
+			return emote.glyph
+	return "?"
+
+func _show_emote_bubble(player_idx: int, emote_id: String) -> void:
+	var seat := _get_safe_player_pos(player_idx)
+	if not seat:
+		return
+	var bubble := Label3D.new()
+	bubble.text = _emote_glyph(emote_id)
+	bubble.font_size = 88
+	bubble.outline_size = 12
+	bubble.outline_modulate = Color(0, 0, 0, 0.85)
+	bubble.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	bubble.modulate = Color(1.0, 0.95, 0.55)
+	bubble.position = Vector3(0, 1.35, 0)
+	seat.add_child(bubble)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(bubble, "position:y", 1.85, 0.75).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(bubble, "modulate:a", 0.0, 1.0).set_delay(0.55)
+	tw.chain().tween_callback(bubble.queue_free)
+
+func _play_player_emote(player_idx: int, emote_id: String) -> void:
+	if player_idx < 0 or player_idx >= 4:
+		return
+	play_take_animation(player_idx)
+	_show_emote_bubble(player_idx, emote_id)
+	var seat := _get_safe_player_pos(player_idx)
 	if seat:
 		var burst_pos := seat.global_position + Vector3(0, 1.0, 0)
 		match emote_id:

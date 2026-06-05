@@ -62,6 +62,8 @@ func _run() -> void:
 
 	await _verify_card_mesh()
 	await create_timer(0.5).timeout
+	await _verify_emote_wheel()
+	await create_timer(0.5).timeout
 	await _verify_beer()
 	await create_timer(1.5).timeout
 	await _verify_jumpscare()
@@ -109,6 +111,27 @@ func _verify_card_mesh() -> void:
 		_fail("discard_trail", "DiscardTrail node missing")
 
 	card.queue_free()
+
+func _verify_emote_wheel() -> void:
+	_log("--- EMOTE WHEEL TEST ---")
+	if _board == null:
+		_fail("emote_board", "board missing")
+		return
+	if not is_instance_valid(_board._emote_wheel_panel):
+		_fail("emote_wheel_panel", "panel missing")
+		return
+	_pass("emote wheel panel created")
+	if _board._emote_buttons.size() != 4:
+		_fail("emote_buttons", "expected 4 buttons")
+		return
+	_pass("emote wheel has 4 buttons")
+
+	var gm := _gm()
+	if not gm.emit_player_emote(0, "gg", false):
+		_fail("emote_emit", "emit_player_emote failed")
+		return
+	await process_frame
+	_pass("player emote signal + VFX path")
 
 func _verify_beer() -> void:
 	_log("--- BEER TEST ---")
