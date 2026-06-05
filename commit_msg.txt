@@ -1,7 +1,4 @@
-feat(avatar): lock hips translation, align camera to eye level, and shift head backward
+feat(avatar): shift camera slightly further forward to Z 0.24
 
 Agent: The Executor (Agent 2)
-- Locked the entire 3D translation vector of mixamorig_Hips to the baseline rest position (Vector3(0.043546, -1.822579, -44.87878)) for all avatars to completely freeze translation during animations.
-- Positioned the Camera3D vertically at eye level (Y +0.10m, down from Y +0.22m) and horizontally in front of the eyes (Z +0.20m, down from Z +0.36m).
-- Shifted the local mixamorig_Head bone position 1.8 units backward in local space to prevent camera face-clipping.
-- Configured a safe Camera3D near clip distance of 0.08m.
+- Slightly increased the horizontal camera forward offset to Z +0.24m (up from Z +0.20m) in front of the eyes.

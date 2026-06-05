@@ -2217,12 +2217,12 @@ func _process(delta: float) -> void:
 						
 						var forward = Vector3(-sin(camera.rotation.y), 0.0, -cos(camera.rotation.y)).normalized()
 						
-						# Lock camera vertical height to base head position + offset (0.10m up to eye level, 0.20m forward in front of the eyes)
+						# Lock camera vertical height to base head position + offset (0.10m up to eye level, 0.24m forward in front of the eyes)
 						# This prevents the camera from bobbing/rising when the character plays the "take" animation.
 						var target_camera_pos = Vector3(
-							head_global_pos.x + forward.x * 0.20,
+							head_global_pos.x + forward.x * 0.24,
 							_base_head_y + 0.10,
-							head_global_pos.z + forward.z * 0.20
+							head_global_pos.z + forward.z * 0.24
 						) + shake_offset
 						
 						# Direct assignment to prevent relative lag
