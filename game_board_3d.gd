@@ -72,6 +72,14 @@ var camera_rot_y: float = 0.0
 		beer_emission = value
 		if Engine.is_editor_hint() and is_inside_tree(): _create_beer_placeholders()
 
+enum BeerVisualState { FULL, HALF, EMPTY }
+
+const BEER_LIQUID_FILL := {
+	BeerVisualState.FULL: 1.0,
+	BeerVisualState.HALF: 0.5,
+	BeerVisualState.EMPTY: 0.04,
+}
+
 var player_beers_nodes: Array = [[], [], [], []]
 var money_labels: Array = []
 var _chicken_node: Node3D = null
@@ -673,6 +681,8 @@ func _create_beer_placeholders():
 			beer.position = Vector3(right_x_base + right_offset, beer_y_offset, front_z)
 			beer.set_meta("base_scale", beer.scale)
 			beer.set_meta("base_y", beer_y_offset)
+			_setup_beer_liquid_visual(beer)
+			_apply_beer_visual_state(beer, BeerVisualState.FULL, false)
 			pos_node.add_child(beer)
 			player_beers_nodes[i].append(beer)
 
@@ -982,8 +992,8 @@ func _on_player_drank_beer(player_idx, remaining):
 	var prev_remaining = _last_sync_diag.get("beers", [3, 3, 3, 3])[player_idx] if player_idx < _last_sync_diag.get("beers", []).size() else 3
 	for i in range(beers_array.size()):
 		if i < remaining:
-			_set_beer_fill(beers_array[i], 1.0, false)
 			beers_array[i].visible = true
+			_apply_beer_visual_state(beers_array[i], BeerVisualState.FULL, false)
 		elif beers_array[i].visible and i >= remaining:
 			_animate_beer_emptying(beers_array[i])
 		else:
@@ -999,61 +1009,119 @@ func _sync_beer_visuals(player_idx: int, remaining: int) -> void:
 	var beers_array = player_beers_nodes[player_idx]
 	for i in range(beers_array.size()):
 		if i < remaining:
-			_set_beer_fill(beers_array[i], 1.0, false)
 			beers_array[i].visible = true
+			_apply_beer_visual_state(beers_array[i], BeerVisualState.FULL, false)
 		else:
 			beers_array[i].visible = false
 
-func _set_beer_fill(beer_node: Node3D, fill_ratio: float, animate: bool) -> void:
+func _setup_beer_liquid_visual(beer_node: Node3D) -> void:
+	if beer_node.get_node_or_null("LiquidFill"):
+		return
+	var liquid := MeshInstance3D.new()
+	liquid.name = "LiquidFill"
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.055
+	cyl.bottom_radius = 0.05
+	cyl.height = 0.14
+	liquid.mesh = cyl
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.92, 0.72, 0.18, 0.92)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.roughness = 0.25
+	mat.emission_enabled = true
+	mat.emission = Color(0.95, 0.65, 0.1)
+	mat.emission_energy_multiplier = 0.15
+	liquid.material_override = mat
+	liquid.position = Vector3(0, 0.08, 0)
+	liquid.set_meta("base_height", cyl.height)
+	beer_node.add_child(liquid)
+
+func _reset_beer_mug_transform(beer_node: Node3D) -> void:
 	if not is_instance_valid(beer_node):
 		return
-	var base_scale: Vector3 = beer_node.get_meta("base_scale", beer_scale)
-	var base_y: float = beer_node.get_meta("base_y", beer_y_offset)
-	var target_scale := Vector3(base_scale.x, base_scale.y * fill_ratio, base_scale.z)
-	var target_y := base_y - (base_scale.y * (1.0 - fill_ratio) * 0.35)
-	if animate:
-		var tween = create_tween().set_parallel(true)
-		tween.tween_property(beer_node, "scale", target_scale, 0.25).set_trans(Tween.TRANS_QUAD)
-		tween.tween_property(beer_node, "position:y", target_y, 0.25).set_trans(Tween.TRANS_QUAD)
-	else:
-		beer_node.scale = target_scale
-		beer_node.position.y = target_y
+	beer_node.scale = beer_node.get_meta("base_scale", beer_scale)
+	beer_node.position.y = beer_node.get_meta("base_y", beer_y_offset)
 	beer_node.rotation_degrees.z = 0.0
+
+func _apply_beer_visual_state(beer_node: Node3D, state: BeerVisualState, animate: bool) -> void:
+	if not is_instance_valid(beer_node):
+		return
+	_reset_beer_mug_transform(beer_node)
+	beer_node.set_meta("beer_state", state)
+	var fill: float = BEER_LIQUID_FILL[state]
+	var liquid := beer_node.get_node_or_null("LiquidFill") as MeshInstance3D
+	if liquid == null:
+		return
+	var base_h: float = liquid.get_meta("base_height", 0.14)
+	var target_scale := Vector3(1.0, fill, 1.0)
+	var target_y := 0.08 - (base_h * (1.0 - fill) * 0.5)
+	if animate:
+		var tween := create_tween().set_parallel(true)
+		tween.tween_property(liquid, "scale", target_scale, 0.28).set_trans(Tween.TRANS_QUAD)
+		tween.tween_property(liquid, "position:y", target_y, 0.28).set_trans(Tween.TRANS_QUAD)
+	else:
+		liquid.scale = target_scale
+		liquid.position.y = target_y
 
 func _animate_beer_emptying(beer_node: Node3D) -> void:
 	if not is_instance_valid(beer_node):
 		return
 	beer_node.visible = true
-	var base_scale: Vector3 = beer_node.get_meta("base_scale", beer_scale)
+	_reset_beer_mug_transform(beer_node)
+	_apply_beer_visual_state(beer_node, BeerVisualState.FULL, false)
+
+	var foam_pos := beer_node.global_position + Vector3(0, 0.22, 0)
 	var spill_pos := beer_node.global_position + Vector3(0, 0.05, 0.1)
-	spawn_particles("beer_drink", beer_node.global_position + Vector3(0, 0.25, 0))
-	var tween = create_tween()
-	tween.tween_property(beer_node, "rotation_degrees:z", -18.0, 0.15).set_trans(Tween.TRANS_QUAD)
-	tween.parallel().tween_property(beer_node, "scale", Vector3(base_scale.x, base_scale.y * 0.5, base_scale.z), 0.2).set_trans(Tween.TRANS_QUAD)
-	tween.tween_callback(func(): spawn_particles("beer_spill", spill_pos))
-	tween.tween_property(beer_node, "scale", Vector3(base_scale.x, base_scale.y * 0.05, base_scale.z), 0.25).set_trans(Tween.TRANS_BACK)
-	tween.tween_callback(func():
+	spawn_particles("beer_drink", foam_pos)
+
+	var tween := create_tween()
+	# State 1 -> 2: full mug to half
+	tween.tween_callback(func() -> void:
+		if is_instance_valid(beer_node):
+			_apply_beer_visual_state(beer_node, BeerVisualState.HALF, true)
+	)
+	tween.tween_interval(0.32)
+	tween.tween_callback(func() -> void:
+		if is_instance_valid(beer_node):
+			spawn_particles("beer_drink", foam_pos)
+	)
+	tween.tween_interval(0.12)
+	# State 2 -> 3: half to empty with spill
+	tween.tween_callback(func() -> void:
+		if is_instance_valid(beer_node):
+			_apply_beer_visual_state(beer_node, BeerVisualState.EMPTY, true)
+			spawn_particles("beer_spill", spill_pos)
+	)
+	tween.tween_interval(0.08)
+	tween.tween_property(beer_node, "rotation_degrees:z", -20.0, 0.18).set_trans(Tween.TRANS_QUAD)
+	tween.tween_interval(0.22)
+	tween.tween_callback(func() -> void:
 		if is_instance_valid(beer_node):
 			beer_node.visible = false
-			beer_node.scale = base_scale
-			beer_node.position.y = beer_node.get_meta("base_y", beer_y_offset)
-			beer_node.rotation_degrees.z = 0.0
+			_reset_beer_mug_transform(beer_node)
+			_apply_beer_visual_state(beer_node, BeerVisualState.FULL, false)
 	)
 
 func _animate_beer_refill(beers_array: Array, remaining: int) -> void:
 	if remaining <= 0 or remaining > beers_array.size():
 		return
-	var beer_node = beers_array[remaining - 1]
+	var beer_node: Node3D = beers_array[remaining - 1]
 	if not is_instance_valid(beer_node):
 		return
 	beer_node.visible = true
-	var base_scale: Vector3 = beer_node.get_meta("base_scale", beer_scale)
-	beer_node.scale = Vector3(base_scale.x, base_scale.y * 0.05, base_scale.z)
-	beer_node.position.y = beer_node.get_meta("base_y", beer_y_offset)
-	var tween = create_tween()
-	tween.tween_property(beer_node, "scale", Vector3(base_scale.x, base_scale.y * 0.5, base_scale.z), 0.2).set_trans(Tween.TRANS_QUAD)
-	tween.tween_property(beer_node, "scale", base_scale, 0.25).set_trans(Tween.TRANS_BACK)
-	spawn_particles("beer_drink", beer_node.global_position + Vector3(0, 0.2, 0))
+	_reset_beer_mug_transform(beer_node)
+	_apply_beer_visual_state(beer_node, BeerVisualState.EMPTY, false)
+	var tween := create_tween()
+	tween.tween_callback(func() -> void:
+		if is_instance_valid(beer_node):
+			_apply_beer_visual_state(beer_node, BeerVisualState.HALF, true)
+	)
+	tween.tween_interval(0.22)
+	tween.tween_callback(func() -> void:
+		if is_instance_valid(beer_node):
+			_apply_beer_visual_state(beer_node, BeerVisualState.FULL, true)
+			spawn_particles("beer_drink", beer_node.global_position + Vector3(0, 0.2, 0))
+	)
 
 func _on_player_eliminated(player_idx):
 	_show_message(GameManager.players_info[player_idx].name + " PASSED OUT!")
