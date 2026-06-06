@@ -105,6 +105,21 @@ var global_ability_counts: Dictionary = {
 	"polarity_shift": 0
 }
 var last_ability_event: Dictionary = {}
+var last_debug_event: String = ""
+var jump_in_validating: bool = false
+
+const DEBUG_LOG_PATH := "user://game_debug.log"
+
+func debug_log(category: String, message: String) -> void:
+	var line := "[%s] [%s] %s" % [Time.get_datetime_string_from_system(), category, message]
+	last_debug_event = "%s: %s" % [category, message]
+	var file := FileAccess.open(DEBUG_LOG_PATH, FileAccess.READ_WRITE)
+	if file == null:
+		file = FileAccess.open(DEBUG_LOG_PATH, FileAccess.WRITE)
+	if file:
+		file.seek_end()
+		file.store_line(line)
+		file.close()
 
 func _ready():
 	deck_manager = DeckManager.new()
@@ -251,9 +266,17 @@ func initialize_game(p_count: int = 4):
 	}
 	jump_in_resume_state = GameState.INITIALIZING
 	drawn_card_data = null
+	jump_in_validating = false
+	last_debug_event = ""
 	is_multiplayer = multiplayer.multiplayer_peer != null \
 		and not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer) \
 		and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
+	var log_file := FileAccess.open(DEBUG_LOG_PATH, FileAccess.WRITE)
+	if log_file:
+		log_file.store_line("[%s] [init] New match (%d players, mp=%s)" % [
+			Time.get_datetime_string_from_system(), count, str(is_multiplayer)
+		])
+		log_file.close()
 	
 	var networked_players = []
 	if is_multiplayer:
@@ -337,13 +360,20 @@ func change_state(new_state: GameState, force_signal: bool = false):
 			next_turn()
 			return
 			
+	var prev_name: String = GameState.keys()[current_state]
 	current_state = new_state
+	debug_log("state", "%s -> %s%s" % [
+		prev_name,
+		GameState.keys()[new_state],
+		" (forced)" if force_signal else ""
+	])
 	game_state_changed.emit(new_state)
 	
 	match current_state:
 		GameState.DEAL_CARDS:
 			_handle_deal_cards()
 		GameState.TURN_START_DRAW:
+			debug_log("turn", "start P%d" % current_player_index)
 			turn_started.emit(current_player_index)
 		GameState.GAME_OVER:
 			_handle_game_over()
@@ -397,6 +427,17 @@ func _can_transition_to(new_state: GameState) -> bool:
 			return new_state in [GameState.TURN_START_DRAW, GameState.GAME_OVER]
 		GameState.GAME_OVER:
 			return new_state == GameState.DEAL_CARDS
+		GameState.STATE_PLAYING_ABILITY:
+			return new_state in [
+				GameState.TURN_START_DRAW,
+				GameState.TURN_RESOLVE_DRAWN,
+				GameState.TURN_END_CHOICE,
+				GameState.TURN_PEEK_ABILITY,
+				GameState.TURN_SWAP_ABILITY,
+				GameState.TURN_CONFIRM_DUTCH,
+				GameState.INITIAL_PEEK,
+				GameState.GAME_OVER
+			]
 	return false
 
 func _is_valid_player_index(player_idx: int) -> bool:
@@ -566,7 +607,12 @@ func request_action(action: String, args: Dictionary = {}):
 			if current_player_index == player_idx:
 				cancel_dutch()
 		"play_ability":
-			play_ability(player_idx, args.get("ability_id"), args.get("target_idx", -1))
+			play_ability(
+				player_idx,
+				args.get("ability_id"),
+				args.get("target_idx", -1),
+				args.get("slot_idx", -1)
+			)
 		"buy_ability":
 			buy_ability(player_idx)
 		"initial_peek_done":
@@ -594,7 +640,7 @@ func next_turn():
 	# Final turn for caller: 
 	# Even if current_player_index == dutch_caller_index, we allow them one 
 	# final normal turn (draw/jump-in/abilities) before confirming.
-	change_state(GameState.TURN_START_DRAW)
+	change_state(GameState.TURN_START_DRAW, true)
 
 func _handle_deal_cards():
 	# The board will handle the visual instantiation in its signal handler
@@ -671,7 +717,11 @@ func drink_beer(p_idx: int):
 	if players_info[p_idx].beers <= 0:
 		players_info[p_idx].is_eliminated = true
 		player_eliminated.emit(p_idx)
+		debug_log("eliminate", "P%d passed out (beers=0)" % p_idx)
 		print("Player ", p_idx, " is ELIMINATED!")
+		if not is_multiplayer and p_idx == 0:
+			change_state(GameState.GAME_OVER)
+			return
 		var was_game_over = _check_elimination_win_condition()
 		
 		# If the player died during their own active turn, instantly end it
@@ -743,6 +793,7 @@ func _clear_interrupt_state():
 
 ## Abilities API
 var state_before_ability: GameState = GameState.INITIALIZING
+var active_player_before_ability: int = -1
 signal ability_played(player_idx, ability_id, target_idx)
 signal ability_finished
 
@@ -765,7 +816,12 @@ func play_ability(player_idx: int, ability_id: String, target_idx: int = -1, slo
 		print("[GM DEBUG] REJECTED: Game state ", GameState.keys()[current_state], " prevents playing abilities.")
 		return false
 
-	# If this is a primary turn action (not already in an ability state), clear interrupt markers
+	# Preserve Queen/Jack interrupt context so cabinet abilities do not strand the FSM.
+	var preserve_interrupt := current_state in [
+		GameState.TURN_PEEK_ABILITY,
+		GameState.TURN_SWAP_ABILITY
+	]
+	active_player_before_ability = active_ability_player if preserve_interrupt else -1
 	if current_state != GameState.STATE_PLAYING_ABILITY:
 		_clear_interrupt_state()
 
@@ -788,6 +844,7 @@ func play_ability(player_idx: int, ability_id: String, target_idx: int = -1, slo
 		players_info[player_idx].abilities[idx] = ""
 	
 	last_ability_event = {"caster": player_idx, "id": ability_id, "target": target_idx}
+	debug_log("ability", "play P%d %s -> T%d" % [player_idx, ability_id, target_idx])
 	ability_played.emit(player_idx, ability_id, target_idx)
 	ability_manager.execute(player_idx, ability_id, target_idx)
 	return true
@@ -798,12 +855,18 @@ func resume_from_ability():
 		return
 	# FORCE SIGNAL: Resume from ability must always wake up bots/UI
 	change_state(state_before_ability, true)
+	if state_before_ability in [GameState.TURN_PEEK_ABILITY, GameState.TURN_SWAP_ABILITY] \
+			and active_player_before_ability != -1:
+		active_ability_player = active_player_before_ability
+	active_player_before_ability = -1
+	debug_log("ability", "finished (resume %s)" % GameState.keys()[state_before_ability])
 	ability_finished.emit()
 
 func end_turn():
 	if not can_player_end_turn(current_player_index):
 		print("FSM Blocked: Cannot end turn outside of TURN_END_CHOICE state")
 		return
+	debug_log("turn", "end P%d" % current_player_index)
 		
 	# If the caller just finished their final turn, prompt for confirmation
 	if current_player_index == dutch_caller_index:
@@ -831,17 +894,22 @@ func start_jump_in(player_idx: int = -1) -> void:
 	if current_state != GameState.TURN_JUMP_IN_SELECTION:
 		jump_in_resume_state = current_state
 	jump_in_player_idx = resolved_idx
+	debug_log("jump_in", "start P%d (resume=%s)" % [resolved_idx, GameState.keys()[jump_in_resume_state]])
 	change_state(GameState.TURN_JUMP_IN_SELECTION)
 
 func validate_jump_in(card_idx: int) -> bool:
 	if current_state != GameState.TURN_JUMP_IN_SELECTION:
 		return false
+	if jump_in_validating:
+		return false
 	if not can_player_select_jump_in_card(jump_in_player_idx, jump_in_player_idx, card_idx):
 		return false
+	jump_in_validating = true
 
 	var hand: Array = players_info[jump_in_player_idx].hand
 	var selected_card: CardData = drawn_card_data if card_idx == -2 else hand[card_idx]
 	if selected_card == null or deck_manager.discard_pile.is_empty():
+		jump_in_validating = false
 		return false
 
 	var top_discard: CardData = deck_manager.discard_pile[-1]
@@ -861,9 +929,12 @@ func validate_jump_in(card_idx: int) -> bool:
 			memory_shift_required.emit(jump_in_player_idx, card_idx)
 		
 		# Check for win condition (out of cards)
+		var winning_player := jump_in_player_idx
 		if hand.size() == 0:
 			jump_in_player_idx = -1
+			jump_in_validating = false
 			_consume_jump_in_resume_state()
+			debug_log("jump_in", "P%d win — out of cards" % winning_player)
 			change_state(GameState.GAME_OVER)
 			return true
 			
@@ -878,19 +949,28 @@ func validate_jump_in(card_idx: int) -> bool:
 		
 		var played_by = p_idx_for_signal
 		jump_in_player_idx = -1
-		
+		jump_in_validating = false
+		debug_log("jump_in", "P%d success (card idx %d)" % [played_by, card_idx])
+		change_state(_resolve_post_interrupt_state())
 		_resolve_discard_effects(selected_card, played_by)
 		bot_action.emit(msg)
 		return true
 
 	# NO MATCH: Penalty
 	print("No match. Jump In invalid.")
-	jump_in_failed.emit(jump_in_player_idx, card_idx, selected_card)
-	drink_beer(jump_in_player_idx)
+	var failed_player := jump_in_player_idx
+	debug_log("jump_in", "P%d fail (card idx %d)" % [failed_player, card_idx])
+	jump_in_failed.emit(failed_player, card_idx, selected_card)
+	drink_beer(failed_player)
 	_mp_broadcast_state_if_server()
 	
-	if players_info[jump_in_player_idx].is_eliminated:
-		jump_in_player_idx = -1
+	jump_in_player_idx = -1
+	jump_in_validating = false
+	if current_state == GameState.GAME_OVER:
+		return false
+	change_state(_resolve_post_interrupt_state())
+	
+	if players_info[failed_player].is_eliminated:
 		return false
 		
 	await get_tree().create_timer(1.2, false).timeout
@@ -899,18 +979,19 @@ func validate_jump_in(card_idx: int) -> bool:
 	if p_card != null:
 		p_card.is_face_up = false
 		hand.append(p_card)
-		hand_updated.emit(jump_in_player_idx)
-		jump_in_penalty.emit(jump_in_player_idx, p_card)
+		hand_updated.emit(failed_player)
+		jump_in_penalty.emit(failed_player, p_card)
 		_mp_broadcast_state_if_server()
+		debug_log("jump_in", "P%d penalty card dealt" % failed_player)
 
-	jump_in_player_idx = -1
-	change_state(_resolve_post_interrupt_state())
 	return false
 
 func cancel_jump_in() -> void:
 	if not can_player_cancel_jump_in(jump_in_player_idx):
 		return
+	debug_log("jump_in", "P%d cancelled" % jump_in_player_idx)
 	jump_in_player_idx = -1
+	jump_in_validating = false
 	change_state(_resolve_post_interrupt_state())
 
 func confirm_dutch():

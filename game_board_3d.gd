@@ -51,11 +51,13 @@ var _hovered_card_node: Card3D = null # Track hovered card for spreading effect
 # Initial peek phase (toggle: click to reveal, click again to hide)
 const INITIAL_PEEK_MAX := 2
 const INITIAL_PEEK_DEBUG := true
+const CABINET_DEBUG := false
 var _initial_peek_open: Array = [] # Card3D nodes currently face-up from peek
 var _initial_peek_memorized: Array = [] # unique cards already peeked this phase
 
 var _debug_reveal := false
 var _debug_flipped_nodes: Array = []
+var _cabinet_debug_nodes: Array[Node3D] = []
 var card_scene = preload("res://card_3d.tscn")
 var pause_menu_scene = preload("res://pause_menu.tscn")
 var beer_scene = preload("res://assets/models/bere.glb")
@@ -111,6 +113,7 @@ var player_avatars: Dictionary = {}
 var avatar_arm_weights: Dictionary = {}
 var _camera_initialized: bool = false
 var _base_head_y: float = 0.0
+const FP_EYE_HEIGHT_OFFSET: float = 2.10  # meters above hips anchor (raised from 1.85)
 var _look_yaw: float = 0.0
 var _look_pitch: float = 0.0
 
@@ -131,6 +134,10 @@ var _turn_vfx_tween: Tween = null
 var _is_waiting_for_target: bool = false
 var _is_preparing_ability: bool = false # Interaction guard for reveals
 var _pending_ability: Dictionary = {} # {id, token, activator}
+var _debug_overlay_visible: bool = false
+var _debug_overlay_layer: CanvasLayer = null
+var _debug_overlay_label: Label = null
+
 var _last_sync_diag := {
 	"state": -1,
 	"cur": -1,
@@ -162,7 +169,6 @@ func _ready():
 		var cab = _cabinets[p_idx]
 		if is_instance_valid(cab):
 			cab.set_meta("player_index", p_idx)
-	_attach_cabinets_to_seats()
 	_bell_stream = _generate_bell_stream()
 	_victory_fanfare_stream = _generate_victory_fanfare_stream()
 	print("Game Board 3D: Ready. Connecting signals...")
@@ -188,6 +194,7 @@ func _ready():
 	GameManager.player_eliminated.connect(_on_player_eliminated)
 	GameManager.player_gained_money.connect(_on_player_gained_money)
 	GameManager.ability_played.connect(_on_ability_played)
+	GameManager.ability_finished.connect(_on_ability_finished)
 	GameManager.polarity_shifted.connect(_on_polarity_shifted)
 	GameManager.pending_card_consumed.connect(_on_pending_card_consumed)
 	GameManager.multiplayer_sync_applied.connect(_on_multiplayer_sync_applied)
@@ -241,6 +248,7 @@ func _ready():
 	_apply_gameplay_mouse_mode()
 
 	_spawn_player_avatars()
+	_attach_cabinets_to_seats()
 
 	bot_controller = BotController.new()
 	bot_controller.gm = GameManager
@@ -277,11 +285,19 @@ func _ready():
 		var tut = tut_scene.instantiate()
 		$GameUI.add_child(tut)
 
-func _send_action(action: String, args: Dictionary = {}):
+func _send_action(action: String, args: Dictionary = {}) -> bool:
 	if GameManager.is_multiplayer:
 		GameManager.request_action.rpc_id(1, action, args)
-	else:
-		GameManager.request_action(action, args)
+		return true
+	if action == "play_ability":
+		return GameManager.play_ability(
+			_human_ui_idx(),
+			str(args.get("ability_id", "")),
+			int(args.get("target_idx", -1)),
+			int(args.get("slot_idx", -1))
+		)
+	GameManager.request_action(action, args)
+	return true
 
 func _human_ui_idx() -> int:
 	return GameManager.local_player_idx if GameManager.is_multiplayer else 0
@@ -306,31 +322,134 @@ func _apply_local_player_seat_rotation() -> void:
 		camera.position = _effective_camera_base_local()
 
 func _attach_cabinets_to_seats() -> void:
-	# Local offsets from each seat — left/beside the player, toward the table.
-	# Y lift keeps drawers above the oversized table mesh (table scale ~19).
-	const OFFSETS := {
-		0: Vector3(-2.8, 1.55, 1.6),
-		1: Vector3(1.6, 1.55, -2.8),
-		2: Vector3(2.8, 1.55, -1.6),
-		3: Vector3(-1.6, 1.55, 2.8),
+	# World offsets from each chair: left of the seat, same depth as the player (not behind them).
+	var chair_nodes := {
+		0: get_node_or_null("Sketchfab_Scene"),
+		1: get_node_or_null("Sketchfab_Scene4"),
+		2: get_node_or_null("Sketchfab_Scene3"),
+		3: get_node_or_null("Sketchfab_Scene2"),
 	}
-	const LOCAL_SCALE := Vector3(3.2, 3.2, 3.2)
-	const LOCAL_ROT := Vector3(0.0, -90.0, 0.0)
+	const WORLD_OFFSETS := {
+		0: Vector3(-3.2, 0.46, -0.82),
+		1: Vector3(0.80, 0.46, -3.23),
+		2: Vector3(3.09, 0.46, 1.58),
+		3: Vector3(-0.85, 0.46, 3.23),
+	}
+	const LOCAL_SCALE := Vector3(0.11, 0.11, 0.11)
 
 	for p_idx in _cabinets:
 		var cab: Node3D = _cabinets[p_idx]
-		var seat: Node3D = player_pos_nodes.get(p_idx)
+		var anchor: Node3D = chair_nodes.get(p_idx) as Node3D
+		if not is_instance_valid(anchor):
+			anchor = player_pos_nodes.get(p_idx)
 		if not is_instance_valid(cab):
 			push_warning("GameBoard3D: cabinet missing for P%d" % p_idx)
 			continue
-		if not is_instance_valid(seat):
+		if not is_instance_valid(anchor):
 			continue
-		if cab.get_parent() != seat:
-			cab.reparent(seat)
-		cab.position = OFFSETS.get(p_idx, Vector3.ZERO)
-		cab.rotation_degrees = LOCAL_ROT
+		if cab.get_parent() != anchor:
+			cab.reparent(anchor)
+		var world_offset: Vector3 = WORLD_OFFSETS.get(p_idx, Vector3.ZERO)
+		cab.position = anchor.to_local(anchor.global_position + world_offset)
 		cab.scale = LOCAL_SCALE
+		# Drawer fronts face the seated player, not the table center.
+		cab.look_at(anchor.global_position, Vector3.UP)
+		cab.rotate_object_local(Vector3.UP, PI)
 		cab.visible = true
+
+	if CABINET_DEBUG:
+		call_deferred("_debug_setup_cabinets")
+
+func _debug_setup_cabinets() -> void:
+	for n in _cabinet_debug_nodes:
+		if is_instance_valid(n):
+			n.queue_free()
+	_cabinet_debug_nodes.clear()
+
+	var cam: Camera3D = $Camera3D
+	var local_idx := _human_ui_idx()
+	var marker_colors := {
+		0: Color(0.1, 0.9, 1.0),
+		1: Color(1.0, 0.25, 0.25),
+		2: Color(0.25, 1.0, 0.35),
+		3: Color(1.0, 0.85, 0.2),
+	}
+
+	print("========== CABINET DEBUG REPORT ==========")
+	for p_idx in _cabinets:
+		var cab: Node3D = _cabinets[p_idx]
+		if not is_instance_valid(cab):
+			print("[CABINET DEBUG] P%d MISSING" % p_idx)
+			continue
+
+		var parent_name: String = "null"
+		var cab_parent: Node = cab.get_parent()
+		if cab_parent != null:
+			parent_name = cab_parent.name
+		var mesh_count: int = _debug_count_meshes(cab)
+		var shelves_ok: bool = false
+		if cab.has_method("_resolve_shelves"):
+			shelves_ok = cab._resolve_shelves().size() == 3
+
+		var dist_to_cam: float = -1.0
+		var blocks_view: bool = false
+		if is_instance_valid(cam):
+			dist_to_cam = cam.global_position.distance_to(cab.global_position)
+			var to_cab: Vector3 = (cab.global_position - cam.global_position).normalized()
+			var forward: Vector3 = -cam.global_transform.basis.z.normalized()
+			blocks_view = to_cab.dot(forward) > 0.85
+
+		print(
+			"[CABINET DEBUG] P%d parent=%s visible=%s global_pos=%s global_scale=%s mesh_count=%d shelves_ok=%s dist_cam=%.2f blocks_view=%s local_player=%s"
+			% [
+				p_idx,
+				parent_name,
+				cab.visible,
+				cab.global_position,
+				cab.global_transform.basis.get_scale(),
+				mesh_count,
+				shelves_ok,
+				dist_to_cam,
+				blocks_view,
+				p_idx == local_idx
+			]
+		)
+
+		var marker := MeshInstance3D.new()
+		marker.name = "CabinetDebugMarker_P%d" % p_idx
+		var box := BoxMesh.new()
+		box.size = Vector3(0.35, 0.55, 0.28)
+		marker.mesh = box
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = marker_colors.get(p_idx, Color.MAGENTA)
+		mat.emission_enabled = true
+		mat.emission = marker_colors.get(p_idx, Color.MAGENTA)
+		mat.emission_energy_multiplier = 2.5
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		marker.material_override = mat
+		add_child(marker)
+		marker.global_position = cab.global_position + Vector3(0.0, 0.45, 0.0)
+		_cabinet_debug_nodes.append(marker)
+
+		var label := Label3D.new()
+		label.name = "CabinetDebugLabel_P%d" % p_idx
+		label.text = "CAB P%d" % p_idx
+		label.font_size = 48
+		label.modulate = marker_colors.get(p_idx, Color.WHITE)
+		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		label.position = Vector3(0.0, 0.55, 0.0)
+		marker.add_child(label)
+		_cabinet_debug_nodes.append(label)
+
+	print("========== END CABINET DEBUG ==========")
+
+func _debug_count_meshes(node: Node) -> int:
+	var count := 0
+	if node is MeshInstance3D and node.visible:
+		count += 1
+	for child in node.get_children():
+		count += _debug_count_meshes(child)
+	return count
 
 func _configure_visible_player_seats(n: int) -> void:
 	var visible_count := clampi(n, 1, 4)
@@ -513,9 +632,11 @@ func _create_hud_ui():
 	action_panel = PanelContainer.new()
 	action_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	action_panel.offset_left = 20
-	action_panel.offset_right = 260
-	action_panel.offset_top = -220
+	action_panel.offset_top = -240
 	action_panel.offset_bottom = -20
+	action_panel.offset_right = 320
+	action_panel.grow_horizontal = Control.GROW_DIRECTION_END
+	action_panel.custom_minimum_size = Vector2(300, 200)
 	action_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 
 	var panel_style = StyleBoxFlat.new()
@@ -539,10 +660,10 @@ func _create_hud_ui():
 
 	# Action Buttons Container: Nested inside the Action Panel
 	var action_container = VBoxContainer.new()
-	action_container.alignment = BoxContainer.ALIGNMENT_END
-	action_container.add_theme_constant_override("separation", 15)
+	action_container.alignment = BoxContainer.ALIGNMENT_BEGIN
+	action_container.add_theme_constant_override("separation", 12)
 	action_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	action_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	action_container.size_flags_vertical = Control.SIZE_SHRINK_END
 	action_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	action_panel.add_child(action_container)
 
@@ -558,6 +679,7 @@ func _create_hud_ui():
 	confirm_dutch_btn.pressed.connect(_on_confirm_dutch_pressed)
 	forfeit_dutch_btn.pressed.connect(_on_cancel_dutch_pressed)
 	_update_action_button_labels()
+	_setup_debug_overlay()
 	
 	# Restyle the TurnLabel
 	turn_label.add_theme_color_override("font_color", Color(0.0, 1.0, 1.0))
@@ -788,15 +910,17 @@ func _create_button(parent: Node, text: String, color: Color) -> Button:
 	btn.add_theme_color_override("font_pressed_color", Color.BLACK)
 	btn.add_theme_color_override("font_disabled_color", Color(color.r, color.g, color.b, 0.25))
 	
-	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	
+	btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	btn.clip_text = false
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
 	parent.add_child(btn)
-	
+
 	# Explicitly set mouse filter to STOP for the button so it can still be clicked,
 	# but its PARENT (action_container) is IGNORE so clicks pass through the spacing.
 	btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	
-	btn.custom_minimum_size = Vector2(240, 45)
+
+	btn.custom_minimum_size = Vector2(260, 45)
 	btn.hide()
 	return btn
 
@@ -1109,7 +1233,9 @@ func _use_hovered_hammer() -> void:
 		}
 		_show_message("SELECT TARGET PLAYER (click their cards or zone)")
 	else:
-		_send_action("play_ability", {"ability_id": ability_id, "target_idx": p_idx, "slot_idx": h_idx})
+		if not _send_action("play_ability", {"ability_id": ability_id, "target_idx": p_idx, "slot_idx": h_idx}):
+			_show_message("Cannot use ability right now!")
+			return
 
 ## hammer_collider: the Area3D Area3D that was clicked (has "hammer_index" meta).
 func _on_hammer_clicked(hammer_collider: Area3D) -> void:
@@ -1173,17 +1299,35 @@ func _on_player_area_input(_camera, event, _position, _normal, _shape_idx, playe
 
 		print("[DEBUG] Requesting play_ability: ", ab_id, " by P", activator, " on P", player_idx, " from slot ", slot_idx)
 		
-		_send_action("play_ability", {"ability_id": ab_id, "target_idx": player_idx, "slot_idx": slot_idx})
-		_is_waiting_for_target = false
-		_set_targeting_areas_enabled(false)
-		_clear_all_highlights()
-		_update_turn_lights(activator) # Reset lights to activator's turn
+		if not _send_action("play_ability", {"ability_id": ab_id, "target_idx": player_idx, "slot_idx": slot_idx}):
+			_show_message("Cannot play ability right now!")
+			return
+
+		_clear_ability_targeting_state(true)
 		_hide_message()
-		
-		# Visual cleanup: token itself is already removed by play_ability signal callback
-		# but we clear the pending data here
-		_pending_ability.clear()
 		_update_ability_visuals(activator)
+
+func _clear_ability_targeting_state(restore_turn_lights: bool = true) -> void:
+	if not _is_waiting_for_target and not _is_preparing_ability and _pending_ability.is_empty():
+		return
+	var activator: int = int(_pending_ability.get("activator", GameManager.current_player_index))
+	_is_waiting_for_target = false
+	_is_preparing_ability = false
+	_pending_ability.clear()
+	_set_targeting_areas_enabled(false)
+	_clear_all_highlights()
+	if restore_turn_lights:
+		_update_turn_lights(activator)
+	_refresh_human_interactivity()
+
+func _on_ability_finished() -> void:
+	_clear_ability_targeting_state()
+	_update_turn_lights(GameManager.current_player_index)
+	_refresh_human_interactivity()
+	_update_action_buttons_state()
+	_update_draw_arrow_visibility()
+	$DeckArea/Area3D.input_ray_pickable = GameManager.can_player_draw(_human_ui_idx())
+	$DiscardArea/Area3D.input_ray_pickable = GameManager.can_player_discard_drawn_card(_human_ui_idx())
 
 func _on_player_drank_beer(player_idx, remaining):
 	play_take_animation(player_idx)
@@ -1309,6 +1453,9 @@ func _animate_beer_refill(beers_array: Array, remaining: int) -> void:
 
 func _on_player_eliminated(player_idx):
 	_show_message(GameManager.players_info[player_idx].name + " PASSED OUT!")
+	if not GameManager.is_multiplayer and player_idx == _human_ui_idx():
+		trigger_glitch(0.5, 0.8)
+		shake(0.35, 0.6)
 
 func _on_player_gained_money(player_idx, amount, total):
 	if player_idx == _human_ui_idx() and money_labels.size() > 0:
@@ -1631,6 +1778,11 @@ func _update_action_buttons_state():
 
 	# Set button disabled states (disabled = not allowed)
 	end_turn_btn.disabled = not can_end_turn
+	if is_instance_valid(end_turn_btn):
+		if GameManager.can_player_cancel_jump_in(local_idx):
+			end_turn_btn.text = "> CANCEL <"
+		else:
+			end_turn_btn.text = "> END_TURN <"
 	jump_in_btn.disabled = not can_jump_in
 	call_dutch_btn.disabled = not can_call_dutch
 
@@ -2198,11 +2350,11 @@ func _on_card_clicked(node, data):
 		else:
 			print("[BOARD DEBUG] Clicked something while waiting for target, but couldn't resolve player index.")
 			
-	# JUMP-IN SHORTCUT: If user clicks their card and can jump in, start it implicitly
+	# JUMP-IN SHORTCUT: card click enters selection only — validate on a second click
 	if p_idx == GameManager.local_player_idx and GameManager.can_player_start_jump_in(GameManager.local_player_idx) and GameManager.current_state != GameManager.GameState.TURN_JUMP_IN_SELECTION:
 		print("[BOARD DEBUG] Implicit Jump-In started by card click.")
 		_send_action("start_jump_in")
-		# Flow now falls through to the TURN_JUMP_IN_SELECTION case below because start_jump_in updated the state.
+		return
 
 	match GameManager.current_state:
 		GameManager.GameState.INITIAL_PEEK:
@@ -2293,6 +2445,14 @@ func _on_discard_clicked():
 		play_take_animation(GameManager.local_player_idx)
 		_send_action("discard_drawn")
 
+func _is_local_human_defeat() -> bool:
+	if GameManager.is_multiplayer:
+		return false
+	var human_idx := _human_ui_idx()
+	if human_idx < 0 or human_idx >= GameManager.players_info.size():
+		return false
+	return GameManager.players_info[human_idx].is_eliminated
+
 func _on_scores_ready(results: Array) -> void:
 	_victory_results_pending = results
 	if not _victory_cinematic_active:
@@ -2315,16 +2475,95 @@ func _victory_cinematic_async() -> void:
 		await get_tree().process_frame
 		await get_tree().process_frame
 
+	var human_defeat := _is_local_human_defeat()
 	var winner_id: int = 0
 	if _victory_results_pending.size() > 0:
 		winner_id = int(_victory_results_pending[0].id)
 
-	await _play_victory_reveal_sequence(winner_id)
+	if not human_defeat:
+		await _play_victory_reveal_sequence(winner_id)
 
 	if not _victory_results_pending.is_empty():
-		_show_victory_overlay(_victory_results_pending)
+		if human_defeat:
+			_show_defeat_overlay(_victory_results_pending)
+		else:
+			_show_victory_overlay(_victory_results_pending)
 
 	_victory_cinematic_active = false
+
+func _show_defeat_overlay(results: Array) -> void:
+	if is_instance_valid(_victory_overlay_layer):
+		_victory_overlay_layer.queue_free()
+	_victory_overlay_layer = null
+
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	shake(0.45, 1.0)
+	trigger_glitch(0.65, 1.4)
+	GameManager.play_sfx(GameManager.sfx_beer_drink)
+
+	var overlay = CanvasLayer.new()
+	overlay.layer = 110
+	_victory_overlay_layer = overlay
+	add_child(overlay)
+
+	var bg = ColorRect.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.color = Color(0.08, 0.0, 0.0, 0.0)
+	overlay.add_child(bg)
+	var bg_tween = create_tween()
+	bg_tween.tween_property(bg, "color:a", 0.9, 0.5)
+
+	var center = CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.modulate.a = 0.0
+	overlay.add_child(center)
+
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 20)
+	center.add_child(vbox)
+
+	var title = Label.new()
+	title.text = "YOU PASSED OUT!"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 64)
+	title.add_theme_color_override("font_color", Color(1.0, 0.25, 0.2))
+	vbox.add_child(title)
+
+	var subtitle = Label.new()
+	subtitle.text = "All 3 beers gone — you're eliminated."
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.add_theme_font_size_override("font_size", 30)
+	subtitle.modulate = Color(0.9, 0.7, 0.7)
+	vbox.add_child(subtitle)
+
+	var winner_name := "Nobody"
+	for entry in results:
+		if not entry.is_eliminated:
+			winner_name = entry.name
+			break
+	var outcome = Label.new()
+	outcome.text = winner_name + " wins this round."
+	outcome.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	outcome.add_theme_font_size_override("font_size", 28)
+	outcome.modulate = Color(0.75, 0.75, 0.8)
+	vbox.add_child(outcome)
+
+	var title_tween = create_tween()
+	title_tween.tween_property(center, "modulate:a", 1.0, 0.6).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+	var btn_h = HBoxContainer.new()
+	btn_h.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(btn_h)
+
+	var play_again = Button.new()
+	play_again.text = "Try Again"
+	play_again.pressed.connect(func(): get_tree().reload_current_scene())
+	btn_h.add_child(play_again)
+
+	var main_menu = Button.new()
+	main_menu.text = "Main Menu"
+	main_menu.pressed.connect(_on_pause_main_menu)
+	btn_h.add_child(main_menu)
 
 func _show_victory_overlay(results: Array) -> void:
 	if is_instance_valid(_victory_overlay_layer):
@@ -2437,6 +2676,17 @@ func _unhandled_input(event):
 	if event.is_action_pressed("ui_cancel"):
 		if DevConsole.window.is_visible():
 			return
+		if GameManager.can_player_cancel_jump_in(GameManager.local_player_idx):
+			_send_action("cancel_jump_in")
+			_show_message("Jump-in cancelled.")
+			get_viewport().set_input_as_handled()
+			return
+		if _is_waiting_for_target:
+			_clear_ability_targeting_state()
+			_hide_message()
+			_show_message("Ability targeting cancelled.")
+			get_viewport().set_input_as_handled()
+			return
 
 		if pause_menu_instance == null:
 			_pause_game()
@@ -2451,10 +2701,13 @@ func _unhandled_input(event):
 			get_viewport().set_input_as_handled()
 			return
 
-	# DEBUG: Press L to toggle all face-down cards face-up.
+	# DEBUG: Press L to toggle all face-down cards face-up; F3 toggles FSM debug panel.
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_L:
 			_toggle_debug_reveal()
+		elif event.keycode == KEY_F3:
+			_toggle_debug_overlay()
+			get_viewport().set_input_as_handled()
 
 	# --- GAME KEYBOARD CONTROLS ---
 	# Priority Guard 2: Dev console is open — keys belong to the text input, not the game.
@@ -2653,8 +2906,61 @@ func _on_jump_in_failed(player_idx, card_idx, _card_data):
 func _on_bot_action(message):
 	_show_message(message)
 
+func _setup_debug_overlay() -> void:
+	if is_instance_valid(_debug_overlay_layer):
+		return
+	_debug_overlay_layer = CanvasLayer.new()
+	_debug_overlay_layer.layer = 120
+	_debug_overlay_layer.visible = false
+	add_child(_debug_overlay_layer)
+
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	panel.offset_left = 8
+	panel.offset_top = 8
+	panel.offset_right = 420
+	panel.offset_bottom = 260
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.02, 0.02, 0.05, 0.82)
+	style.border_color = Color(0.2, 0.9, 0.9, 0.6)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(4)
+	panel.add_theme_stylebox_override("panel", style)
+	_debug_overlay_layer.add_child(panel)
+
+	_debug_overlay_label = Label.new()
+	_debug_overlay_label.add_theme_font_size_override("font_size", 14)
+	_debug_overlay_label.add_theme_color_override("font_color", Color(0.75, 1.0, 1.0))
+	panel.add_child(_debug_overlay_label)
+
+func _toggle_debug_overlay() -> void:
+	_debug_overlay_visible = not _debug_overlay_visible
+	if is_instance_valid(_debug_overlay_layer):
+		_debug_overlay_layer.visible = _debug_overlay_visible
+	if _debug_overlay_visible:
+		_update_debug_overlay()
+
+func _update_debug_overlay() -> void:
+	if not _debug_overlay_visible or not is_instance_valid(_debug_overlay_label):
+		return
+	var gm := GameManager
+	var lines: PackedStringArray = PackedStringArray([
+		"FSM: %s" % gm.GameState.keys()[gm.current_state],
+		"Player: P%d (local P%d)" % [gm.current_player_index, _human_ui_idx()],
+		"jump_in: idx=%d validating=%s" % [gm.jump_in_player_idx, str(gm.jump_in_validating)],
+		"ability: active=%d state=%s" % [gm.active_ability_player, gm.GameState.keys()[gm.state_before_ability]],
+		"targeting: %s prep=%s" % [str(_is_waiting_for_target), str(_is_preparing_ability)],
+		"drawn: %s" % ("yes" if gm.drawn_card_data != null else "no"),
+		"last: %s" % (gm.last_debug_event if gm.last_debug_event != "" else "(none)"),
+		"[F3 hide | log: user://game_debug.log]"
+	])
+	_debug_overlay_label.text = "\n".join(lines)
+
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint(): return
+
+	if _debug_overlay_visible:
+		_update_debug_overlay()
 
 	if GameManager.is_multiplayer:
 		_mp_status_poll_timer += delta
@@ -2699,18 +3005,21 @@ func _process(delta: float) -> void:
 					var head_idx = skeleton.find_bone("mixamorig_Head")
 					var neck_idx = skeleton.find_bone("mixamorig_Neck")
 					
-					# Head and neck mesh are kept active (exists) at scale Vector3(1,1,1)
 					if head_idx != -1:
-						skeleton.set_bone_pose_scale(head_idx, Vector3(1.0, 1.0, 1.0))
-						# Shift the head bone position slightly backwards in local space to prevent clipping with camera
-						var head_pos = skeleton.get_bone_pose_position(head_idx)
 						if p_idx == local_p_idx:
-							head_pos.z = 3.74789 - 1.8 # Shift local player's head backward by 1.8 units in bone space
+							skeleton.set_bone_pose_scale(head_idx, Vector3.ZERO)
 						else:
-							head_pos.z = 3.74789 # Remote players: keep head at default position
-						skeleton.set_bone_pose_position(head_idx, head_pos)
+							skeleton.set_bone_pose_scale(head_idx, Vector3(1.0, 1.0, 1.0))
+							var head_pos = skeleton.get_bone_pose_position(head_idx)
+							head_pos.z = 3.74789
+							skeleton.set_bone_pose_position(head_idx, head_pos)
 					if neck_idx != -1:
-						skeleton.set_bone_pose_scale(neck_idx, Vector3(1.0, 1.0, 1.0))
+						if p_idx == local_p_idx:
+							skeleton.set_bone_pose_scale(neck_idx, Vector3.ZERO)
+						else:
+							skeleton.set_bone_pose_scale(neck_idx, Vector3(1.0, 1.0, 1.0))
+					if p_idx == local_p_idx:
+						_set_avatar_body_visible(avatar, false)
 					
 					# Lock hips translation completely to rest position to prevent rising/shifting during take animation
 					var hips_idx = skeleton.find_bone("mixamorig_Hips")
@@ -2750,24 +3059,25 @@ func _process(delta: float) -> void:
 					# Force skeleton update to get correct global bone pose in the same frame
 					skeleton.force_update_all_bone_transforms()
 					
-					# Align camera with the head bone + eye offset + shake
+					# Eye-level camera from hips anchor (local body mesh hidden — no head clipping).
 					if is_instance_valid(camera):
-						# Use 0.08m near clip (since head is shifted back and camera is in front of the eyes)
-						camera.near = 0.08
-						var head_global_pos = skeleton.global_transform * skeleton.get_bone_global_pose(head_idx).origin
+						camera.near = 0.05
+						var hips_idx := skeleton.find_bone("mixamorig_Hips")
+						var eye_anchor: Vector3 = avatar.global_position
+						if hips_idx != -1:
+							eye_anchor = skeleton.global_transform * skeleton.get_bone_global_pose(hips_idx).origin
 						
 						if not _camera_initialized:
-							_base_head_y = head_global_pos.y
+							_base_head_y = eye_anchor.y + FP_EYE_HEIGHT_OFFSET
 							_camera_initialized = true
 						
 						var forward = Vector3(-sin(camera.rotation.y), 0.0, -cos(camera.rotation.y)).normalized()
+						var right = Vector3(forward.z, 0.0, -forward.x).normalized()
 						
-						# Lock camera vertical height to base head position + offset (0.10m up to eye level, 0.24m forward in front of the eyes)
-						# This prevents the camera from bobbing/rising when the character plays the "take" animation.
 						var target_camera_pos = Vector3(
-							head_global_pos.x + forward.x * 0.24,
-							_base_head_y + 0.10,
-							head_global_pos.z + forward.z * 0.24
+							eye_anchor.x + forward.x * 0.42 + right.x * 0.06,
+							_base_head_y,
+							eye_anchor.z + forward.z * 0.42 + right.z * 0.06
 						) + shake_offset
 						
 						# Direct assignment to prevent relative lag
@@ -3737,8 +4047,16 @@ func _spawn_player_avatars() -> void:
 
 		player_avatars[i] = char_node
 		avatar_arm_weights[i] = 1.0
+		if i == _human_ui_idx():
+			_set_avatar_body_visible(char_node, false)
 
 	take_inst.queue_free()
+
+func _set_avatar_body_visible(avatar: Node3D, body_visible: bool) -> void:
+	if not is_instance_valid(avatar):
+		return
+	for mesh in avatar.find_children("*", "MeshInstance3D", true, false):
+		mesh.visible = body_visible
 
 func play_take_animation(player_idx: int) -> void:
 	if player_avatars.has(player_idx) and is_instance_valid(player_avatars[player_idx]):
