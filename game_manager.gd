@@ -382,6 +382,12 @@ func change_state(new_state: GameState, force_signal: bool = false):
 	_mp_broadcast_state_if_server()
 
 func _can_transition_to(new_state: GameState) -> bool:
+	# GAME_OVER is a terminal state that can be reached from any in-progress state:
+	# elimination (beers=0), a confirmed Dutch, or a jump-in win can all end the game
+	# mid-turn (e.g. while a drawn card is pending in TURN_RESOLVE_DRAWN). Always allow it
+	# so the FSM never strands the match instead of ending it.
+	if new_state == GameState.GAME_OVER:
+		return true
 	match current_state:
 		GameState.INITIALIZING:
 			return new_state == GameState.DEAL_CARDS

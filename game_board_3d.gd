@@ -465,11 +465,15 @@ func _configure_visible_player_seats(n: int) -> void:
 		var is_active := seat < visible_count
 		if player_pos_nodes.has(seat):
 			player_pos_nodes[seat].visible = is_active
-		if player_avatars.has(seat) and is_instance_valid(player_avatars[seat]):
-			player_avatars[seat].visible = is_active
+		# MP avatar visibility is owned by _refresh_avatar_body_visibility (local hidden, remotes shown).
+		if not GameManager.is_multiplayer:
+			if player_avatars.has(seat) and is_instance_valid(player_avatars[seat]):
+				player_avatars[seat].visible = is_active
 		var cab: Node3D = _cabinets.get(seat)
 		if is_instance_valid(cab):
 			cab.visible = is_active
+	if GameManager.is_multiplayer:
+		_refresh_avatar_body_visibility()
 
 func _on_multiplayer_sync_applied() -> void:
 	var new_state: int = int(GameManager.current_state)
@@ -486,6 +490,7 @@ func _on_multiplayer_sync_applied() -> void:
 		pending_card.queue_free()
 		pending_card = null
 	_apply_local_player_seat_rotation()
+	_refresh_avatar_body_visibility()
 	_configure_visible_player_seats(GameManager.num_players)
 	
 	# Snapshot abilities BEFORE _update_hand_visuals so we diff correctly
@@ -3051,6 +3056,12 @@ func _process(delta: float) -> void:
 							skeleton.set_bone_pose_scale(neck_idx, Vector3(1.0, 1.0, 1.0))
 					if p_idx == local_p_idx:
 						_set_avatar_body_visible(avatar, false)
+						if GameManager.is_multiplayer:
+							avatar.visible = false
+					else:
+						_set_avatar_body_visible(avatar, true)
+						if GameManager.is_multiplayer and p_idx < GameManager.num_players:
+							avatar.visible = true
 					
 					# Lock hips translation completely to rest position to prevent rising/shifting during take animation
 					var hips_idx = skeleton.find_bone("mixamorig_Hips")
@@ -4046,14 +4057,14 @@ func _spawn_player_avatars() -> void:
 
 	for i in range(4):
 		var chair = chairs[i]
-		if not is_instance_valid(chair):
+		var seat: Node3D = player_pos_nodes.get(i) as Node3D
+		if not is_instance_valid(chair) or not is_instance_valid(seat):
 			continue
 
 		var char_node = char_scene.instantiate()
 		chair.add_child(char_node)
 
-		# Position character on the seat:
-		# At scale 4.5, local Y = 0.025 raises the character by 2.0m globally to sit at a natural table height
+		# Position character on the seat, then reparent under PlayerPositions so MP seat rotation shows opponents correctly.
 		char_node.position = Vector3(0.0, 0.025, 0.0)
 		char_node.scale = Vector3(4.5/43.0, 4.5/43.0, 4.5/43.0)
 		char_node.rotation_degrees = Vector3(0.0, chair_rotations[i], 0.0)
@@ -4063,28 +4074,62 @@ func _spawn_player_avatars() -> void:
 		if ap:
 			var lib = ap.get_animation_library("")
 			if lib:
-				# Add the "take" animation
 				lib.add_animation("take", take_anim)
-
-				# Rename original Mixamo animation to "idle" and set to loop
 				var idle_orig = "Armature|mixamo_com|Layer0"
 				if lib.has_animation(idle_orig):
 					var idle_anim = lib.get_animation(idle_orig)
 					idle_anim.loop_mode = Animation.LOOP_LINEAR
 					lib.add_animation("idle", idle_anim)
 					lib.remove_animation(idle_orig)
-
-			# Play the idle animation initially
 			ap.play("idle")
 			ap.set_blend_time("idle", "take", 0.3)
 			ap.set_blend_time("take", "idle", 0.3)
 
+		var avatar_global: Transform3D = char_node.global_transform
+		char_node.reparent(seat)
+		char_node.global_transform = avatar_global
+
 		player_avatars[i] = char_node
 		avatar_arm_weights[i] = 1.0
-		if i == _human_ui_idx():
-			_set_avatar_body_visible(char_node, false)
 
 	take_inst.queue_free()
+	_refresh_avatar_body_visibility()
+
+func _refresh_avatar_body_visibility() -> void:
+	var local_idx := _human_ui_idx()
+	var seat_count := clampi(GameManager.num_players, 1, 4) if GameManager.is_multiplayer else 4
+	for p_idx in player_avatars:
+		var avatar: Node3D = player_avatars[p_idx]
+		if not is_instance_valid(avatar):
+			continue
+		if p_idx >= seat_count:
+			avatar.visible = false
+			_set_avatar_body_visible(avatar, false)
+			continue
+		if GameManager.is_multiplayer and p_idx == local_idx:
+			avatar.visible = false
+			_set_avatar_body_visible(avatar, false)
+		else:
+			avatar.visible = true
+			_set_avatar_body_visible(avatar, true)
+
+func get_avatar_visibility_report() -> Dictionary:
+	var local_idx := _human_ui_idx()
+	var report := {}
+	for p_idx in player_avatars:
+		var avatar: Node3D = player_avatars[p_idx]
+		if not is_instance_valid(avatar):
+			continue
+		var visible_meshes := 0
+		for mesh in avatar.find_children("*", "MeshInstance3D", true, false):
+			if mesh.visible:
+				visible_meshes += 1
+		report[p_idx] = {
+			"is_local": p_idx == local_idx,
+			"avatar_node_visible": avatar.visible,
+			"visible_mesh_count": visible_meshes,
+		}
+	return report
 
 func _set_avatar_body_visible(avatar: Node3D, body_visible: bool) -> void:
 	if not is_instance_valid(avatar):
@@ -4093,6 +4138,8 @@ func _set_avatar_body_visible(avatar: Node3D, body_visible: bool) -> void:
 		mesh.visible = body_visible
 
 func play_take_animation(player_idx: int) -> void:
+	if GameManager.is_multiplayer and player_idx == _human_ui_idx():
+		return
 	if player_avatars.has(player_idx) and is_instance_valid(player_avatars[player_idx]):
 		var char_node = player_avatars[player_idx]
 		var ap: AnimationPlayer = char_node.get_node("AnimationPlayer")
