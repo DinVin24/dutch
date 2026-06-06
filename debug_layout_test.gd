@@ -54,15 +54,27 @@ func _resolve_role() -> TestRole:
 	return TestRole.NONE
 
 func _apply_window_layout() -> void:
-	var target_size := HOST_WINDOW_SIZE if _role == TestRole.HOST else CLIENT_WINDOW_SIZE
+	var args := OS.get_cmdline_user_args()
+	var vision_layout := "--vision-layout" in args
+	var target_size := HOST_WINDOW_SIZE
+	if not vision_layout and _role == TestRole.CLIENT:
+		target_size = CLIENT_WINDOW_SIZE
 	DisplayServer.window_set_size(target_size)
 
 	var screen_index := DisplayServer.window_get_current_screen()
 	var screen_pos := DisplayServer.screen_get_position(screen_index)
 	var screen_size := DisplayServer.screen_get_size(screen_index)
-	var x := screen_pos.x if _role == TestRole.HOST else screen_pos.x + screen_size.x - target_size.x
 	var y := screen_pos.y + maxi(0, int((screen_size.y - target_size.y) / 2))
+	var x: int
+	if vision_layout:
+		# Side-by-side 1280x720: host left, client right (vision/CI capture).
+		x = screen_pos.x + 16 if _role == TestRole.HOST else screen_pos.x + target_size.x + 32
+	else:
+		x = screen_pos.x if _role == TestRole.HOST else screen_pos.x + screen_size.x - target_size.x
 	DisplayServer.window_set_position(Vector2i(x, y))
+	print("DebugLayoutTest: Window %dx%d at (%d,%d) role=%s vision=%s" % [
+		target_size.x, target_size.y, x, y, _role_label, vision_layout
+	])
 
 func _bootstrap_network_role() -> void:
 	# Ensure Multiplayer peers are only auto-started in explicit test mode.
@@ -71,9 +83,7 @@ func _bootstrap_network_role() -> void:
 		var started: bool = bool(NetworkManager.host_game())
 		if started:
 			print("DebugLayoutTest: Host started via WebRTC")
-			var code := NetworkManager.get_room_code()
-			print("DebugLayoutTest: Host Room Code: ", code)
-			_write_room_code_file(code)
+			call_deferred("_wait_for_host_room_code")
 		else:
 			push_warning("DebugLayoutTest: Failed to start host on port %d" % _test_port)
 		return
@@ -97,6 +107,19 @@ func _resolve_room_code() -> String:
 		if FileAccess.file_exists(path):
 			return FileAccess.get_file_as_string(path).strip_edges()
 	return "TEST"
+
+func _wait_for_host_room_code() -> void:
+	const MAX_WAIT_SEC := 45.0
+	var elapsed := 0.0
+	while NetworkManager.get_room_code().strip_edges() == "" and elapsed < MAX_WAIT_SEC:
+		await get_tree().create_timer(0.25).timeout
+		elapsed += 0.25
+	var code := NetworkManager.get_room_code().strip_edges()
+	print("DebugLayoutTest: Host Room Code: ", code)
+	if code != "":
+		_write_room_code_file(code)
+	else:
+		push_warning("DebugLayoutTest: Timed out waiting for signaling room code")
 
 func _write_room_code_file(code: String) -> void:
 	var path := ProjectSettings.globalize_path("res://.debug/mp/room_code.txt")
@@ -144,6 +167,8 @@ func _trigger_synced_screenshot() -> void:
 func _trigger_synced_checkpoint(label: String) -> void:
 	take_test_screenshot(label)
 
+var _checkpoints_seen: Dictionary = {}
+
 func take_test_screenshot(label: String = "checkpoint") -> void:
 	if _run_stamp == "":
 		_run_stamp = Time.get_datetime_string_from_system().replace(":", "").replace("-", "").replace(" ", "_")
@@ -163,6 +188,8 @@ func take_test_screenshot(label: String = "checkpoint") -> void:
 		push_warning("DebugLayoutTest: Screenshot save failed. Error: %d" % save_error)
 		return
 	print("DebugLayoutTest: Saved screenshot -> ", path)
+	print("DebugLayoutTest: CHECKPOINT %s role=%s" % [label, _role_label])
+	_checkpoints_seen[label] = true
 
 func _resolution_label() -> String:
 	var size := DisplayServer.window_get_size()
@@ -186,12 +213,42 @@ func _on_game_started() -> void:
 
 func _run_checkpoint_flow() -> void:
 	await get_tree().create_timer(2.0).timeout
+	await _ensure_turn_start_draw()
+	_trigger_synced_checkpoint.rpc("cp1_deal")
 	if _role == TestRole.HOST:
-		_trigger_synced_checkpoint.rpc("cp1_deal")
 		await get_tree().create_timer(float(CHECKPOINT_DELAYS[0])).timeout
 		GameManager.request_action("draw_card")
 		await get_tree().create_timer(float(CHECKPOINT_DELAYS[1])).timeout
 		_trigger_synced_checkpoint.rpc("cp2_drawn")
-		GameManager.request_action("discard_drawn")
+		# Allow FSM / sync to settle (Queen peek, etc.) before discard.
+		await get_tree().create_timer(0.8).timeout
+		if GameManager.current_state == GameManager.GameState.TURN_RESOLVE_DRAWN:
+			GameManager.request_action("discard_drawn")
 		await get_tree().create_timer(float(CHECKPOINT_DELAYS[2])).timeout
 		_trigger_synced_checkpoint.rpc("cp3_discarded")
+	else:
+		var elapsed := 0.0
+		while elapsed < 25.0 and not _checkpoints_seen.get("cp3_discarded", false):
+			await get_tree().create_timer(0.25).timeout
+			elapsed += 0.25
+	await get_tree().create_timer(1.0).timeout
+	print("DebugLayoutTest: VISION_RUN_COMPLETE role=%s" % _role_label)
+	get_tree().quit()
+
+func _ensure_turn_start_draw() -> void:
+	const MAX_WAIT_SEC := 45.0
+	var elapsed := 0.0
+	while elapsed < MAX_WAIT_SEC:
+		var state := GameManager.current_state
+		if state == GameManager.GameState.TURN_START_DRAW:
+			print("DebugLayoutTest: Ready for draw phase (role=%s)" % _role_label)
+			return
+		if state == GameManager.GameState.INITIAL_PEEK:
+			print("DebugLayoutTest: Auto-skipping initial peek (role=%s)" % _role_label)
+			if _role == TestRole.HOST:
+				GameManager.request_action("initial_peek_done")
+			else:
+				GameManager.request_action.rpc_id(1, "initial_peek_done")
+		await get_tree().create_timer(0.5).timeout
+		elapsed += 0.5
+	push_warning("DebugLayoutTest: Timed out waiting for TURN_START_DRAW (state=%s)" % GameManager.GameState.keys()[GameManager.current_state])

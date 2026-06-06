@@ -320,6 +320,13 @@ func _apply_local_player_seat_rotation() -> void:
 		player_positions_root.rotation.y = 0.0
 		_mp_camera_offset = Vector3.ZERO
 	if is_instance_valid(camera):
+		if GameManager.is_multiplayer:
+			# Table cam (not avatar FP): rotate with seat so the deck stays centered for every peer.
+			camera.rotation.y = _base_camera_rotation.y + GameManager.local_player_idx * (TAU / 4.0)
+			_look_yaw = 0.0
+			_look_pitch = 0.0
+		else:
+			camera.rotation.y = _base_camera_rotation.y
 		camera.position = _effective_camera_base_local()
 
 func _attach_cabinets_to_seats() -> void:
@@ -509,19 +516,23 @@ func _on_multiplayer_sync_applied() -> void:
 			_update_discard_visual()
 	if GameManager.drawn_card_data != null \
 			and GameManager.current_state == GameManager.GameState.TURN_RESOLVE_DRAWN \
-			and GameManager.current_player_index == GameManager.local_player_idx \
 			and pending_card == null:
+		var actor_idx: int = GameManager.current_player_index
+		var is_local_turn := actor_idx == GameManager.local_player_idx
 		var d = GameManager.drawn_card_data
 		pending_card = card_scene.instantiate()
 		pending_card.name = "PendingCard"
 		add_child(pending_card)
-		d.is_face_up = true
+		d.is_face_up = false
 		pending_card.setup(d)
 		pending_card.card_clicked.connect(_on_card_clicked)
 		pending_card.position = deck_area.position + Vector3(0, 0.6, 0.5)
 		pending_card.rotation_degrees = Vector3(90, 0, 0)
 		pending_card.scale = Vector3(1.5, 1.5, 1.5)
-		pending_card.set_interactive(true)
+		pending_card.set_interactive(is_local_turn)
+		if not is_local_turn and actor_idx >= 0 and actor_idx < GameManager.players_info.size():
+			_show_message(GameManager.players_info[actor_idx].name + " is drawing...")
+		call_deferred("_reveal_synced_pending_card", is_local_turn)
 	
 	# --- Bug 5: Detect Dutch call and show feedback on client ---
 	if new_dutch_i != -1 and _last_sync_diag["dutch_i"] == -1:
@@ -1659,6 +1670,14 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	await get_tree().create_timer(0.1, false).timeout
 	pending_card.animate_flip(player_idx == _human_ui_idx())
 	_update_deck_visual() # Refresh deck after drawing
+
+func _reveal_synced_pending_card(is_local_turn: bool) -> void:
+	if not is_instance_valid(pending_card):
+		return
+	await get_tree().create_timer(0.1, false).timeout
+	if is_instance_valid(pending_card):
+		pending_card.animate_flip(is_local_turn)
+	_update_deck_visual()
 
 func _on_card_discarded(player_idx, card_data):
 	play_take_animation(player_idx)
@@ -3043,7 +3062,7 @@ func _process(delta: float) -> void:
 					if attachment:
 						attachment.queue_free()
 
-		if player_avatars.has(local_p_idx) and is_instance_valid(player_avatars[local_p_idx]):
+		if not GameManager.is_multiplayer and player_avatars.has(local_p_idx) and is_instance_valid(player_avatars[local_p_idx]):
 			var avatar = player_avatars[local_p_idx]
 			var skeleton = avatar.get_node_or_null("Armature/Skeleton3D") as Skeleton3D
 			if skeleton:

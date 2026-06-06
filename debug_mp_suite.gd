@@ -110,6 +110,7 @@ func _phase_mp2_sync_draw_discard() -> void:
 	# Client (P1) apply
 	_gm.local_player_idx = 1
 	_gm._apply_mp_sync_payload(host_payload)
+	_gm.multiplayer_sync_applied.emit()
 	await process_frame
 	for _i in 10:
 		await process_frame
@@ -117,13 +118,9 @@ func _phase_mp2_sync_draw_discard() -> void:
 	if _gm.drawn_card_data == null:
 		_fail("MP-2", "drawn_card_data null after host draw")
 	elif not MpCommon.pending_alive(_board):
-		# Client only spawns pending when local player's turn
-		if _gm.current_player_index == _gm.local_player_idx:
-			_fail("MP-2", "pending node missing on client after draw sync")
-		else:
-			_pass("MP-2", "observer client: no local pending (expected when not local turn)")
+		_fail("MP-2", "pending node missing on client after host draw sync")
 	else:
-		_pass("MP-2", "pending visible after draw sync")
+		_pass("MP-2", "pending visible after draw sync (remote turn)")
 
 	var d1: Dictionary = MpCommon.board_digest(_board)
 	_log("[MP-2 DIGEST] after draw: %s" % str(d1))
@@ -142,6 +139,7 @@ func _phase_mp2_sync_draw_discard() -> void:
 	host_payload["seq"] = _gm._mp_sync_seq
 	_gm.local_player_idx = 1
 	_gm._apply_mp_sync_payload(host_payload)
+	_gm.multiplayer_sync_applied.emit()
 	await create_timer(0.5).timeout
 	for _i in 10:
 		await process_frame
@@ -316,7 +314,7 @@ func _phase_p3_stress_objects() -> void:
 	await create_timer(2.0).timeout
 	var settled: int = int(Performance.get_monitor(Performance.OBJECT_COUNT))
 
-	_log("[P-3] baseline=%d peak=%d final=%d settled=%d cycles=%d" % [baseline, peak, final, settled])
+	_log("[P-3] baseline=%d peak=%d final=%d settled=%d cycles=%d" % [baseline, peak, final, settled, cycle])
 	if settled > baseline + 80:
 		_fail("P-3", "object count drift +%d after 20 cycles (possible MP VFX leak)" % (settled - baseline))
 	else:
