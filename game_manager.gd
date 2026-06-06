@@ -128,6 +128,8 @@ func _ready():
 	ability_manager = AbilityManager.new()
 	add_child(ability_manager)
 	
+	NetworkManager.player_disconnected.connect(_on_peer_disconnected)
+	
 	# Background Music Setup (Dual Players for Seamless Loop)
 	menu_music_p1 = AudioStreamPlayer.new()
 	menu_music_p2 = AudioStreamPlayer.new()
@@ -706,6 +708,55 @@ func _check_elimination_win_condition() -> bool:
 		change_state(GameState.GAME_OVER)
 		return true
 	return false
+
+func _on_peer_disconnected(peer_id: int) -> void:
+	if not is_multiplayer or not multiplayer.is_server():
+		return
+	if players_info.is_empty() or current_state == GameState.GAME_OVER:
+		return
+	var player_idx: int = int(peer_to_idx.get(peer_id, -1))
+	if player_idx == -1:
+		return
+	peer_to_idx.erase(peer_id)
+	idx_to_peer.erase(player_idx)
+	if not _is_valid_player_index(player_idx):
+		return
+	if not players_info[player_idx].is_eliminated:
+		players_info[player_idx].is_eliminated = true
+		players_info[player_idx].is_bot = true
+		debug_log("disconnect", "P%d (peer %d) rage-quit → eliminated" % [player_idx, peer_id])
+		player_eliminated.emit(player_idx)
+
+	# Count remaining active players — elimination can occur from any FSM state so
+	# we force the GAME_OVER transition rather than relying on _check_elimination_win_condition
+	# which uses the FSM validation table (TURN_RESOLVE_DRAWN → GAME_OVER is not listed).
+	var active_count := 0
+	for i in range(num_players):
+		if not players_info[i].is_eliminated:
+			active_count += 1
+	var game_ended := active_count <= 1
+
+	# Always clear a pending drawn card when the seat that drew it is vacated
+	if current_player_index == player_idx and drawn_card_data != null:
+		drawn_card_data = null
+		pending_card_consumed.emit()
+
+	if game_ended:
+		print("Only one player remains after disconnect. Game Over.")
+		change_state(GameState.GAME_OVER, true)
+		_mp_broadcast_state_if_server()
+		return
+
+	if current_player_index == player_idx:
+		if jump_in_player_idx == player_idx:
+			jump_in_player_idx = -1
+			jump_in_validating = false
+		next_turn()
+	elif jump_in_player_idx == player_idx:
+		jump_in_player_idx = -1
+		jump_in_validating = false
+		change_state(_resolve_post_interrupt_state())
+	_mp_broadcast_state_if_server()
 
 func drink_beer(p_idx: int):
 	if players_info[p_idx].is_eliminated: return

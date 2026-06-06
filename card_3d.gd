@@ -220,7 +220,9 @@ func animate_flip(is_face_up: bool, target_y: float = -1.0, persist_data_state: 
 	if is_flipping: return
 	is_flipping = true
 	
-	GameManager.play_sfx(GameManager.sfx_card_flip)
+	var gm := get_node_or_null("/root/GameManager")
+	if gm:
+		gm.play_sfx(gm.sfx_card_flip)
 	if is_inside_tree():
 		var board = get_tree().current_scene
 		if board and board.has_method("spawn_particles"):

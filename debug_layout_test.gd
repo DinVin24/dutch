@@ -71,19 +71,40 @@ func _bootstrap_network_role() -> void:
 		var started: bool = bool(NetworkManager.host_game())
 		if started:
 			print("DebugLayoutTest: Host started via WebRTC")
-			print("DebugLayoutTest: Host Room Code: ", NetworkManager.get_room_code())
+			var code := NetworkManager.get_room_code()
+			print("DebugLayoutTest: Host Room Code: ", code)
+			_write_room_code_file(code)
 		else:
 			push_warning("DebugLayoutTest: Failed to start host on port %d" % _test_port)
 		return
 
 	NetworkManager.set_local_player_name("TestClient")
-	# NOTE: For auto-join to work in WebRTC tests, the host must share the room code somehow.
-	# For now, we stub it out with a placeholder to fix syntax errors.
-	var connected: bool = bool(NetworkManager.join_game("TEST"))
+	var room_code := _resolve_room_code()
+	var connected: bool = bool(NetworkManager.join_game(room_code))
 	if connected:
-		print("DebugLayoutTest: Client attempting to join via WebRTC")
+		print("DebugLayoutTest: Client attempting to join via WebRTC room=%s" % room_code)
 	else:
-		push_warning("DebugLayoutTest: Failed to connect client")
+		push_warning("DebugLayoutTest: Failed to connect client to room %s" % room_code)
+
+func _resolve_room_code() -> String:
+	var args := OS.get_cmdline_user_args()
+	var idx := args.find("--room-code")
+	if idx != -1 and idx + 1 < args.size():
+		return String(args[idx + 1]).strip_edges()
+	idx = args.find("--room-code-file")
+	if idx != -1 and idx + 1 < args.size():
+		var path := String(args[idx + 1]).strip_edges()
+		if FileAccess.file_exists(path):
+			return FileAccess.get_file_as_string(path).strip_edges()
+	return "TEST"
+
+func _write_room_code_file(code: String) -> void:
+	var path := ProjectSettings.globalize_path("res://.debug/mp/room_code.txt")
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var f := FileAccess.open("res://.debug/mp/room_code.txt", FileAccess.WRITE)
+	if f:
+		f.store_string(code.strip_edges())
+		print("DebugLayoutTest: Wrote room code to res://.debug/mp/room_code.txt")
 
 func _capture_after_handshake_delay() -> void:
 	await get_tree().create_timer(HANDSHAKE_WAIT_SECONDS).timeout

@@ -201,6 +201,7 @@ func _ready():
 	GameManager.mp_connection_status_changed.connect(_on_mp_connection_status_changed)
 	GameManager.player_emoted.connect(_on_player_emoted)
 	NetworkManager.play_again_votes_updated.connect(_on_play_again_votes_updated)
+	NetworkManager.server_disconnected.connect(_on_host_disconnected)
 	
 	# Dynamic Tavern Ambient & Spotlight Lighting
 	var center_light = OmniLight3D.new()
@@ -495,11 +496,15 @@ func _on_multiplayer_sync_applied() -> void:
 		var prev_discard: int = int(_last_sync_diag["discard"])
 		if new_discard > prev_discard \
 				and GameManager.is_multiplayer \
-				and not multiplayer.is_server():
+				and not multiplayer.is_server() \
+				and GameManager.deck_manager.discard_pile.size() > 0:
 			# Server already got card_discarded; clients only see the sync diff.
 			var top_card: CardData = GameManager.deck_manager.discard_pile.back()
-			var actor_idx: int = int(_last_sync_diag["cur"])
-			_on_card_discarded(actor_idx, top_card)
+			if top_card != null:
+				var actor_idx: int = int(_last_sync_diag["cur"])
+				_on_card_discarded(actor_idx, top_card)
+			else:
+				_update_discard_visual()
 		else:
 			_update_discard_visual()
 	if GameManager.drawn_card_data != null \
@@ -2847,6 +2852,13 @@ func _on_pause_main_menu():
 	get_tree().paused = false
 	get_tree().change_scene_to_file("res://main_menu.tscn")
 
+func _on_host_disconnected() -> void:
+	if not GameManager.is_multiplayer:
+		return
+	NetworkManager.leave_game()
+	get_tree().paused = false
+	get_tree().change_scene_to_file("res://main_menu.tscn")
+
 func _toggle_debug_reveal():
 	if not _debug_reveal:
 		_debug_flipped_nodes.clear()
@@ -3045,16 +3057,19 @@ func _process(delta: float) -> void:
 					var body_yaw = clamp(smooth_yaw * 0.35, deg_to_rad(-50.0), deg_to_rad(50.0))
 					avatar.rotation.y = deg_to_rad(90.0) + body_yaw
 					
-					# Rotate head bone to look exactly where the camera is looking in 3D world space
-					var cam_basis = camera.global_transform.basis
+				# Rotate head bone to look exactly where the camera is looking in 3D world space
+				var cam_basis = camera.global_transform.basis
+				# Guard: skip quaternion ops when basis is degenerate (e.g. headless mode, uninitialized transforms)
+				if cam_basis.determinant() != 0.0:
 					var target_basis = cam_basis * Basis.from_euler(Vector3(0, PI, 0)) # Rotate 180 on Y because head faces +Z, camera looks -Z
 					var target_global_quat = target_basis.get_rotation_quaternion()
 					var parent_idx = skeleton.get_bone_parent(head_idx)
 					if parent_idx != -1:
 						var parent_global_pose = skeleton.global_transform * skeleton.get_bone_global_pose(parent_idx)
-						var parent_global_quat = parent_global_pose.basis.get_rotation_quaternion()
-						var local_quat = parent_global_quat.inverse() * target_global_quat
-						skeleton.set_bone_pose_rotation(head_idx, local_quat)
+						if parent_global_pose.basis.determinant() != 0.0:
+							var parent_global_quat = parent_global_pose.basis.get_rotation_quaternion()
+							var local_quat = parent_global_quat.inverse() * target_global_quat
+							skeleton.set_bone_pose_rotation(head_idx, local_quat)
 					
 					# Force skeleton update to get correct global bone pose in the same frame
 					skeleton.force_update_all_bone_transforms()
