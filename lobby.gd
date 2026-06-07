@@ -22,6 +22,9 @@ var _btn_original: Dictionary = {}
 var _btn_hover: Dictionary = {}
 
 func _ready():
+	get_tree().paused = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	NetworkManager.leave_game()
 	GameManager.play_menu_music()
 	NetworkManager.players_updated.connect(_update_lobby_ui)
 	NetworkManager.match_settings_updated.connect(_update_lobby_ui)
@@ -103,7 +106,7 @@ func _on_host_pressed():
 		name_edit.grab_focus()
 		return
 	_clear_status()
-	var player_name := name_edit.text.strip_edges()
+	var player_name: String = name_edit.text.strip_edges()
 	SettingsManager.set_player_name(player_name)
 	NetworkManager.set_local_player_name(player_name)
 	if NetworkManager.host_game():
@@ -122,7 +125,7 @@ func _on_join_pressed():
 		code_edit.grab_focus()
 		return
 	_clear_status()
-	var player_name := name_edit.text.strip_edges()
+	var player_name: String = name_edit.text.strip_edges()
 	SettingsManager.set_player_name(player_name)
 	NetworkManager.set_local_player_name(player_name)
 	if NetworkManager.join_game(code_edit.text):
