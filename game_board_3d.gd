@@ -3050,7 +3050,7 @@ func _process(delta: float) -> void:
 				_drink_beers.erase(p_idx)
 			elif p_idx == local_p_idx:
 				var drink_t = 1.8 - _drink_timers[p_idx]
-				var max_tilt = deg_to_rad(20.0)
+				var max_tilt = deg_to_rad(35.0)
 				if drink_t < 0.5:
 					_drink_camera_pitch_offset = 0.0
 				elif drink_t < 1.0:
@@ -4316,31 +4316,31 @@ func _get_drink_bone_rotation(bone_name: String, t: float) -> Quaternion:
 	if bone_name == "mixamorig_RightArm":
 		if t < 0.5:
 			var p = t / 0.5
-			rot = Vector3(-15, -30, -20) * p
+			rot = Vector3(-25, -20, -30) * p
 		elif t < 1.0:
 			var p = (t - 0.5) / 0.5
-			rot = Vector3(-15, -30, -20).lerp(Vector3(-75, -55, -40), p)
+			rot = Vector3(-25, -20, -30).lerp(Vector3(-65, -45, -75), p)
 		elif t < 1.4:
-			rot = Vector3(-75, -55, -40)
+			rot = Vector3(-65, -45, -75)
 		else:
 			var p = (t - 1.4) / 0.4
-			rot = Vector3(-75, -55, -40).lerp(Vector3.ZERO, p)
+			rot = Vector3(-65, -45, -75).lerp(Vector3.ZERO, p)
 			
 	elif bone_name == "mixamorig_RightForeArm":
 		if t < 0.5:
 			var p = t / 0.5
-			rot = Vector3(0, 30, 0) * p
+			rot = Vector3(0, 0, -45) * p
 		elif t < 1.0:
 			var p = (t - 0.5) / 0.5
-			rot = Vector3(0, 30, 0).lerp(Vector3(0, 95, 0), p)
+			rot = Vector3(0, 0, -45).lerp(Vector3(0, 0, -115), p)
 		elif t < 1.4:
-			rot = Vector3(0, 95, 0)
+			rot = Vector3(0, 0, -115)
 		else:
 			var p = (t - 1.4) / 0.4
-			rot = Vector3(0, 95, 0).lerp(Vector3.ZERO, p)
+			rot = Vector3(0, 0, -115).lerp(Vector3.ZERO, p)
 			
 	elif bone_name == "mixamorig_Neck" or bone_name == "mixamorig_Head":
-		var max_tilt = Vector3(-20, 0, 0) if bone_name == "mixamorig_Neck" else Vector3(-15, 0, 0)
+		var max_tilt = Vector3(-30, 0, 0) if bone_name == "mixamorig_Neck" else Vector3(-25, 0, 0)
 		if t < 0.5:
 			rot = Vector3.ZERO
 		elif t < 1.0:
