@@ -3185,7 +3185,11 @@ func _process(delta: float) -> void:
 									var base_gpos = beer_node.get_parent().global_transform * base_pos
 									var base_gbasis = beer_node.get_parent().global_transform.basis * Basis.from_euler(base_rot)
 									beer_node.global_position = base_gpos.lerp(target_gpos, blend)
-									beer_node.global_basis = base_gbasis.slerp(target_gbasis, blend)
+									var base_quat = base_gbasis.get_rotation_quaternion()
+									var target_quat = target_gbasis.get_rotation_quaternion()
+									var blended_quat = base_quat.slerp(target_quat, blend)
+									var blended_scale = base_gbasis.get_scale().lerp(target_gbasis.get_scale(), blend)
+									beer_node.global_basis = Basis(blended_quat) * Basis.from_scale(blended_scale)
 								else:
 									_reset_beer_mug_transform(beer_node)
 							elif drink_t <= 1.4:
@@ -3197,7 +3201,11 @@ func _process(delta: float) -> void:
 									var base_gpos = beer_node.get_parent().global_transform * base_pos
 									var base_gbasis = beer_node.get_parent().global_transform.basis * Basis.from_euler(base_rot)
 									beer_node.global_position = base_gpos.lerp(target_gpos, blend)
-									beer_node.global_basis = base_gbasis.slerp(target_gbasis, blend)
+									var base_quat = base_gbasis.get_rotation_quaternion()
+									var target_quat = target_gbasis.get_rotation_quaternion()
+									var blended_quat = base_quat.slerp(target_quat, blend)
+									var blended_scale = base_gbasis.get_scale().lerp(target_gbasis.get_scale(), blend)
+									beer_node.global_basis = Basis(blended_quat) * Basis.from_scale(blended_scale)
 								else:
 									beer_node.global_position = target_gpos
 									beer_node.global_basis = target_gbasis
@@ -4233,10 +4241,6 @@ func _spawn_player_avatars() -> void:
 
 		player_avatars[i] = char_node
 		avatar_arm_weights[i] = 1.0
-
-		var skeleton = char_node.get_node_or_null("Armature/Skeleton3D") as Skeleton3D
-		if ap:
-			ap.callback_mode_process = AnimationPlayer.ANIMATION_PROCESS_IDLE
 
 	take_inst.queue_free()
 	_refresh_avatar_body_visibility()
