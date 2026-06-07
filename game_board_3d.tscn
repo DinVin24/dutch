@@ -71,9 +71,9 @@ shader_parameter/time = 0.0
 
 [node name="GameBoard3D" type="Node3D" unique_id=1162522278]
 script = ExtResource("1_script")
-beer_scale = Vector3(4.5, 4.5, 4.5)
+beer_scale = Vector3(3.8, 3.8, 3.8)
 beer_spacing = 0.55
-beer_y_offset = 0.75
+beer_y_offset = 0.64
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=125711330]
 environment = SubResource("Environment_1")
