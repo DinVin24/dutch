@@ -1431,7 +1431,6 @@ func _animate_beer_emptying(beer_node: Node3D) -> void:
 	if not is_instance_valid(beer_node):
 		return
 	beer_node.visible = true
-	_reset_beer_mug_transform(beer_node)
 	_apply_beer_visual_state(beer_node, BeerVisualState.FULL, false)
 
 	var foam_pos := beer_node.global_position + Vector3(0, 0.22, 0)
@@ -3164,6 +3163,11 @@ func _process(delta: float) -> void:
 							var anim_rot = skeleton.get_bone_pose_rotation(head)
 							var target_rot = _get_drink_bone_rotation("mixamorig_Head", drink_t)
 							skeleton.set_bone_pose_rotation(head, anim_rot.slerp(target_rot, blend_w))
+						var right_hand = skeleton.find_bone("mixamorig_RightHand")
+						if right_hand != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(right_hand)
+							var target_rot = _get_drink_bone_rotation("mixamorig_RightHand", drink_t)
+							skeleton.set_bone_pose_rotation(right_hand, anim_rot.slerp(target_rot, blend_w))
 
 					# Force recalculation of bone global positions so we can snap/lerp the beer mug accurately
 					skeleton.force_update_all_bone_transforms()
@@ -3175,8 +3179,9 @@ func _process(delta: float) -> void:
 						var hand_idx = skeleton.find_bone("mixamorig_RightHand")
 						if hand_idx != -1:
 							var hand_trans = skeleton.global_transform * skeleton.get_bone_global_pose(hand_idx)
-							var target_gpos = hand_trans.origin + hand_trans.basis * Vector3(0.015, 0.015, 0.0)
-							var target_gbasis = hand_trans.basis * Basis.from_euler(Vector3(deg_to_rad(-90), deg_to_rad(90), 0))
+							var hand_basis_normalized = hand_trans.basis.orthonormalized()
+							var target_gpos = hand_trans.origin + hand_basis_normalized * Vector3(0.05, 0.05, 0.0)
+							var target_gbasis = hand_basis_normalized * Basis.from_euler(Vector3(deg_to_rad(-90), deg_to_rad(90), 0)) * Basis.from_scale(beer_node.scale)
 							
 							var base_pos = beer_node.get_meta("base_position") if beer_node.has_meta("base_position") else beer_node.position
 							var base_rot = beer_node.get_meta("base_rotation", Vector3.ZERO)
@@ -3190,7 +3195,7 @@ func _process(delta: float) -> void:
 									var base_quat = base_gbasis.get_rotation_quaternion()
 									var target_quat = target_gbasis.get_rotation_quaternion()
 									var blended_quat = base_quat.slerp(target_quat, blend)
-									var blended_scale = base_gbasis.get_scale().lerp(target_gbasis.get_scale(), blend)
+									var blended_scale = base_gbasis.get_scale().lerp(beer_node.scale, blend)
 									beer_node.global_basis = Basis(blended_quat) * Basis.from_scale(blended_scale)
 								else:
 									_reset_beer_mug_transform(beer_node)
@@ -3206,7 +3211,7 @@ func _process(delta: float) -> void:
 									var base_quat = base_gbasis.get_rotation_quaternion()
 									var target_quat = target_gbasis.get_rotation_quaternion()
 									var blended_quat = base_quat.slerp(target_quat, blend)
-									var blended_scale = base_gbasis.get_scale().lerp(target_gbasis.get_scale(), blend)
+									var blended_scale = base_gbasis.get_scale().lerp(beer_node.scale, blend)
 									beer_node.global_basis = Basis(blended_quat) * Basis.from_scale(blended_scale)
 								else:
 									beer_node.global_position = target_gpos
@@ -4371,6 +4376,19 @@ func _get_drink_bone_rotation(bone_name: String, t: float) -> Quaternion:
 		else:
 			var p = (t - 1.4) / 0.4
 			rot = max_tilt * (1.0 - p)
+			
+	elif bone_name == "mixamorig_RightHand":
+		if t < 0.5:
+			var p = t / 0.5
+			rot = Vector3.ZERO
+		elif t < 1.0:
+			var p = (t - 0.5) / 0.5
+			rot = Vector3(0, 0, -40) * p
+		elif t < 1.4:
+			rot = Vector3(0, 0, -40)
+		else:
+			var p = (t - 1.4) / 0.4
+			rot = Vector3(0, 0, -40).lerp(Vector3.ZERO, p)
 			
 	return Quaternion.from_euler(Vector3(deg_to_rad(rot.x), deg_to_rad(rot.y), deg_to_rad(rot.z)))
 
