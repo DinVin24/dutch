@@ -30,6 +30,8 @@ ResponsiveUI="*res://responsive_ui.gd"
 SceneLoader="*res://scene_loader.gd"
 GameManager="*res://game_manager.gd"
 NetworkManager="*res://network_manager.gd"
+GameKnowledge="*res://game_knowledge.gd"
+GameAssistant="*res://game_assistant.gd"
 DebugLayoutTest="*res://debug_layout_test.gd"
 DevConsole="*res://dev_console.tscn"
 

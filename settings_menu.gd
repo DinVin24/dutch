@@ -16,6 +16,7 @@ const COLOR_MUTED := Color(0.6, 0.6, 0.7)
 @onready var music_value_label: Label = $Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/AUDIO/AudioMargin/AudioVBox/AudioGrid/MusicValueLabel
 @onready var sfx_value_label: Label = $Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/AUDIO/AudioMargin/AudioVBox/AudioGrid/SFXValueLabel
 @onready var dev_console_check: CheckBox = $Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/DevConsoleRow/DevConsoleCheck
+@onready var game_assistant_check: CheckBox = $Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/GameAssistantRow/GameAssistantCheck
 @onready var back_button: Button = $Center/OuterMargin/PanelShell/InnerMargin/Panel/FooterRow/BackButton
 @onready var glitch_player: AudioStreamPlayer = $GlitchSound
 
@@ -60,6 +61,7 @@ func _ready() -> void:
 	_update_volume_label(sfx_value_label, sfx_slider.value)
 
 	dev_console_check.button_pressed = GameManager.dev_console_enabled
+	game_assistant_check.button_pressed = GameManager.show_game_assistant
 	_populate_keybind_buttons()
 	_apply_ui_theme()
 	_connect_hover_sounds()
@@ -75,6 +77,7 @@ func _apply_ui_theme() -> void:
 	_style_slider(music_slider)
 	_style_slider(sfx_slider)
 	_style_checkbox(dev_console_check)
+	_style_checkbox(game_assistant_check)
 	_style_tabs(tabs)
 	_style_back_button(back_button)
 
@@ -241,6 +244,7 @@ func _connect_hover_sounds() -> void:
 	_register_glitch_hover(music_slider)
 	_register_glitch_hover(sfx_slider)
 	_register_glitch_hover(dev_console_check)
+	_register_glitch_hover(game_assistant_check)
 	for action in KEYBIND_ACTIONS:
 		_register_glitch_hover(get_node(KEYBIND_ACTIONS[action]))
 
@@ -289,6 +293,9 @@ func _on_back_button_pressed() -> void:
 
 func _on_dev_console_toggled(toggled_on: bool) -> void:
 	GameManager.dev_console_enabled = toggled_on
+
+func _on_game_assistant_toggled(toggled_on: bool) -> void:
+	GameManager.show_game_assistant = toggled_on
 
 # ── KEYBINDS ──────────────────────────────────────────────────────────────────
 

@@ -46,6 +46,10 @@ func load_and_apply_settings() -> void:
 	if config.has_section_key("controls", "dev_console"):
 		GameManager.dev_console_enabled = config.get_value("controls", "dev_console")
 
+	# Gameplay
+	if config.has_section_key("gameplay", "show_game_assistant"):
+		GameManager.show_game_assistant = bool(config.get_value("gameplay", "show_game_assistant"))
+
 	for action in CONFIGURABLE_ACTIONS:
 		if config.has_section_key("keybinds", action):
 			var keycode = config.get_value("keybinds", action)
@@ -70,6 +74,9 @@ func save_settings() -> void:
 
 	# Controls
 	config.set_value("controls", "dev_console", GameManager.dev_console_enabled)
+
+	# Gameplay
+	config.set_value("gameplay", "show_game_assistant", GameManager.show_game_assistant)
 
 	for action in CONFIGURABLE_ACTIONS:
 		var events = InputMap.action_get_events(action)
