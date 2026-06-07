@@ -10,6 +10,9 @@ const MAX_INTERACT_DISTANCE := 4.5
 # Hammer hover animation constants
 const HAMMER_HOVER_RISE   := 0.035  # meters to rise in Y
 const HAMMER_HOVER_SHAKE  := 0.004  # shake amplitude
+## Click target for cabinet hammers (hammer model local space; scaled ~0.008 globally).
+const HAMMER_HITBOX_SIZE := Vector3(75.0, 42.0, 140.0)
+const HAMMER_HITBOX_OFFSET := Vector3(0.0, 0.0, 38.25)
 
 # References to drawer nodes (GLB nodes may be plain Node3D, not MeshInstance3D)
 var _shelves: Array[Node3D] = []
@@ -327,9 +330,9 @@ func update_hammers(abilities: Array, p_idx: int = -1) -> void:
 
 		var hammer_col = CollisionShape3D.new()
 		var hammer_box = BoxShape3D.new()
-		hammer_box.size = Vector3(55.0, 30.0, 110.0)
+		hammer_box.size = HAMMER_HITBOX_SIZE
 		hammer_col.shape = hammer_box
-		hammer_col.position = Vector3(0.0, 0.0, 38.25)
+		hammer_col.position = HAMMER_HITBOX_OFFSET
 		hammer_area.add_child(hammer_col)
 
 		# Floating sparkles

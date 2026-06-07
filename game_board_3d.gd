@@ -101,7 +101,6 @@ const BEER_LIQUID_FILL := {
 var player_beers_nodes: Array = [[], [], [], []]
 var money_labels: Array = []
 var _chicken_node: Node3D = null
-var _chicken_zoom_active: bool = false
 var _hovered_shelf_index: int = -1
 var _hovered_cabinet_node: Node = null
 var _hovered_hammer_idx_board: int = -1
@@ -1136,41 +1135,27 @@ func _try_buy_ability(p_idx: int):
 		
 	_send_action("buy_ability")
 
-func _drop_egg_for(p_idx: int, ab: String):
+func _drop_egg_for(p_idx: int, ab: String) -> void:
+	var ab_name := _format_ability_name(ab)
 	if p_idx == _human_ui_idx():
-		_show_message("You got: " + ab.capitalize() + "! (Check your cabinet)")
+		_show_ability_purchase_alert(ab_name, ab)
 	else:
-		_show_message(GameManager.players_info[p_idx].name + " bought an ability!")
+		_show_message(GameManager.players_info[p_idx].name + " bought " + ab_name + "!")
 	
 	if is_instance_valid(_chicken_node):
-		spawn_particles("ability_buy", _chicken_node.global_position)
+		spawn_particles("ability_buy", _chicken_node.global_position + Vector3(0, 0.35, 0))
 		var tween = create_tween()
 		tween.tween_property(_chicken_node, "position:y", 1.38, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tween.tween_property(_chicken_node, "position:y", 0.58, 0.2).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
 
-		# Camera cinematic zoom - GUARD against re-entry
-		if not _chicken_zoom_active:
-			_chicken_zoom_active = true
-			var target_pos = _chicken_node.global_position + Vector3(0, 1.5, 2.5)
-			var cam_tween = create_tween()
-			var restore_cam_local = _effective_camera_base_local()
-			var original_fov = camera.fov
-			var original_rot = camera.rotation_degrees
-			
-			cam_tween.tween_property(camera, "global_position", target_pos, 0.3).set_trans(Tween.TRANS_CUBIC)
-			cam_tween.parallel().tween_property(camera, "rotation_degrees", Vector3(-20, 0, 0), 0.3).set_trans(Tween.TRANS_CUBIC)
-			cam_tween.parallel().tween_property(camera, "fov", 45.0, 0.3).set_trans(Tween.TRANS_CUBIC)
-			cam_tween.tween_interval(0.8)
-			cam_tween.tween_property(camera, "position", restore_cam_local, 0.4).set_trans(Tween.TRANS_QUAD)
-			cam_tween.parallel().tween_property(camera, "rotation_degrees", original_rot, 0.4).set_trans(Tween.TRANS_QUAD)
-			cam_tween.parallel().tween_property(camera, "fov", original_fov, 0.4).set_trans(Tween.TRANS_QUAD)
-			cam_tween.tween_callback(func():
-				camera.position = restore_cam_local
-				_chicken_zoom_active = false
-			)
 	# Spawn hammer in the player's cabinet
 	print("BOARD: syncing ability hammers for P", p_idx)
 	_update_ability_visuals(p_idx)
+	var cab: Node3D = _cabinets.get(p_idx)
+	if is_instance_valid(cab):
+		spawn_particles("ability_buy", cab.global_position + Vector3(0, 0.55, 0))
+		if p_idx == _human_ui_idx():
+			_play_ability_purchase_flash()
 	
 func _update_ability_visuals(p_idx: int):
 	# Abilities are now represented exclusively by hammers in the cabinet.
@@ -3602,6 +3587,108 @@ func _on_play_again_votes_updated(voted: int, total: int) -> void:
 	if is_instance_valid(play_again_btn):
 		play_again_btn.text = "Play Again (%d/%d)" % [voted, total]
 
+func _format_ability_name(ab: String) -> String:
+	return ab.capitalize().replace("_", " ")
+
+func _show_ability_purchase_alert(display_name: String, ab_id: String) -> void:
+	var old_alert = $GameUI/MainHUD.get_node_or_null("AbilityPurchaseAlert")
+	if old_alert:
+		old_alert.queue_free()
+
+	var center = CenterContainer.new()
+	center.name = "AbilityPurchaseAlert"
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$GameUI/MainHUD.add_child(center)
+
+	var panel = PanelContainer.new()
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.08, 0.05, 0.0, 0.92)
+	style.border_width_left = 5
+	style.border_width_right = 5
+	style.border_width_top = 5
+	style.border_width_bottom = 5
+	style.border_color = Color(1.0, 0.82, 0.15)
+	style.corner_radius_top_left = 14
+	style.corner_radius_top_right = 14
+	style.corner_radius_bottom_left = 14
+	style.corner_radius_bottom_right = 14
+	style.shadow_color = Color(1.0, 0.75, 0.0, 0.45)
+	style.shadow_size = 24
+	style.content_margin_left = 36
+	style.content_margin_right = 36
+	style.content_margin_top = 22
+	style.content_margin_bottom = 22
+	panel.add_theme_stylebox_override("panel", style)
+	center.add_child(panel)
+
+	var vbox = VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 8)
+	panel.add_child(vbox)
+
+	var title = Label.new()
+	title.text = "NEW ABILITY!"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_color_override("font_color", Color(1.0, 0.9, 0.25))
+	vbox.add_child(title)
+
+	var name_label = Label.new()
+	name_label.text = display_name.to_upper()
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.add_theme_font_size_override("font_size", 44)
+	name_label.add_theme_color_override("font_color", Color(1.0, 0.95, 0.55))
+	name_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.8))
+	name_label.add_theme_constant_override("shadow_offset_x", 2)
+	name_label.add_theme_constant_override("shadow_offset_y", 2)
+	vbox.add_child(name_label)
+
+	var desc := _get_ability_desc(ab_id)
+	if desc != "":
+		var desc_label = Label.new()
+		desc_label.text = desc.get_slice("\n", 0)
+		desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		desc_label.custom_minimum_size = Vector2(520, 0)
+		desc_label.add_theme_font_size_override("font_size", 20)
+		desc_label.add_theme_color_override("font_color", Color(0.85, 0.95, 1.0))
+		vbox.add_child(desc_label)
+
+	var hint = Label.new()
+	hint.text = "Added to your cabinet — click the hammer to use it"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 18)
+	hint.add_theme_color_override("font_color", Color(0.65, 1.0, 0.85))
+	vbox.add_child(hint)
+
+	_show_message("Purchased: " + display_name + " ($50) — check your cabinet")
+	shake(0.25, 0.35)
+
+	center.modulate.a = 0.0
+	center.scale = Vector2(0.92, 0.92)
+	var intro = create_tween().set_parallel(true)
+	intro.tween_property(center, "modulate:a", 1.0, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	intro.tween_property(center, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+	var fade = create_tween()
+	fade.tween_interval(4.0)
+	fade.tween_property(center, "modulate:a", 0.0, 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	fade.tween_callback(center.queue_free)
+
+func _play_ability_purchase_flash() -> void:
+	var flash_layer = CanvasLayer.new()
+	flash_layer.layer = 119
+	add_child(flash_layer)
+	var flash = ColorRect.new()
+	flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	flash.color = Color(1.0, 0.82, 0.15, 0.28)
+	flash_layer.add_child(flash)
+	var flash_tween = create_tween()
+	flash_tween.tween_property(flash, "color:a", 0.0, 0.35).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	flash_tween.tween_callback(flash_layer.queue_free)
+
 func _show_dutch_alert(caller_name: String):
 	var old_alert = $GameUI/MainHUD.get_node_or_null("DutchAlert")
 	if old_alert:
@@ -3747,16 +3834,17 @@ func spawn_particles(type: String, global_pos: Vector3):
 			mesh.size = Vector2(0.16, 0.16)
 			
 		"ability_buy":
-			particles.amount = 20
-			particles.lifetime = 0.6
-			particles.spread = 120.0
+			particles.amount = 48
+			particles.lifetime = 0.85
+			particles.spread = 140.0
 			particles.direction = Vector3.UP
-			particles.gravity = Vector3(0, -3.0, 0) # Coins fall down
-			particles.initial_velocity_min = 2.0
-			particles.initial_velocity_max = 4.0
+			particles.gravity = Vector3(0, -2.5, 0) # Coins fall down
+			particles.initial_velocity_min = 2.5
+			particles.initial_velocity_max = 5.0
 			particles.color = Color(1.0, 0.9, 0.0) # Gold coins
 			grad.set_color(0, Color(1.0, 0.95, 0.2, 1.0))
 			grad.set_color(1, Color(0.8, 0.5, 0.0, 0.0))
+			mesh.size = Vector2(0.11, 0.11)
 			
 		"ability_use":
 			particles.amount = 40
