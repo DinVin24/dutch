@@ -4326,22 +4326,22 @@ func _get_drink_bone_rotation(bone_name: String, t: float) -> Quaternion:
 			rot = Vector3(-25, -20, -30) * p
 		elif t < 1.0:
 			var p = (t - 0.5) / 0.5
-			rot = Vector3(-25, -20, -30).lerp(Vector3(-45, -30, -60), p)
+			rot = Vector3(-25, -20, -30).lerp(Vector3(-75, -25, -70), p)
 		elif t < 1.4:
-			rot = Vector3(-45, -30, -60)
+			rot = Vector3(-75, -25, -70)
 		else:
 			var p = (t - 1.4) / 0.4
-			rot = Vector3(-45, -30, -60).lerp(Vector3.ZERO, p)
+			rot = Vector3(-75, -25, -70).lerp(Vector3.ZERO, p)
 			
 		# Outward curved flaring to avoid torso clipping
 		if t < 1.0:
 			var p_lift = t / 1.0
-			rot.y -= 10.0 * sin(p_lift * PI)
-			rot.z -= 25.0 * sin(p_lift * PI)
+			rot.y -= 20.0 * sin(p_lift * PI)
+			rot.z -= 45.0 * sin(p_lift * PI)
 		elif t >= 1.4:
 			var p_return = (t - 1.4) / 0.4
-			rot.y -= 10.0 * sin(p_return * PI)
-			rot.z -= 25.0 * sin(p_return * PI)
+			rot.y -= 20.0 * sin(p_return * PI)
+			rot.z -= 45.0 * sin(p_return * PI)
 			
 	elif bone_name == "mixamorig_RightForeArm":
 		if t < 0.5:
@@ -4349,20 +4349,20 @@ func _get_drink_bone_rotation(bone_name: String, t: float) -> Quaternion:
 			rot = Vector3(0, 0, -45) * p
 		elif t < 1.0:
 			var p = (t - 0.5) / 0.5
-			rot = Vector3(0, 0, -45).lerp(Vector3(0, 0, -95), p)
+			rot = Vector3(0, 0, -45).lerp(Vector3(0, 0, -100), p)
 		elif t < 1.4:
-			rot = Vector3(0, 0, -95)
+			rot = Vector3(0, 0, -100)
 		else:
 			var p = (t - 1.4) / 0.4
-			rot = Vector3(0, 0, -95).lerp(Vector3.ZERO, p)
+			rot = Vector3(0, 0, -100).lerp(Vector3.ZERO, p)
 			
 		# Flare elbow Z to delay bending and keep hand/mug away from chest
 		if t < 1.0:
 			var p_lift = t / 1.0
-			rot.z += 20.0 * sin(p_lift * PI)
+			rot.z += 35.0 * sin(p_lift * PI)
 		elif t >= 1.4:
 			var p_return = (t - 1.4) / 0.4
-			rot.z += 20.0 * sin(p_return * PI)
+			rot.z += 35.0 * sin(p_return * PI)
 			
 	elif bone_name == "mixamorig_Neck" or bone_name == "mixamorig_Head":
 		var max_tilt = Vector3(-45, 0, 0) if bone_name == "mixamorig_Neck" else Vector3(-35, 0, 0)
@@ -4383,12 +4383,12 @@ func _get_drink_bone_rotation(bone_name: String, t: float) -> Quaternion:
 			rot = Vector3.ZERO
 		elif t < 1.0:
 			var p = (t - 0.5) / 0.5
-			rot = Vector3(0, 0, 25) * p
+			rot = Vector3(0, 0, 30) * p
 		elif t < 1.4:
-			rot = Vector3(0, 0, 25)
+			rot = Vector3(0, 0, 30)
 		else:
 			var p = (t - 1.4) / 0.4
-			rot = Vector3(0, 0, 25).lerp(Vector3.ZERO, p)
+			rot = Vector3(0, 0, 30).lerp(Vector3.ZERO, p)
 			
 	return Quaternion.from_euler(Vector3(deg_to_rad(rot.x), deg_to_rad(rot.y), deg_to_rad(rot.z)))
 
