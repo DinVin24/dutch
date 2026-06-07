@@ -4023,13 +4023,20 @@ func _update_crosshair_raycast() -> void:
 		if is_instance_valid(_hovered_board_card):
 			_on_card_hover_enter(_hovered_board_card)
 
-## Filters out lower body tracks from the source Mixamo animation
+## Filters out lower body tracks from the source Mixamo animation and locks hips translation & rotation
 func _make_upper_body_animation(src: Animation) -> Animation:
 	var dst := src.duplicate() as Animation
 	var lower_keywords := ["LeftUpLeg", "LeftLeg", "LeftFoot", "LeftToe",
 						   "RightUpLeg", "RightLeg", "RightFoot", "RightToe"]
+	var hips_pos_path = NodePath()
+	var hips_rot_path = NodePath()
 	for ti in range(dst.get_track_count() - 1, -1, -1):
 		var path_str := dst.track_get_path(ti).get_concatenated_subnames()
+		if "mixamorig_Hips" in path_str:
+			if dst.track_get_type(ti) == Animation.TYPE_POSITION_3D:
+				hips_pos_path = dst.track_get_path(ti)
+			elif dst.track_get_type(ti) == Animation.TYPE_ROTATION_3D:
+				hips_rot_path = dst.track_get_path(ti)
 		var is_lower := false
 		for kw in lower_keywords:
 			if kw.to_lower() in path_str.to_lower():
@@ -4037,6 +4044,23 @@ func _make_upper_body_animation(src: Animation) -> Animation:
 				break
 		if is_lower or dst.track_get_type(ti) == Animation.TYPE_POSITION_3D or "position" in path_str.to_lower():
 			dst.remove_track(ti)
+	
+	if hips_rot_path != NodePath():
+		for ti in range(dst.get_track_count() - 1, -1, -1):
+			if dst.track_get_path(ti) == hips_rot_path:
+				dst.remove_track(ti)
+				break
+				
+	if hips_pos_path != NodePath():
+		var new_pos_ti = dst.add_track(Animation.TYPE_POSITION_3D)
+		dst.track_set_path(new_pos_ti, hips_pos_path)
+		dst.position_track_insert_key(new_pos_ti, 0.0, Vector3(0.043546, -1.822579, -44.87878))
+		
+	if hips_rot_path != NodePath():
+		var new_rot_ti = dst.add_track(Animation.TYPE_ROTATION_3D)
+		dst.track_set_path(new_rot_ti, hips_rot_path)
+		dst.rotation_track_insert_key(new_rot_ti, 0.0, Quaternion(-0.742863, -0.030465, -0.004276, 0.668737))
+		
 	return dst
 
 func _spawn_player_avatars() -> void:
@@ -4072,7 +4096,7 @@ func _spawn_player_avatars() -> void:
 		0: 270.0,
 		1: 90.0,
 		2: 270.0,
-		3: 90.0
+		3: 270.0
 	}
 
 	for i in range(4):
