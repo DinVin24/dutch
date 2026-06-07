@@ -1,12 +1,18 @@
 #!/bin/bash
 # Runner for the experimental Godot QA Bot (Retry)
 
-GODOT_BIN="/home/codex/Downloads/Godot_v4.6.1-stable_linux.x86_64"
-PROJECT_DIR="/home/codex/git/dutch"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="${PROJECT_DIR:-$SCRIPT_DIR}"
+GODOT_BIN="${GODOT_BIN:-}"
 
 # OS Check (Linux Only)
 if [[ "$OSTYPE" != "linux-gnu"* ]]; then
     echo "ERROR: Automated QA Pipeline is currently only supported on Linux."
+    exit 1
+fi
+
+if [[ -z "$GODOT_BIN" || ! -f "$GODOT_BIN" ]]; then
+    echo "ERROR: Set GODOT_BIN to your Godot 4.x Linux binary (e.g. export GODOT_BIN=/path/to/Godot_v4.6.x-stable_linux.x86_64)"
     exit 1
 fi
 

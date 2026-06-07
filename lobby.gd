@@ -22,6 +22,9 @@ var _btn_original: Dictionary = {}
 var _btn_hover: Dictionary = {}
 
 func _ready():
+	get_tree().paused = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	NetworkManager.leave_game()
 	GameManager.play_menu_music()
 	NetworkManager.players_updated.connect(_update_lobby_ui)
 	NetworkManager.match_settings_updated.connect(_update_lobby_ui)
@@ -51,7 +54,42 @@ func _ready():
 	_register_arcade_button(copy_code_button, "COPY_CODE", "COPY_CODE")
 
 	_clear_status()
+	var saved_name := SettingsManager.get_player_name()
+	if saved_name != "":
+		name_edit.text = saved_name
+	var saved_code := SettingsManager.get_last_room_code()
+	if saved_code != "":
+		code_edit.text = saved_code
 	name_edit.grab_focus()
+	if not get_viewport().size_changed.is_connected(_apply_responsive_layout):
+		get_viewport().size_changed.connect(_apply_responsive_layout)
+	call_deferred("_apply_responsive_layout")
+
+func _apply_responsive_layout() -> void:
+	var left_margin: Control = $LeftMargin
+	left_margin.anchor_right = 0.95 if ResponsiveUI.is_narrow_screen() else 0.48
+	$LeftMargin/VBox/Title.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(64))
+	for node_path in [
+		"SetupPanel/HBoxName/Label",
+		"SetupPanel/HBoxConnection/HostButton",
+		"SetupPanel/HBoxConnection/JoinButton",
+		"ActiveLobbyPanel/HBoxContainer/PlayersList/Label",
+		"ActiveLobbyPanel/HBoxContainer/Settings/SettingsTitle",
+		"ActiveLobbyPanel/StartButton",
+	]:
+		var node := get_node("LeftMargin/VBox/" + node_path)
+		if node is Label:
+			node.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(22))
+		elif node is Button:
+			node.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(30))
+	$LeftMargin/VBox/BackButton.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(24))
+
+func _input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		if DevConsole and DevConsole.window.is_visible():
+			return
+		_on_back_pressed()
+		get_viewport().set_input_as_handled()
 
 func _clear_status() -> void:
 	status_label.text = ""
@@ -90,7 +128,9 @@ func _on_host_pressed():
 		name_edit.grab_focus()
 		return
 	_clear_status()
-	NetworkManager.set_local_player_name(name_edit.text)
+	var player_name: String = name_edit.text.strip_edges()
+	SettingsManager.set_player_name(player_name)
+	NetworkManager.set_local_player_name(player_name)
 	if NetworkManager.host_game():
 		NetworkManager.mp_log("ui.lobby", "host_game ok -> transition", {})
 		_transition_to_lobby(true)
@@ -107,7 +147,9 @@ func _on_join_pressed():
 		code_edit.grab_focus()
 		return
 	_clear_status()
-	NetworkManager.set_local_player_name(name_edit.text)
+	var player_name: String = name_edit.text.strip_edges()
+	SettingsManager.set_player_name(player_name)
+	NetworkManager.set_local_player_name(player_name)
 	if NetworkManager.join_game(code_edit.text):
 		NetworkManager.mp_log("ui.lobby", "join_game started -> transition", {})
 		_transition_to_lobby(false)
@@ -199,7 +241,7 @@ func _on_start_pressed():
 	NetworkManager.start_match.rpc(total, deck_seed)
 
 func _on_game_started():
-	get_tree().change_scene_to_file("res://game_board_3d.tscn")
+	SceneLoader.change_scene("res://game_board_3d.tscn")
 
 func _on_server_disconnected():
 	NetworkManager.mp_log("ui.lobby", "server_disconnected signal", {})
@@ -232,4 +274,6 @@ func _on_back_pressed():
 	_clear_status()
 	NetworkManager.mp_log("ui.lobby", "back pressed", {})
 	NetworkManager.leave_game()
+	setup_panel.show()
+	active_lobby_panel.hide()
 	get_tree().change_scene_to_file("res://main_menu.tscn")

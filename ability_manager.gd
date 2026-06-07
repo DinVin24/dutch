@@ -44,7 +44,6 @@ func execute(player_idx: int, ability_id: String, target_idx: int = -1):
 				if p_card != null:
 					gm.players_info[target_idx].hand.append(p_card)
 					gm.hand_updated.emit(target_idx)
-				# Jumpscare signal can be added later for UI
 		"shuffle":
 			if target_idx != -1:
 				gm.players_info[target_idx].hand.shuffle()
@@ -52,16 +51,15 @@ func execute(player_idx: int, ability_id: String, target_idx: int = -1):
 		"polarity_shift":
 			gm.shift_polarity()
 
-	# Return FSM to normal
-	await get_tree().create_timer(1.0).timeout
-	
-	# Only resume if we haven't already moved to a new state (e.g. elimination next_turn)
-	if gm.current_state == gm.GameState.STATE_PLAYING_ABILITY:
-		print("[AM DEBUG] Resuming from ability...")
-		gm.resume_from_ability()
-	else:
-		print("[AM DEBUG] Already changed state (", gm.GameState.keys()[gm.current_state], "), skipping resume but finishing ability signal.")
-		gm.ability_finished.emit()
+	# Return FSM to normal (process_always=true so pause cannot strand STATE_PLAYING_ABILITY)
+	gm.get_tree().create_timer(1.0, true).timeout.connect(func() -> void:
+		if gm.current_state == gm.GameState.STATE_PLAYING_ABILITY:
+			print("[AM DEBUG] Resuming from ability...")
+			gm.resume_from_ability()
+		else:
+			print("[AM DEBUG] Already changed state (", gm.GameState.keys()[gm.current_state], "), skipping resume but finishing ability signal.")
+			gm.ability_finished.emit()
+	, CONNECT_ONE_SHOT)
 
 func _trim_off(p_idx: int):
 	var hand = gm.players_info[p_idx].hand
@@ -109,6 +107,7 @@ func _perfect_match(activator_idx: int):
 	print("[AM DEBUG] Perfect Match triggered by P", activator_idx, ". Resetting round...")
 	# 0. Clear any pending drawn card in manager
 	gm.drawn_card_data = null
+	gm.pending_card_consumed.emit()
 	
 	# 1. Collect all board cards
 	var all_cards = []

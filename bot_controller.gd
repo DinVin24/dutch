@@ -10,6 +10,9 @@ class_name BotController
 # ============================================================
 
 const UNKNOWN_VALUE := 99
+## Single-player pacing: bots feel rushed without extra breathing room between actions.
+const SP_DELAY_MULT := 1.6
+const SP_POST_ACTION_PAUSE := 1.0
 
 var gm: Node = null
 var rng := RandomNumberGenerator.new()
@@ -31,7 +34,25 @@ func _is_headless() -> bool:
 
 func _wait(seconds: float) -> void:
 	if _is_headless(): return
-	await gm.get_tree().create_timer(seconds, false).timeout
+	var delay := seconds
+	if not gm.is_multiplayer:
+		delay *= SP_DELAY_MULT
+	await gm.get_tree().create_timer(delay, false).timeout
+
+func _wait_after_bot_action() -> void:
+	if _is_headless(): return
+	var pause := 0.35 if gm.is_multiplayer else SP_POST_ACTION_PAUSE
+	await gm.get_tree().create_timer(pause, false).timeout
+
+func _maybe_bot_emote(bot_idx: int, chance: float = 0.38) -> void:
+	if _is_headless(): return
+	if rng.randf() > chance:
+		return
+	await _wait(rng.randf_range(0.15, 0.45))
+	if bot_idx < 0 or bot_idx >= gm.num_players:
+		return
+	var emote_id: String = GameManager.EMOTE_IDS[rng.randi() % GameManager.EMOTE_IDS.size()]
+	gm.emit_player_emote(bot_idx, emote_id)
 
 # ─── Memory helpers ──────────────────────────────────────────
 
@@ -171,6 +192,8 @@ func _try_jump_ins(card_data: CardData) -> void:
 			gm.bot_action.emit("Player %d jumped in with %s over %s." % [bot_idx, jumped_card.display_name(), over_str])
 			gm.start_jump_in(bot_idx)
 			gm.validate_jump_in(match_idx)
+			await _maybe_bot_emote(bot_idx, 0.55)
+			await _wait_after_bot_action()
 			break  # Only one jump-in per discard event
 
 # ─── Bot Turn Actions ─────────────────────────────────────────
@@ -229,12 +252,16 @@ func _execute_resolve_drawn(bot_idx: int) -> void:
 			summary, drawn.display_name(), card_name, drawn.display_name()])
 		gm.bot_action.emit("Player %d drew %s. Discarded %s." % [bot_idx, drawn.display_name(), card_name])
 		gm.player_swap_drawn_card(worst_idx)
+		await _maybe_bot_emote(bot_idx, 0.25)
+		await _wait_after_bot_action()
 	else:
 		# Drawn card is no better — just discard it
 		var summary := _hand_summary(bot_idx)
 		print("%s\nDrew %s\nDiscarded %s" % [summary, drawn.display_name(), drawn.display_name()])
 		gm.bot_action.emit("Player %d drew %s. Discarded %s." % [bot_idx, drawn.display_name(), drawn.display_name()])
 		gm.player_discard_drawn_card()
+		await _maybe_bot_emote(bot_idx, 0.2)
+		await _wait_after_bot_action()
 
 ## QUEEN ABILITY: learn an unknown own card first; otherwise learn any card on the board.
 func _execute_queen_peek(bot_idx: int) -> void:
@@ -272,6 +299,7 @@ func _execute_queen_peek(bot_idx: int) -> void:
 			gm.bot_action.emit("Player %d used a Queen to reveal %s." % [bot_idx, card.display_name()])
 
 	gm.complete_peek_ability()
+	await _wait_after_bot_action()
 
 ## JACK ABILITY: swap 2 random cards from any two different opponent slots.
 func _execute_jack_swap(bot_idx: int) -> void:
@@ -304,6 +332,7 @@ func _execute_jack_swap(bot_idx: int) -> void:
 	gm.complete_swap_ability(s1.p, s1.c, s2.p, s2.c)
 	if gm.current_state != GameManager.GameState.TURN_SWAP_ABILITY:
 		_update_memory_on_swap(bot_idx, s1.p, s1.c, s2.p, s2.c)
+	await _wait_after_bot_action()
 
 ## END CHOICE: call Dutch if all cards are known and score < 7.
 ## Also proactively use abilities if I have them.
@@ -346,8 +375,12 @@ func _execute_end_choice(bot_idx: int) -> void:
 		if score < 7 and gm.can_player_call_dutch(bot_idx):
 			gm.bot_action.emit("Player %d calls DUTCH! (score: %d)" % [bot_idx, score])
 			gm.call_dutch(bot_idx)
+			await _maybe_bot_emote(bot_idx, 0.7)
+			await _wait_after_bot_action()
 			return
 
+	await _maybe_bot_emote(bot_idx, 0.12)
+	await _wait_after_bot_action()
 	gm.end_turn()
 
 func _get_best_target_for(bot_idx: int, ab: String) -> int:
@@ -420,6 +453,7 @@ func _get_leading_opponent_idx(bot_idx: int) -> int:
 func _execute_confirm_dutch(bot_idx: int) -> void:
 	await _wait(1.5)
 	if not gm.can_player_confirm_dutch(bot_idx): return
+	await _maybe_bot_emote(bot_idx, 0.9)
 	gm.confirm_dutch()
 
 # ─── Memory Utility ───────────────────────────────────────────

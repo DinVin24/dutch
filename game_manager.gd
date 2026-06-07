@@ -29,6 +29,7 @@ signal card_discarded(player_id, card_data)
 signal jump_in_penalty(player_idx, penalty_card_data)
 signal jump_in_failed(player_idx: int, card_idx: int, card_data: CardData) # Bug 2
 signal bot_action(message: String)
+signal player_emoted(player_idx: int, emote_id: String)
 signal memory_shift_required(player_idx, removed_card_idx)
 signal jack_swap_resolved(p1: int, c1: int, p2: int, c2: int)
 signal hand_updated(player_idx: int)
@@ -42,6 +43,10 @@ signal player_gained_money(player_idx, amount, total)
 signal ability_unlocked(player_idx, ability_id)
 signal polarity_shifted(new_state: bool)
 signal multiplayer_sync_applied
+signal mp_connection_status_changed(lag_ms: int, status: String)
+
+const EMOTE_IDS: Array[String] = ["laugh", "shock", "gg", "chicken"]
+const EMOTE_COOLDOWN_SEC := 4.0
 
 var current_state: GameState = GameState.INITIALIZING
 var deck_manager: DeckManager
@@ -79,6 +84,11 @@ var pending_match_seed: int = -1
 var _mp_initial_peek_done: Dictionary = {}
 var _mp_sync_seq: int = 0
 var _mp_last_applied_sync_seq: int = -1
+var _mp_game_over_scores_applied: bool = false
+var _mp_sync_prev_cur: int = -1
+var _emote_cooldown_until: Dictionary = {}
+var mp_sync_lag_ms: int = 0
+var mp_connection_status: String = "ok"
 var turn_direction: int = 1 # 1 for clockwise, -1 for counter-clockwise (Uno Reverse)
 var dutch_caller_index: int = -1 # -1 means no one has called Dutch yet
 var jump_in_player_idx: int = -1 # who is currently attempting the jump-in
@@ -94,6 +104,22 @@ var global_ability_counts: Dictionary = {
 	"perfect_match": 0,
 	"polarity_shift": 0
 }
+var last_ability_event: Dictionary = {}
+var last_debug_event: String = ""
+var jump_in_validating: bool = false
+
+const DEBUG_LOG_PATH := "user://game_debug.log"
+
+func debug_log(category: String, message: String) -> void:
+	var line := "[%s] [%s] %s" % [Time.get_datetime_string_from_system(), category, message]
+	last_debug_event = "%s: %s" % [category, message]
+	var file := FileAccess.open(DEBUG_LOG_PATH, FileAccess.READ_WRITE)
+	if file == null:
+		file = FileAccess.open(DEBUG_LOG_PATH, FileAccess.WRITE)
+	if file:
+		file.seek_end()
+		file.store_line(line)
+		file.close()
 
 func _ready():
 	deck_manager = DeckManager.new()
@@ -101,6 +127,8 @@ func _ready():
 	
 	ability_manager = AbilityManager.new()
 	add_child(ability_manager)
+	
+	NetworkManager.player_disconnected.connect(_on_peer_disconnected)
 	
 	# Background Music Setup (Dual Players for Seamless Loop)
 	menu_music_p1 = AudioStreamPlayer.new()
@@ -222,6 +250,11 @@ func initialize_game(p_count: int = 4):
 	_mp_initial_peek_done.clear()
 	_mp_sync_seq = 0
 	_mp_last_applied_sync_seq = -1
+	_mp_game_over_scores_applied = false
+	_mp_sync_prev_cur = -1
+	_emote_cooldown_until.clear()
+	mp_sync_lag_ms = 0
+	mp_connection_status = "ok"
 	players_info.clear()
 	current_state = GameState.INITIALIZING
 	current_player_index = 0
@@ -235,9 +268,17 @@ func initialize_game(p_count: int = 4):
 	}
 	jump_in_resume_state = GameState.INITIALIZING
 	drawn_card_data = null
+	jump_in_validating = false
+	last_debug_event = ""
 	is_multiplayer = multiplayer.multiplayer_peer != null \
 		and not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer) \
 		and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
+	var log_file := FileAccess.open(DEBUG_LOG_PATH, FileAccess.WRITE)
+	if log_file:
+		log_file.store_line("[%s] [init] New match (%d players, mp=%s)" % [
+			Time.get_datetime_string_from_system(), count, str(is_multiplayer)
+		])
+		log_file.close()
 	
 	var networked_players = []
 	if is_multiplayer:
@@ -321,19 +362,32 @@ func change_state(new_state: GameState, force_signal: bool = false):
 			next_turn()
 			return
 			
+	var prev_name: String = GameState.keys()[current_state]
 	current_state = new_state
+	debug_log("state", "%s -> %s%s" % [
+		prev_name,
+		GameState.keys()[new_state],
+		" (forced)" if force_signal else ""
+	])
 	game_state_changed.emit(new_state)
 	
 	match current_state:
 		GameState.DEAL_CARDS:
 			_handle_deal_cards()
 		GameState.TURN_START_DRAW:
+			debug_log("turn", "start P%d" % current_player_index)
 			turn_started.emit(current_player_index)
 		GameState.GAME_OVER:
 			_handle_game_over()
 	_mp_broadcast_state_if_server()
 
 func _can_transition_to(new_state: GameState) -> bool:
+	# GAME_OVER is a terminal state that can be reached from any in-progress state:
+	# elimination (beers=0), a confirmed Dutch, or a jump-in win can all end the game
+	# mid-turn (e.g. while a drawn card is pending in TURN_RESOLVE_DRAWN). Always allow it
+	# so the FSM never strands the match instead of ending it.
+	if new_state == GameState.GAME_OVER:
+		return true
 	match current_state:
 		GameState.INITIALIZING:
 			return new_state == GameState.DEAL_CARDS
@@ -381,6 +435,17 @@ func _can_transition_to(new_state: GameState) -> bool:
 			return new_state in [GameState.TURN_START_DRAW, GameState.GAME_OVER]
 		GameState.GAME_OVER:
 			return new_state == GameState.DEAL_CARDS
+		GameState.STATE_PLAYING_ABILITY:
+			return new_state in [
+				GameState.TURN_START_DRAW,
+				GameState.TURN_RESOLVE_DRAWN,
+				GameState.TURN_END_CHOICE,
+				GameState.TURN_PEEK_ABILITY,
+				GameState.TURN_SWAP_ABILITY,
+				GameState.TURN_CONFIRM_DUTCH,
+				GameState.INITIAL_PEEK,
+				GameState.GAME_OVER
+			]
 	return false
 
 func _is_valid_player_index(player_idx: int) -> bool:
@@ -550,7 +615,12 @@ func request_action(action: String, args: Dictionary = {}):
 			if current_player_index == player_idx:
 				cancel_dutch()
 		"play_ability":
-			play_ability(player_idx, args.get("ability_id"), args.get("target_idx", -1))
+			play_ability(
+				player_idx,
+				args.get("ability_id"),
+				args.get("target_idx", -1),
+				args.get("slot_idx", -1)
+			)
 		"buy_ability":
 			buy_ability(player_idx)
 		"initial_peek_done":
@@ -578,7 +648,7 @@ func next_turn():
 	# Final turn for caller: 
 	# Even if current_player_index == dutch_caller_index, we allow them one 
 	# final normal turn (draw/jump-in/abilities) before confirming.
-	change_state(GameState.TURN_START_DRAW)
+	change_state(GameState.TURN_START_DRAW, true)
 
 func _handle_deal_cards():
 	# The board will handle the visual instantiation in its signal handler
@@ -645,6 +715,55 @@ func _check_elimination_win_condition() -> bool:
 		return true
 	return false
 
+func _on_peer_disconnected(peer_id: int) -> void:
+	if not is_multiplayer or not multiplayer.is_server():
+		return
+	if players_info.is_empty() or current_state == GameState.GAME_OVER:
+		return
+	var player_idx: int = int(peer_to_idx.get(peer_id, -1))
+	if player_idx == -1:
+		return
+	peer_to_idx.erase(peer_id)
+	idx_to_peer.erase(player_idx)
+	if not _is_valid_player_index(player_idx):
+		return
+	if not players_info[player_idx].is_eliminated:
+		players_info[player_idx].is_eliminated = true
+		players_info[player_idx].is_bot = true
+		debug_log("disconnect", "P%d (peer %d) rage-quit → eliminated" % [player_idx, peer_id])
+		player_eliminated.emit(player_idx)
+
+	# Count remaining active players — elimination can occur from any FSM state so
+	# we force the GAME_OVER transition rather than relying on _check_elimination_win_condition
+	# which uses the FSM validation table (TURN_RESOLVE_DRAWN → GAME_OVER is not listed).
+	var active_count := 0
+	for i in range(num_players):
+		if not players_info[i].is_eliminated:
+			active_count += 1
+	var game_ended := active_count <= 1
+
+	# Always clear a pending drawn card when the seat that drew it is vacated
+	if current_player_index == player_idx and drawn_card_data != null:
+		drawn_card_data = null
+		pending_card_consumed.emit()
+
+	if game_ended:
+		print("Only one player remains after disconnect. Game Over.")
+		change_state(GameState.GAME_OVER, true)
+		_mp_broadcast_state_if_server()
+		return
+
+	if current_player_index == player_idx:
+		if jump_in_player_idx == player_idx:
+			jump_in_player_idx = -1
+			jump_in_validating = false
+		next_turn()
+	elif jump_in_player_idx == player_idx:
+		jump_in_player_idx = -1
+		jump_in_validating = false
+		change_state(_resolve_post_interrupt_state())
+	_mp_broadcast_state_if_server()
+
 func drink_beer(p_idx: int):
 	if players_info[p_idx].is_eliminated: return
 	players_info[p_idx].beers -= 1
@@ -655,7 +774,11 @@ func drink_beer(p_idx: int):
 	if players_info[p_idx].beers <= 0:
 		players_info[p_idx].is_eliminated = true
 		player_eliminated.emit(p_idx)
+		debug_log("eliminate", "P%d passed out (beers=0)" % p_idx)
 		print("Player ", p_idx, " is ELIMINATED!")
+		if not is_multiplayer and p_idx == 0:
+			change_state(GameState.GAME_OVER)
+			return
 		var was_game_over = _check_elimination_win_condition()
 		
 		# If the player died during their own active turn, instantly end it
@@ -663,25 +786,29 @@ func drink_beer(p_idx: int):
 			print("Player died on their turn. Forcing next turn.")
 			next_turn()
 
+func get_discard_money_amount(card: CardData) -> int:
+	var r: String = card.rank
+	var s: String = card.suit
+	if r == "King":
+		return 200 if s == "Diamonds" else 10
+	if r == "Ace":
+		return 100
+	if r == "Queen" or r == "Jack":
+		return 80
+	if r == "10" or r == "9":
+		return 70
+	if r == "8" or r == "7":
+		return 50
+	if r == "6" or r == "5":
+		return 40
+	return 30
+
 func gain_money_for_discard(p_idx: int, card: CardData):
 	if players_info[p_idx].is_eliminated: return
-	var amount = 0
-	var r = card.rank
-	var s = card.suit
-	
-	if r == "King":
-		if s == "Diamonds": amount = 200
-		else: amount = 10
-	elif r == "Ace": amount = 100
-	elif r == "Queen" or r == "Jack": amount = 80
-	elif r == "10" or r == "9": amount = 70
-	elif r == "8" or r == "7": amount = 50
-	elif r == "6" or r == "5": amount = 40
-	else: amount = 30
-	
+	var amount := get_discard_money_amount(card)
 	players_info[p_idx].money += amount
 	player_gained_money.emit(p_idx, amount, players_info[p_idx].money)
-	print("Player ", p_idx, " gained $", amount, " for discarding ", r, " of ", s)
+	print("Player ", p_idx, " gained $", amount, " for discarding ", card.rank, " of ", card.suit)
 
 
 func start_game():
@@ -723,7 +850,8 @@ func _clear_interrupt_state():
 
 ## Abilities API
 var state_before_ability: GameState = GameState.INITIALIZING
-signal ability_played(player_idx, ability_id)
+var active_player_before_ability: int = -1
+signal ability_played(player_idx, ability_id, target_idx)
 signal ability_finished
 
 func play_ability(player_idx: int, ability_id: String, target_idx: int = -1, slot_idx: int = -1) -> bool:
@@ -745,7 +873,12 @@ func play_ability(player_idx: int, ability_id: String, target_idx: int = -1, slo
 		print("[GM DEBUG] REJECTED: Game state ", GameState.keys()[current_state], " prevents playing abilities.")
 		return false
 
-	# If this is a primary turn action (not already in an ability state), clear interrupt markers
+	# Preserve Queen/Jack interrupt context so cabinet abilities do not strand the FSM.
+	var preserve_interrupt := current_state in [
+		GameState.TURN_PEEK_ABILITY,
+		GameState.TURN_SWAP_ABILITY
+	]
+	active_player_before_ability = active_ability_player if preserve_interrupt else -1
 	if current_state != GameState.STATE_PLAYING_ABILITY:
 		_clear_interrupt_state()
 
@@ -767,7 +900,9 @@ func play_ability(player_idx: int, ability_id: String, target_idx: int = -1, slo
 	if idx != -1:
 		players_info[player_idx].abilities[idx] = ""
 	
-	ability_played.emit(player_idx, ability_id)
+	last_ability_event = {"caster": player_idx, "id": ability_id, "target": target_idx}
+	debug_log("ability", "play P%d %s -> T%d" % [player_idx, ability_id, target_idx])
+	ability_played.emit(player_idx, ability_id, target_idx)
 	ability_manager.execute(player_idx, ability_id, target_idx)
 	return true
 	
@@ -777,12 +912,18 @@ func resume_from_ability():
 		return
 	# FORCE SIGNAL: Resume from ability must always wake up bots/UI
 	change_state(state_before_ability, true)
+	if state_before_ability in [GameState.TURN_PEEK_ABILITY, GameState.TURN_SWAP_ABILITY] \
+			and active_player_before_ability != -1:
+		active_ability_player = active_player_before_ability
+	active_player_before_ability = -1
+	debug_log("ability", "finished (resume %s)" % GameState.keys()[state_before_ability])
 	ability_finished.emit()
 
 func end_turn():
 	if not can_player_end_turn(current_player_index):
 		print("FSM Blocked: Cannot end turn outside of TURN_END_CHOICE state")
 		return
+	debug_log("turn", "end P%d" % current_player_index)
 		
 	# If the caller just finished their final turn, prompt for confirmation
 	if current_player_index == dutch_caller_index:
@@ -810,17 +951,22 @@ func start_jump_in(player_idx: int = -1) -> void:
 	if current_state != GameState.TURN_JUMP_IN_SELECTION:
 		jump_in_resume_state = current_state
 	jump_in_player_idx = resolved_idx
+	debug_log("jump_in", "start P%d (resume=%s)" % [resolved_idx, GameState.keys()[jump_in_resume_state]])
 	change_state(GameState.TURN_JUMP_IN_SELECTION)
 
 func validate_jump_in(card_idx: int) -> bool:
 	if current_state != GameState.TURN_JUMP_IN_SELECTION:
 		return false
+	if jump_in_validating:
+		return false
 	if not can_player_select_jump_in_card(jump_in_player_idx, jump_in_player_idx, card_idx):
 		return false
+	jump_in_validating = true
 
 	var hand: Array = players_info[jump_in_player_idx].hand
 	var selected_card: CardData = drawn_card_data if card_idx == -2 else hand[card_idx]
 	if selected_card == null or deck_manager.discard_pile.is_empty():
+		jump_in_validating = false
 		return false
 
 	var top_discard: CardData = deck_manager.discard_pile[-1]
@@ -840,9 +986,12 @@ func validate_jump_in(card_idx: int) -> bool:
 			memory_shift_required.emit(jump_in_player_idx, card_idx)
 		
 		# Check for win condition (out of cards)
+		var winning_player := jump_in_player_idx
 		if hand.size() == 0:
 			jump_in_player_idx = -1
+			jump_in_validating = false
 			_consume_jump_in_resume_state()
+			debug_log("jump_in", "P%d win — out of cards" % winning_player)
 			change_state(GameState.GAME_OVER)
 			return true
 			
@@ -857,19 +1006,28 @@ func validate_jump_in(card_idx: int) -> bool:
 		
 		var played_by = p_idx_for_signal
 		jump_in_player_idx = -1
-		
+		jump_in_validating = false
+		debug_log("jump_in", "P%d success (card idx %d)" % [played_by, card_idx])
+		change_state(_resolve_post_interrupt_state())
 		_resolve_discard_effects(selected_card, played_by)
 		bot_action.emit(msg)
 		return true
 
 	# NO MATCH: Penalty
 	print("No match. Jump In invalid.")
-	jump_in_failed.emit(jump_in_player_idx, card_idx, selected_card)
-	drink_beer(jump_in_player_idx)
+	var failed_player := jump_in_player_idx
+	debug_log("jump_in", "P%d fail (card idx %d)" % [failed_player, card_idx])
+	jump_in_failed.emit(failed_player, card_idx, selected_card)
+	drink_beer(failed_player)
 	_mp_broadcast_state_if_server()
 	
-	if players_info[jump_in_player_idx].is_eliminated:
-		jump_in_player_idx = -1
+	jump_in_player_idx = -1
+	jump_in_validating = false
+	if current_state == GameState.GAME_OVER:
+		return false
+	change_state(_resolve_post_interrupt_state())
+	
+	if players_info[failed_player].is_eliminated:
 		return false
 		
 	await get_tree().create_timer(1.2, false).timeout
@@ -878,18 +1036,19 @@ func validate_jump_in(card_idx: int) -> bool:
 	if p_card != null:
 		p_card.is_face_up = false
 		hand.append(p_card)
-		hand_updated.emit(jump_in_player_idx)
-		jump_in_penalty.emit(jump_in_player_idx, p_card)
+		hand_updated.emit(failed_player)
+		jump_in_penalty.emit(failed_player, p_card)
 		_mp_broadcast_state_if_server()
+		debug_log("jump_in", "P%d penalty card dealt" % failed_player)
 
-	jump_in_player_idx = -1
-	change_state(_resolve_post_interrupt_state())
 	return false
 
 func cancel_jump_in() -> void:
 	if not can_player_cancel_jump_in(jump_in_player_idx):
 		return
+	debug_log("jump_in", "P%d cancelled" % jump_in_player_idx)
 	jump_in_player_idx = -1
+	jump_in_validating = false
 	change_state(_resolve_post_interrupt_state())
 
 func confirm_dutch():
@@ -1165,9 +1324,10 @@ func _build_mp_sync_payload() -> Dictionary:
 	var drawn_d: Variant = null
 	if drawn_card_data != null:
 		drawn_d = _card_to_dict(drawn_card_data)
-	return {
+	var payload := {
 		"v": 1,
 		"seq": _mp_sync_seq,
+		"ts": Time.get_ticks_msec(),
 		"state": int(current_state),
 		"cur": current_player_index,
 		"td": turn_direction,
@@ -1185,8 +1345,12 @@ func _build_mp_sync_payload() -> Dictionary:
 		"players": players_arr,
 		"deck": deck_arr,
 		"discard": disc_arr,
-		"drawn": drawn_d
+		"drawn": drawn_d,
+		"last_ab": last_ability_event.duplicate()
 	}
+	if current_state == GameState.GAME_OVER:
+		payload["scores"] = _calculate_scores()
+	return payload
 
 func _apply_mp_sync_payload(payload: Dictionary) -> void:
 	if payload.get("v", 0) != 1:
@@ -1199,6 +1363,8 @@ func _apply_mp_sync_payload(payload: Dictionary) -> void:
 		if _mp_last_applied_sync_seq != -1 and incoming_seq > _mp_last_applied_sync_seq + 1:
 			print("GameManager: Sync sequence gap detected prev=%d new=%d" % [_mp_last_applied_sync_seq, incoming_seq])
 		_mp_last_applied_sync_seq = incoming_seq
+	var prev_cur_before_apply := current_player_index
+	var prev_state_before_apply := current_state
 	num_players = int(payload.get("num", 4))
 	current_state = int(payload.get("state", 0)) as GameState
 	current_player_index = int(payload.get("cur", 0))
@@ -1212,6 +1378,7 @@ func _apply_mp_sync_payload(payload: Dictionary) -> void:
 	global_ability_counts = (payload.get("global_ab", {}) as Dictionary).duplicate()
 	easy_mode = bool(payload.get("easy", false))
 	tutorial_mode = bool(payload.get("tutorial", false))
+	last_ability_event = (payload.get("last_ab", {}) as Dictionary).duplicate()
 	peer_to_idx.clear()
 	idx_to_peer.clear()
 	for pair in payload.get("peers", []):
@@ -1265,8 +1432,99 @@ func _apply_mp_sync_payload(payload: Dictionary) -> void:
 		drawn_card_data = _dict_to_card(dr)
 	else:
 		drawn_card_data = null
-	if current_state == GameState.TURN_START_DRAW:
+	var server_ts := int(payload.get("ts", 0))
+	if server_ts > 0:
+		mp_sync_lag_ms = maxi(0, Time.get_ticks_msec() - server_ts)
+		_update_mp_connection_status()
+	if current_state == GameState.GAME_OVER:
+		var synced_scores: Array = payload.get("scores", [])
+		if synced_scores.size() > 0 and not _mp_game_over_scores_applied:
+			_mp_game_over_scores_applied = true
+			all_cards_revealed.emit()
+			var winner_id: int = synced_scores[0].get("id", -1) if synced_scores[0] is Dictionary else -1
+			game_over.emit(winner_id)
+			scores_ready.emit(synced_scores)
+	elif current_state != GameState.GAME_OVER and (
+		current_player_index != prev_cur_before_apply
+		or (current_state == GameState.TURN_START_DRAW and prev_state_before_apply != GameState.TURN_START_DRAW)
+	):
 		turn_started.emit(current_player_index)
+	_mp_sync_prev_cur = current_player_index
+
+func _update_mp_connection_status() -> void:
+	if not is_multiplayer:
+		return
+	var status := "ok"
+	if multiplayer.multiplayer_peer == null \
+			or multiplayer.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED:
+		status = "disconnected"
+	elif not multiplayer.is_server() and mp_sync_lag_ms >= 1500:
+		status = "lagging"
+	var prev_status := mp_connection_status
+	var prev_lag := mp_sync_lag_ms
+	mp_connection_status = status
+	if status != prev_status or abs(mp_sync_lag_ms - prev_lag) >= 50:
+		mp_connection_status_changed.emit(mp_sync_lag_ms, status)
+
+func refresh_mp_connection_status() -> void:
+	_update_mp_connection_status()
+
+func is_valid_emote_id(emote_id: String) -> bool:
+	return EMOTE_IDS.has(emote_id)
+
+func get_emote_cooldown_remaining(player_idx: int) -> float:
+	if not _is_valid_player_index(player_idx):
+		return 0.0
+	var until: float = float(_emote_cooldown_until.get(player_idx, 0.0))
+	var now: float = Time.get_ticks_msec() / 1000.0
+	return maxf(0.0, until - now)
+
+func request_emote(emote_id: String) -> bool:
+	if not is_valid_emote_id(emote_id):
+		return false
+	if is_multiplayer:
+		if multiplayer.is_server():
+			return emit_player_emote(local_player_idx, emote_id)
+		request_player_emote.rpc_id(1, emote_id)
+		return true
+	return emit_player_emote(0, emote_id)
+
+func emit_player_emote(player_idx: int, emote_id: String, respect_cooldown: bool = true) -> bool:
+	if not is_valid_emote_id(emote_id) or not _is_valid_player_index(player_idx):
+		return false
+	if respect_cooldown and get_emote_cooldown_remaining(player_idx) > 0.0:
+		return false
+	if respect_cooldown:
+		_emote_cooldown_until[player_idx] = Time.get_ticks_msec() / 1000.0 + EMOTE_COOLDOWN_SEC
+	if is_multiplayer:
+		broadcast_player_emote.rpc(player_idx, emote_id)
+	else:
+		player_emoted.emit(player_idx, emote_id)
+	return true
+
+@rpc("any_peer", "call_local", "reliable")
+func request_player_emote(emote_id: String) -> void:
+	if not is_multiplayer or not multiplayer.is_server():
+		return
+	if not is_valid_emote_id(emote_id):
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = multiplayer.get_unique_id()
+	var player_idx: int = int(peer_to_idx.get(sender_id, -1))
+	if player_idx == -1:
+		return
+	emit_player_emote(player_idx, emote_id)
+
+@rpc("any_peer", "call_local", "reliable")
+func broadcast_player_emote(player_idx: int, emote_id: String) -> void:
+	if not is_valid_emote_id(emote_id) or not _is_valid_player_index(player_idx):
+		return
+	if is_multiplayer and multiplayer.is_server():
+		var sender_id := multiplayer.get_remote_sender_id()
+		if sender_id != 0 and int(peer_to_idx.get(sender_id, -1)) != player_idx:
+			return
+	player_emoted.emit(player_idx, emote_id)
 
 @rpc("authority", "call_local", "reliable")
 func sync_match_state(payload: Dictionary) -> void:

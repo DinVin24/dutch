@@ -10,10 +10,41 @@ var gm: Node = null
 func _init():
 	call_deferred("start_pipeline")
 
+func _release_gm_audio() -> void:
+	if gm == null:
+		return
+	gm.is_menu_music_active = false
+	gm.is_game_music_active = false
+	if gm.has_method("stop_all_music"):
+		gm.stop_all_music()
+	for tw in gm.get_tree().get_processed_tweens():
+		if tw.is_valid():
+			tw.kill()
+	var players: Array[AudioStreamPlayer] = []
+	for child in gm.get_children():
+		if child is AudioStreamPlayer:
+			players.append(child)
+	for p in players:
+		p.stop()
+		p.stream = null
+		gm.remove_child(p)
+		p.free()
+	for key in [
+		"menu_music_p1", "menu_music_p2", "game_music_p1", "game_music_p2",
+		"current_menu_player", "next_menu_player", "current_game_player", "next_game_player",
+		"sfx_card_flip", "sfx_beer_drink", "sfx_chicken",
+	]:
+		gm.set(key, null)
+
+func _quit() -> void:
+	_release_gm_audio()
+	await create_timer(0.1).timeout
+	quit()
+
 func _input(event):
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		print("[QA] User Abort via ESC.")
-		quit()
+		await _quit()
 
 func start_pipeline():
 	print("\n[QA] STARTING PURE LOGIC PIPELINE (HEADLESS)...")
@@ -43,8 +74,11 @@ func start_pipeline():
 	# PHASE 7: JUMP IN
 	await phase_jump_in_all_players()
 	
+	# PHASE 8: MP sync payload logic (mock, no WebRTC)
+	await phase_mp_sync_logic()
+	
 	print("\n[QA] ALL GRANULAR LOGIC PHASES AND PLAYER TURNS VERIFIED.")
-	quit()
+	await _quit()
 
 # --- PHASE MODULES ---
 
@@ -266,6 +300,57 @@ func phase_jump_in_all_players():
 		print("[QA PASS] Bot start-turn jump-in request left FSM unchanged")
 	else:
 		print("[QA FAIL] Bot start-turn jump-in request changed FSM")
+
+func phase_mp_sync_logic() -> void:
+	print("\n>>> PHASE 8: MP Sync Payload Logic <<<")
+	_setup_turn_start(0)
+	gm.is_multiplayer = true
+	gm.num_players = 2
+	gm.local_player_idx = 1
+	gm.peer_to_idx = {1: 0, 2: 1}
+	gm.idx_to_peer = {0: 1, 1: 2}
+	gm.players_info[0]["is_bot"] = false
+	gm.players_info[1]["is_bot"] = false
+	
+	var payload: Dictionary = gm._build_mp_sync_payload()
+	if int(payload.get("num", 0)) != 2:
+		print("[QA FAIL] MP payload num=%d" % int(payload.get("num", 0)))
+	else:
+		print("[QA PASS] MP payload num_players=2")
+	
+	var peers: Array = payload.get("peers", [])
+	if peers.size() < 2:
+		print("[QA FAIL] MP payload peers=%s" % str(peers))
+	else:
+		print("[QA PASS] MP peer map present")
+	
+	gm.local_player_idx = 0
+	gm.current_player_index = 0
+	gm.player_draw_card()
+	payload = gm._build_mp_sync_payload()
+	gm._mp_sync_seq += 1
+	payload["seq"] = gm._mp_sync_seq
+	
+	gm.local_player_idx = 1
+	gm._apply_mp_sync_payload(payload)
+	if gm.drawn_card_data == null:
+		print("[QA FAIL] MP client missing drawn_card_data after draw sync")
+	else:
+		print("[QA PASS] MP client received drawn_card_data")
+	
+	gm.local_player_idx = 0
+	gm.player_discard_drawn_card()
+	await _await_resolution()
+	payload = gm._build_mp_sync_payload()
+	payload["drawn"] = null
+	gm._mp_sync_seq += 1
+	payload["seq"] = gm._mp_sync_seq
+	gm.local_player_idx = 1
+	gm._apply_mp_sync_payload(payload)
+	if gm.drawn_card_data != null:
+		print("[QA FAIL] MP client drawn_card_data not cleared after discard sync")
+	else:
+		print("[QA PASS] MP client drawn_card cleared after discard sync")
 
 func _make_card(rank: String, suit: String) -> CardData:
 	return load("res://card_data.gd").new(rank, suit)
