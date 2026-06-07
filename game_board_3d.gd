@@ -116,7 +116,7 @@ var _drink_timers: Dictionary = {}
 var _drink_beers: Dictionary = {}
 var _drink_camera_pitch_offset: float = 0.0
 var _base_head_y: float = 0.0
-const FP_EYE_HEIGHT_OFFSET: float = 4.3  # meters above hips anchor (raised much higher for overview)
+const FP_EYE_HEIGHT_OFFSET: float = 3.9  # meters above hips anchor (raised much higher for overview)
 var _look_yaw: float = 0.0
 var _look_pitch: float = 0.0
 
@@ -3050,7 +3050,7 @@ func _process(delta: float) -> void:
 				_drink_beers.erase(p_idx)
 			elif p_idx == local_p_idx:
 				var drink_t = 1.8 - _drink_timers[p_idx]
-				var max_tilt = deg_to_rad(35.0)
+				var max_tilt = deg_to_rad(55.0)
 				if drink_t < 0.5:
 					_drink_camera_pitch_offset = 0.0
 				elif drink_t < 1.0:
@@ -3119,18 +3119,20 @@ func _process(delta: float) -> void:
 						
 						if left_arm != -1:
 							var anim_rot = skeleton.get_bone_pose_rotation(left_arm)
-							var target_rot = Quaternion.from_euler(Vector3(0.0, deg_to_rad(60.0), deg_to_rad(60.0)))
+							var target_rot = Quaternion.from_euler(Vector3(0.0, deg_to_rad(30.0), deg_to_rad(42.0)))
 							skeleton.set_bone_pose_rotation(left_arm, anim_rot.slerp(target_rot, w))
 						if left_forearm != -1:
 							var anim_rot = skeleton.get_bone_pose_rotation(left_forearm)
-							skeleton.set_bone_pose_rotation(left_forearm, anim_rot.slerp(Quaternion.IDENTITY, w))
+							var target_rot = Quaternion.from_euler(Vector3(0.0, 0.0, deg_to_rad(20.0)))
+							skeleton.set_bone_pose_rotation(left_forearm, anim_rot.slerp(target_rot, w))
 						if right_arm != -1:
 							var anim_rot = skeleton.get_bone_pose_rotation(right_arm)
-							var target_rot = Quaternion.from_euler(Vector3(0.0, deg_to_rad(-60.0), deg_to_rad(-60.0)))
+							var target_rot = Quaternion.from_euler(Vector3(0.0, deg_to_rad(-30.0), deg_to_rad(-42.0)))
 							skeleton.set_bone_pose_rotation(right_arm, anim_rot.slerp(target_rot, w))
 						if right_forearm != -1:
 							var anim_rot = skeleton.get_bone_pose_rotation(right_forearm)
-							skeleton.set_bone_pose_rotation(right_forearm, anim_rot.slerp(Quaternion.IDENTITY, w))
+							var target_rot = Quaternion.from_euler(Vector3(0.0, 0.0, deg_to_rad(-20.0)))
+							skeleton.set_bone_pose_rotation(right_forearm, anim_rot.slerp(target_rot, w))
 
 					# Apply drinking overrides
 					if _drink_timers.has(p_idx):
@@ -3252,7 +3254,7 @@ func _process(delta: float) -> void:
 							_camera_initialized = true
 						
 						var forward_dir = avatar.global_transform.basis.z.normalized()
-						var target_camera_pos = eye_anchor - forward_dir * 0.42
+						var target_camera_pos = eye_anchor - forward_dir * 0.52
 						target_camera_pos.y = _base_head_y
 						target_camera_pos += shake_offset
 						camera.global_position = target_camera_pos
@@ -4326,6 +4328,16 @@ func _get_drink_bone_rotation(bone_name: String, t: float) -> Quaternion:
 			var p = (t - 1.4) / 0.4
 			rot = Vector3(-65, -45, -75).lerp(Vector3.ZERO, p)
 			
+		# Outward curved flaring to avoid torso clipping
+		if t < 1.0:
+			var p_lift = t / 1.0
+			rot.y -= 15.0 * sin(p_lift * PI)
+			rot.z -= 55.0 * sin(p_lift * PI)
+		elif t >= 1.4:
+			var p_return = (t - 1.4) / 0.4
+			rot.y -= 15.0 * sin(p_return * PI)
+			rot.z -= 55.0 * sin(p_return * PI)
+			
 	elif bone_name == "mixamorig_RightForeArm":
 		if t < 0.5:
 			var p = t / 0.5
@@ -4339,8 +4351,16 @@ func _get_drink_bone_rotation(bone_name: String, t: float) -> Quaternion:
 			var p = (t - 1.4) / 0.4
 			rot = Vector3(0, 0, -115).lerp(Vector3.ZERO, p)
 			
+		# Flare elbow Z to delay bending and keep hand/mug away from chest
+		if t < 1.0:
+			var p_lift = t / 1.0
+			rot.z += 30.0 * sin(p_lift * PI)
+		elif t >= 1.4:
+			var p_return = (t - 1.4) / 0.4
+			rot.z += 30.0 * sin(p_return * PI)
+			
 	elif bone_name == "mixamorig_Neck" or bone_name == "mixamorig_Head":
-		var max_tilt = Vector3(-30, 0, 0) if bone_name == "mixamorig_Neck" else Vector3(-25, 0, 0)
+		var max_tilt = Vector3(-45, 0, 0) if bone_name == "mixamorig_Neck" else Vector3(-35, 0, 0)
 		if t < 0.5:
 			rot = Vector3.ZERO
 		elif t < 1.0:
