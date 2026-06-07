@@ -289,6 +289,7 @@ func _ready():
 		var tut = tut_scene.instantiate()
 		$GameUI.add_child(tut)
 
+
 func _send_action(action: String, args: Dictionary = {}) -> bool:
 	if GameManager.is_multiplayer:
 		GameManager.request_action.rpc_id(1, action, args)
@@ -3148,11 +3149,8 @@ func _process(delta: float) -> void:
 		for p_idx in player_avatars:
 			var avatar = player_avatars[p_idx]
 			if is_instance_valid(avatar) and avatar.visible:
-				var skeleton = avatar.get_node_or_null("Armature/Skeleton3D") as Skeleton3D
 				var ap = avatar.get_node_or_null("AnimationPlayer") as AnimationPlayer
-				if skeleton and ap:
-					var is_drinking := false
-					var drink_t := 0.0
+				if ap:
 					if _drink_timers.has(p_idx):
 						_drink_timers[p_idx] -= delta
 						if _drink_timers[p_idx] <= 0.0:
@@ -3161,9 +3159,6 @@ func _process(delta: float) -> void:
 								_reset_beer_mug_transform(beer_node)
 							_drink_timers.erase(p_idx)
 							_drink_beers.erase(p_idx)
-						else:
-							is_drinking = true
-							drink_t = 1.8 - _drink_timers[p_idx]
 
 					if not avatar_arm_weights.has(p_idx):
 						avatar_arm_weights[p_idx] = 1.0
@@ -3171,68 +3166,9 @@ func _process(delta: float) -> void:
 					var target_w = 1.0 if ap.current_animation == "idle" else 0.0
 					avatar_arm_weights[p_idx] = move_toward(avatar_arm_weights[p_idx], target_w, delta * 3.33)
 					
-					var w = avatar_arm_weights[p_idx]
-					if w > 0.0:
-						var left_arm = skeleton.find_bone("mixamorig_LeftArm")
-						var left_forearm = skeleton.find_bone("mixamorig_LeftForeArm")
-						var right_arm = skeleton.find_bone("mixamorig_RightArm")
-						var right_forearm = skeleton.find_bone("mixamorig_RightForeArm")
-						
-						if left_arm != -1:
-							var anim_rot = skeleton.get_bone_pose_rotation(left_arm)
-							var target_rot = Quaternion.from_euler(Vector3(0.0, deg_to_rad(60.0), deg_to_rad(60.0)))
-							skeleton.set_bone_pose_rotation(left_arm, anim_rot.slerp(target_rot, w))
-						if left_forearm != -1:
-							var anim_rot = skeleton.get_bone_pose_rotation(left_forearm)
-							skeleton.set_bone_pose_rotation(left_forearm, anim_rot.slerp(Quaternion.IDENTITY, w))
-						if right_arm != -1:
-							var anim_rot = skeleton.get_bone_pose_rotation(right_arm)
-							var target_rot = Quaternion.from_euler(Vector3(0.0, deg_to_rad(-60.0), deg_to_rad(-60.0)))
-							skeleton.set_bone_pose_rotation(right_arm, anim_rot.slerp(target_rot, w))
-						if right_forearm != -1:
-							var anim_rot = skeleton.get_bone_pose_rotation(right_forearm)
-							skeleton.set_bone_pose_rotation(right_forearm, anim_rot.slerp(Quaternion.IDENTITY, w))
-							
-					if is_drinking:
-						var blend_w := 1.0
-						if drink_t < 0.15:
-							blend_w = drink_t / 0.15
-						elif drink_t > 1.65:
-							blend_w = (1.8 - drink_t) / 0.15
-							
-						var right_arm = skeleton.find_bone("mixamorig_RightArm")
-						var right_forearm = skeleton.find_bone("mixamorig_RightForeArm")
-						var neck = skeleton.find_bone("mixamorig_Neck")
-						var head = skeleton.find_bone("mixamorig_Head")
-						
-						if right_arm != -1:
-							var anim_rot = skeleton.get_bone_pose_rotation(right_arm)
-							var target_rot = _get_drink_bone_rotation("mixamorig_RightArm", drink_t)
-							skeleton.set_bone_pose_rotation(right_arm, anim_rot.slerp(target_rot, blend_w))
-						if right_forearm != -1:
-							var anim_rot = skeleton.get_bone_pose_rotation(right_forearm)
-							var target_rot = _get_drink_bone_rotation("mixamorig_RightForeArm", drink_t)
-							skeleton.set_bone_pose_rotation(right_forearm, anim_rot.slerp(target_rot, blend_w))
-						if neck != -1:
-							var anim_rot = skeleton.get_bone_pose_rotation(neck)
-							var target_rot = _get_drink_bone_rotation("mixamorig_Neck", drink_t)
-							skeleton.set_bone_pose_rotation(neck, anim_rot.slerp(target_rot, blend_w))
-						if head != -1:
-							var anim_rot = skeleton.get_bone_pose_rotation(head)
-							var target_rot = _get_drink_bone_rotation("mixamorig_Head", drink_t)
-							skeleton.set_bone_pose_rotation(head, anim_rot.slerp(target_rot, blend_w))
-							
-						if _drink_beers.has(p_idx) and is_instance_valid(_drink_beers[p_idx]):
-							var beer_node = _drink_beers[p_idx]
-							if drink_t >= 0.5:
-								var hand_idx = skeleton.find_bone("mixamorig_RightHand")
-								if hand_idx != -1:
-									var hand_trans = skeleton.global_transform * skeleton.get_bone_global_pose(hand_idx)
-									var offset_pos = hand_trans.basis * Vector3(0.015, 0.015, 0.0)
-									beer_node.global_position = hand_trans.origin + offset_pos
-									beer_node.global_basis = hand_trans.basis * Basis.from_euler(Vector3(deg_to_rad(-90), deg_to_rad(90), 0))
-									
-						if p_idx == local_p_idx:
+					if p_idx == local_p_idx:
+						if _drink_timers.has(p_idx):
+							var drink_t = 1.8 - _drink_timers[p_idx]
 							var max_tilt = deg_to_rad(20.0)
 							if drink_t < 0.5:
 								_drink_camera_pitch_offset = 0.0
@@ -3242,6 +3178,8 @@ func _process(delta: float) -> void:
 								_drink_camera_pitch_offset = max_tilt
 							else:
 								_drink_camera_pitch_offset = max_tilt * (1.0 - (drink_t - 1.4) / 0.4)
+						else:
+							_drink_camera_pitch_offset = 0.0
 
 func _update_cabinet_hover() -> void:
 	if not is_instance_valid(camera):
@@ -4173,8 +4111,8 @@ func _spawn_player_avatars() -> void:
 	var chair_rotations = {
 		0: 270.0,
 		1: 90.0,
-		2: 270.0,
-		3: 270.0
+		2: 90.0,
+		3: 90.0
 	}
 
 	for i in range(4):
@@ -4226,8 +4164,86 @@ func _spawn_player_avatars() -> void:
 		player_avatars[i] = char_node
 		avatar_arm_weights[i] = 1.0
 
+		var skeleton = char_node.get_node_or_null("Armature/Skeleton3D") as Skeleton3D
+		if skeleton and ap:
+			skeleton.skeleton_updated.connect(_on_avatar_skeleton_updated.bind(i, skeleton, ap))
+
 	take_inst.queue_free()
 	_refresh_avatar_body_visibility()
+
+func _on_avatar_skeleton_updated(p_idx: int, skeleton: Skeleton3D, ap: AnimationPlayer) -> void:
+	if not is_instance_valid(skeleton) or not is_instance_valid(ap):
+		return
+		
+	# 1. Lock hips translation and rotation completely to rest position
+	var hips_idx = skeleton.find_bone("mixamorig_Hips")
+	if hips_idx != -1:
+		skeleton.set_bone_pose_position(hips_idx, Vector3(0.043546, -1.822579, -44.87878))
+		skeleton.set_bone_pose_rotation(hips_idx, Quaternion(-0.742863, -0.030465, -0.004276, 0.668737))
+
+	# 2. Apply idle arm adjustments (hands down) for spawned player avatars during idle animation
+	var w = avatar_arm_weights.get(p_idx, 0.0)
+	if w > 0.0:
+		var left_arm = skeleton.find_bone("mixamorig_LeftArm")
+		var left_forearm = skeleton.find_bone("mixamorig_LeftForeArm")
+		var right_arm = skeleton.find_bone("mixamorig_RightArm")
+		var right_forearm = skeleton.find_bone("mixamorig_RightForeArm")
+		
+		if left_arm != -1:
+			var anim_rot = skeleton.get_bone_pose_rotation(left_arm)
+			var target_rot = Quaternion.from_euler(Vector3(0.0, deg_to_rad(60.0), deg_to_rad(60.0)))
+			skeleton.set_bone_pose_rotation(left_arm, anim_rot.slerp(target_rot, w))
+		if left_forearm != -1:
+			var anim_rot = skeleton.get_bone_pose_rotation(left_forearm)
+			skeleton.set_bone_pose_rotation(left_forearm, anim_rot.slerp(Quaternion.IDENTITY, w))
+		if right_arm != -1:
+			var anim_rot = skeleton.get_bone_pose_rotation(right_arm)
+			var target_rot = Quaternion.from_euler(Vector3(0.0, deg_to_rad(-60.0), deg_to_rad(-60.0)))
+			skeleton.set_bone_pose_rotation(right_arm, anim_rot.slerp(target_rot, w))
+		if right_forearm != -1:
+			var anim_rot = skeleton.get_bone_pose_rotation(right_forearm)
+			skeleton.set_bone_pose_rotation(right_forearm, anim_rot.slerp(Quaternion.IDENTITY, w))
+
+	# 3. Drinking animation overrides
+	if _drink_timers.has(p_idx):
+		var drink_t = 1.8 - _drink_timers[p_idx]
+		var blend_w := 1.0
+		if drink_t < 0.15:
+			blend_w = drink_t / 0.15
+		elif drink_t > 1.65:
+			blend_w = (1.8 - drink_t) / 0.15
+			
+		var right_arm = skeleton.find_bone("mixamorig_RightArm")
+		var right_forearm = skeleton.find_bone("mixamorig_RightForeArm")
+		var neck = skeleton.find_bone("mixamorig_Neck")
+		var head = skeleton.find_bone("mixamorig_Head")
+		
+		if right_arm != -1:
+			var anim_rot = skeleton.get_bone_pose_rotation(right_arm)
+			var target_rot = _get_drink_bone_rotation("mixamorig_RightArm", drink_t)
+			skeleton.set_bone_pose_rotation(right_arm, anim_rot.slerp(target_rot, blend_w))
+		if right_forearm != -1:
+			var anim_rot = skeleton.get_bone_pose_rotation(right_forearm)
+			var target_rot = _get_drink_bone_rotation("mixamorig_RightForeArm", drink_t)
+			skeleton.set_bone_pose_rotation(right_forearm, anim_rot.slerp(target_rot, blend_w))
+		if neck != -1:
+			var anim_rot = skeleton.get_bone_pose_rotation(neck)
+			var target_rot = _get_drink_bone_rotation("mixamorig_Neck", drink_t)
+			skeleton.set_bone_pose_rotation(neck, anim_rot.slerp(target_rot, blend_w))
+		if head != -1:
+			var anim_rot = skeleton.get_bone_pose_rotation(head)
+			var target_rot = _get_drink_bone_rotation("mixamorig_Head", drink_t)
+			skeleton.set_bone_pose_rotation(head, anim_rot.slerp(target_rot, blend_w))
+			
+		if _drink_beers.has(p_idx) and is_instance_valid(_drink_beers[p_idx]):
+			var beer_node = _drink_beers[p_idx]
+			if drink_t >= 0.5:
+				var hand_idx = skeleton.find_bone("mixamorig_RightHand")
+				if hand_idx != -1:
+					var hand_trans = skeleton.global_transform * skeleton.get_bone_global_pose(hand_idx)
+					var offset_pos = hand_trans.basis * Vector3(0.015, 0.015, 0.0)
+					beer_node.global_position = hand_trans.origin + offset_pos
+					beer_node.global_basis = hand_trans.basis * Basis.from_euler(Vector3(deg_to_rad(-90), deg_to_rad(90), 0))
 
 func _refresh_avatar_body_visibility() -> void:
 	var local_idx := _human_ui_idx()
