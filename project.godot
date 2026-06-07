@@ -15,9 +15,18 @@ run/main_scene="res://press_any_key.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://assets/images/icon.svg"
 
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=1
+
 [autoload]
 
 SettingsManager="*res://settings_manager.gd"
+ResponsiveUI="*res://responsive_ui.gd"
 SceneLoader="*res://scene_loader.gd"
 GameManager="*res://game_manager.gd"
 NetworkManager="*res://network_manager.gd"

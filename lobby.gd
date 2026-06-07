@@ -61,6 +61,28 @@ func _ready():
 	if saved_code != "":
 		code_edit.text = saved_code
 	name_edit.grab_focus()
+	if not get_viewport().size_changed.is_connected(_apply_responsive_layout):
+		get_viewport().size_changed.connect(_apply_responsive_layout)
+	call_deferred("_apply_responsive_layout")
+
+func _apply_responsive_layout() -> void:
+	var left_margin: Control = $LeftMargin
+	left_margin.anchor_right = 0.95 if ResponsiveUI.is_narrow_screen() else 0.48
+	$LeftMargin/VBox/Title.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(64))
+	for node_path in [
+		"SetupPanel/HBoxName/Label",
+		"SetupPanel/HBoxConnection/HostButton",
+		"SetupPanel/HBoxConnection/JoinButton",
+		"ActiveLobbyPanel/HBoxContainer/PlayersList/Label",
+		"ActiveLobbyPanel/HBoxContainer/Settings/SettingsTitle",
+		"ActiveLobbyPanel/StartButton",
+	]:
+		var node := get_node("LeftMargin/VBox/" + node_path)
+		if node is Label:
+			node.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(22))
+		elif node is Button:
+			node.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(30))
+	$LeftMargin/VBox/BackButton.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(24))
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
