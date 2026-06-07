@@ -3208,7 +3208,7 @@ func _process(delta: float) -> void:
 						if hand_idx != -1:
 							var hand_trans = skeleton.global_transform * skeleton.get_bone_global_pose(hand_idx)
 							var hand_basis_normalized = hand_trans.basis.orthonormalized()
-							var target_gpos = hand_trans.origin + hand_basis_normalized * Vector3(0.07, 0.045, -0.01)
+							var target_gpos = hand_trans.origin + hand_basis_normalized * Vector3(0.07, 0.42, -0.01)
 							
 							# Calculate dynamic tilt of the beer mug from 0 to 100 degrees during the drinking animation
 							var tilt_angle := 0.0
