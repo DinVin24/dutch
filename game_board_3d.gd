@@ -113,7 +113,7 @@ var player_avatars: Dictionary = {}
 var avatar_arm_weights: Dictionary = {}
 var _camera_initialized: bool = false
 var _base_head_y: float = 0.0
-const FP_EYE_HEIGHT_OFFSET: float = 2.35  # meters above hips anchor (raised to top of head)
+const FP_EYE_HEIGHT_OFFSET: float = 3.65  # meters above hips anchor (raised much higher for overview)
 var _look_yaw: float = 0.0
 var _look_pitch: float = 0.0
 
@@ -3118,8 +3118,8 @@ func _process(delta: float) -> void:
 						var forward = Vector3(-sin(camera.rotation.y), 0.0, -cos(camera.rotation.y)).normalized()
 						var right = Vector3(forward.z, 0.0, -forward.x).normalized()
 						
-						var forward_dir = -avatar.global_transform.basis.z.normalized()
-						var target_camera_pos = eye_anchor + forward_dir * 0.12
+						var forward_dir = avatar.global_transform.basis.z.normalized()
+						var target_camera_pos = eye_anchor + forward_dir * 0.48
 						target_camera_pos.y = _base_head_y
 						target_camera_pos += shake_offset
 						
@@ -3356,7 +3356,7 @@ func _input(event: InputEvent) -> void:
 			_look_yaw -= event.relative.x * 0.0025
 			_look_pitch -= event.relative.y * 0.0025
 			_look_yaw = clamp(_look_yaw, deg_to_rad(-105.0), deg_to_rad(105.0))
-			_look_pitch = clamp(_look_pitch, deg_to_rad(-35.0), deg_to_rad(22.0))
+			_look_pitch = clamp(_look_pitch, deg_to_rad(-45.0), deg_to_rad(22.0))
 
 func _on_jack_swap_resolved(p1: int, c1: int, p2: int, c2: int) -> void:
 	play_take_animation(GameManager.current_player_index)
@@ -4069,9 +4069,9 @@ func _spawn_player_avatars() -> void:
 	if is_instance_valid(chairs[3]): chairs[3].position.x += 0.5
 
 	var chair_rotations = {
-		0: 90.0,
+		0: 270.0,
 		1: 90.0,
-		2: 90.0,
+		2: 270.0,
 		3: 90.0
 	}
 
@@ -4092,15 +4092,27 @@ func _spawn_player_avatars() -> void:
 		# Set up AnimationPlayer
 		var ap: AnimationPlayer = char_node.get_node("AnimationPlayer")
 		if ap:
-			var lib = ap.get_animation_library("")
+			var anim_list = ap.get_animation_list()
+			var idle_anim: Animation = null
+			for anim_name in anim_list:
+				if "layer0" in anim_name.to_lower() or "idle" in anim_name.to_lower():
+					idle_anim = ap.get_animation(anim_name)
+					break
+			if idle_anim:
+				idle_anim.loop_mode = Animation.LOOP_LINEAR
+			
+			var lib: AnimationLibrary = null
+			if ap.has_animation_library(""):
+				lib = ap.get_animation_library("")
+			else:
+				lib = AnimationLibrary.new()
+				ap.add_animation_library("", lib)
+				
 			if lib:
-				lib.add_animation("take", take_anim)
-				var idle_orig = "Armature|mixamo_com|Layer0"
-				if lib.has_animation(idle_orig):
-					var idle_anim = lib.get_animation(idle_orig)
-					idle_anim.loop_mode = Animation.LOOP_LINEAR
+				if idle_anim:
 					lib.add_animation("idle", idle_anim)
-					lib.remove_animation(idle_orig)
+				lib.add_animation("take", take_anim)
+				
 			ap.play("idle")
 			ap.set_blend_time("idle", "take", 0.3)
 			ap.set_blend_time("take", "idle", 0.3)
