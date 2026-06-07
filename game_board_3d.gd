@@ -3084,7 +3084,7 @@ func _process(delta: float) -> void:
 					var smooth_yaw = camera.rotation.y - _base_camera_rotation.y
 					var smooth_pitch = camera.rotation.x - _base_camera_rotation.x
 					var body_yaw = clamp(smooth_yaw * 0.35, deg_to_rad(-50.0), deg_to_rad(50.0))
-					avatar.rotation.y = deg_to_rad(90.0) + body_yaw
+					avatar.rotation.y = deg_to_rad(180.0) + body_yaw
 					
 				# Rotate head bone to look exactly where the camera is looking in 3D world space
 				var cam_basis = camera.global_transform.basis
@@ -3170,8 +3170,7 @@ func _update_cabinet_hover() -> void:
 	if not is_instance_valid(camera):
 		return
 	
-	var viewport_size := get_viewport().get_visible_rect().size
-	var center := viewport_size / 2.0
+	var center := _get_screen_ray_position()
 	var ray_origin = camera.project_ray_origin(center)
 	var ray_normal = camera.project_ray_normal(center)
 	var space_state := get_world_3d().direct_space_state
@@ -3339,6 +3338,12 @@ func _handle_noclip_movement(delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if DevConsole and DevConsole.window.visible:
 		return
+
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
+		if event.pressed:
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		else:
+			_apply_gameplay_mouse_mode()
 		
 	if event is InputEventMouseMotion:
 		if noclip_enabled:
@@ -4019,6 +4024,19 @@ func _update_crosshair_raycast() -> void:
 		if is_instance_valid(_hovered_board_card):
 			_on_card_hover_enter(_hovered_board_card)
 
+## Filters out lower body tracks from the source Mixamo animation
+func _make_upper_body_animation(src: Animation) -> Animation:
+	var dst := src.duplicate() as Animation
+	var lower_keywords := ["LeftUpLeg", "LeftLeg", "LeftFoot", "LeftToe",
+						   "RightUpLeg", "RightLeg", "RightFoot", "RightToe"]
+	for ti in range(dst.get_track_count() - 1, -1, -1):
+		var path_str := dst.track_get_path(ti).get_concatenated_subnames()
+		for kw in lower_keywords:
+			if kw.to_lower() in path_str.to_lower():
+				dst.remove_track(ti)
+				break
+	return dst
+
 func _spawn_player_avatars() -> void:
 	var char_scene = load("res://assets/models/animatii/idle.glb")
 	var take_scene = load("res://assets/models/animatii/take.glb")
@@ -4028,11 +4046,12 @@ func _spawn_player_avatars() -> void:
 
 	var take_inst = take_scene.instantiate()
 	var take_ap: AnimationPlayer = take_inst.get_node("AnimationPlayer")
-	var take_anim = take_ap.get_animation("Armature|mixamo_com|Layer0_001")
-	if not take_anim:
+	var take_anim_raw = take_ap.get_animation("Armature|mixamo_com|Layer0_001")
+	if not take_anim_raw:
 		push_error("GameBoard3D: Take animation not found in take.glb!")
 		take_inst.queue_free()
 		return
+	var take_anim = _make_upper_body_animation(take_anim_raw)
 
 	var chairs = {
 		0: get_node_or_null("Sketchfab_Scene"),  # Bottom (Player 0)
@@ -4141,10 +4160,7 @@ func play_take_animation(player_idx: int) -> void:
 		var char_node = player_avatars[player_idx]
 		var ap: AnimationPlayer = char_node.get_node("AnimationPlayer")
 		if ap:
-			if ap.current_animation == "take":
-				ap.seek(0.0, true)
-			else:
-				ap.play("take")
+			ap.play("take", 0.2)
 			ap.queue("idle")
 
 func _on_mp_connection_status_changed(lag_ms: int, status: String) -> void:
