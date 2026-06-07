@@ -279,14 +279,14 @@ func update_hammers(abilities: Array, p_idx: int = -1) -> void:
 		return
 
 	# 6 slot positions: 0,1 = top drawer; 2,3 = middle; 4,5 = bottom
-	# Shifted slightly to the right inside the cabinet (X offset +0.04)
+	# Shifted slightly to the right inside the cabinet (X offset +0.04), and raised vertically (Y = -0.04)
 	var slots = [
-		{"shelf": 0, "pos": Vector3(-0.02, -0.07, -0.09)},
-		{"shelf": 0, "pos": Vector3(0.10,  -0.07, -0.09)},
-		{"shelf": 1, "pos": Vector3(-0.02, -0.07, -0.09)},
-		{"shelf": 1, "pos": Vector3(0.10,  -0.07, -0.09)},
-		{"shelf": 2, "pos": Vector3(-0.02, -0.07, -0.09)},
-		{"shelf": 2, "pos": Vector3(0.10,  -0.07, -0.09)}
+		{"shelf": 0, "pos": Vector3(-0.02, -0.04, -0.09)},
+		{"shelf": 0, "pos": Vector3(0.10,  -0.04, -0.09)},
+		{"shelf": 1, "pos": Vector3(-0.02, -0.04, -0.09)},
+		{"shelf": 1, "pos": Vector3(0.10,  -0.04, -0.09)},
+		{"shelf": 2, "pos": Vector3(-0.02, -0.04, -0.09)},
+		{"shelf": 2, "pos": Vector3(0.10,  -0.04, -0.09)}
 	]
 
 	_hammers.resize(6)
@@ -348,9 +348,9 @@ func update_hammers(abilities: Array, p_idx: int = -1) -> void:
 
 		var hammer_col = CollisionShape3D.new()
 		var hammer_box = BoxShape3D.new()
-		hammer_box.size = Vector3(55.0, 30.0, 110.0)
+		hammer_box.size = Vector3(80.0, 60.0, 150.0)
 		hammer_col.shape = hammer_box
-		hammer_col.position = Vector3(0.0, 0.0, 38.25)
+		hammer_col.position = Vector3(0.0, 0.0, 65.0)
 		hammer_area.add_child(hammer_col)
 
 		# Floating sparkles

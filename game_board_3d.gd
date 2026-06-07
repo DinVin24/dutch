@@ -3119,9 +3119,9 @@ func _process(delta: float) -> void:
 						var right = Vector3(forward.z, 0.0, -forward.x).normalized()
 						
 						var target_camera_pos = Vector3(
-							eye_anchor.x + forward.x * 0.42 + right.x * 0.06,
+							eye_anchor.x,
 							_base_head_y,
-							eye_anchor.z + forward.z * 0.42 + right.z * 0.06
+							eye_anchor.z
 						) + shake_offset
 						
 						# Direct assignment to prevent relative lag
@@ -4031,10 +4031,13 @@ func _make_upper_body_animation(src: Animation) -> Animation:
 						   "RightUpLeg", "RightLeg", "RightFoot", "RightToe"]
 	for ti in range(dst.get_track_count() - 1, -1, -1):
 		var path_str := dst.track_get_path(ti).get_concatenated_subnames()
+		var is_lower := false
 		for kw in lower_keywords:
 			if kw.to_lower() in path_str.to_lower():
-				dst.remove_track(ti)
+				is_lower = true
 				break
+		if is_lower or ("hips" in path_str.to_lower() and (dst.track_get_type(ti) == Animation.TYPE_POSITION_3D or "position" in path_str.to_lower())):
+			dst.remove_track(ti)
 	return dst
 
 func _spawn_player_avatars() -> void:
