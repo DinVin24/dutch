@@ -3223,7 +3223,7 @@ func _process(delta: float) -> void:
 							
 							# Tilt relative to the seat basis to ensure stable, predictable world rotation
 							var seat_basis = beer_node.get_parent().global_transform.basis
-							var target_gbasis = seat_basis * Basis.from_euler(Vector3(0, 0, deg_to_rad(-tilt_angle))) * Basis.from_scale(beer_node.scale)
+							var target_gbasis = seat_basis * Basis.from_euler(Vector3(deg_to_rad(-tilt_angle), 0, 0)) * Basis.from_scale(beer_node.scale)
 							
 							var base_pos = beer_node.get_meta("base_position") if beer_node.has_meta("base_position") else beer_node.position
 							var base_rot = beer_node.get_meta("base_rotation", Vector3.ZERO)
