@@ -29,6 +29,7 @@ var _hovered_hammer_idx: int = -1
 var _hammer_shake_time: float = 0.0
 var _sparkles: Array[Node3D] = []
 var _last_abilities: Array = []
+var _hammer_hover_progress: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 # The player slot this cabinet belongs to (set by game_board_3d)
 var player_index: int = -1
@@ -38,12 +39,26 @@ var _gold_mat: StandardMaterial3D = null
 
 func _ready() -> void:
 	_gold_mat = StandardMaterial3D.new()
-	_gold_mat.albedo_color = Color(1.0, 0.75, 0.1)
+	_gold_mat.albedo_color = Color(1.0, 0.85, 0.35)
+	_gold_mat.metallic = 1.0
+	_gold_mat.roughness = 0.1
+	_gold_mat.rim_enabled = true
+	_gold_mat.rim = 0.5
+	_gold_mat.rim_tint = 0.5
+	_gold_mat.clearcoat_enabled = true
+	_gold_mat.clearcoat = 1.0
+	_gold_mat.clearcoat_roughness = 0.1
 	_gold_mat.emission_enabled = true
-	_gold_mat.emission = Color(1.0, 0.7, 0.0)
+	_gold_mat.emission = Color(1.0, 0.75, 0.15)
 	_gold_mat.emission_energy_multiplier = 1.2
-	_gold_mat.roughness = 0.3
-	_gold_mat.metallic = 0.9
+
+	var outline_mat = StandardMaterial3D.new()
+	outline_mat.cull_mode = BaseMaterial3D.CULL_FRONT
+	outline_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	outline_mat.albedo_color = Color(1.0, 0.85, 0.0)
+	outline_mat.grow = true
+	outline_mat.grow_amount = 0.02
+	_gold_mat.next_pass = outline_mat
 
 	_shelves = _resolve_shelves()
 	if _shelves.is_empty():
@@ -124,21 +139,30 @@ func toggle_shelf(index: int) -> void:
 		.set_trans(Tween.TRANS_CUBIC)\
 		.set_ease(Tween.EASE_OUT)
 
-## Shake + rise applied every frame while a hammer is hovered
+## Rise + float bobbing applied smoothly every frame
 func _process(delta: float) -> void:
-	if _hovered_hammer_idx < 0 or _hovered_hammer_idx >= _hammers.size():
-		return
-	var h = _hammers[_hovered_hammer_idx]
-	if not is_instance_valid(h):
-		return
-	_hammer_shake_time += delta * 12.0
-	var s = HAMMER_HOVER_SHAKE
-	var base = _hammer_base_pos[_hovered_hammer_idx]
-	h.position = base + Vector3(
-		sin(_hammer_shake_time * 1.7) * s,
-		HAMMER_HOVER_RISE + sin(_hammer_shake_time * 2.5) * s * 0.5,
-		cos(_hammer_shake_time * 1.3) * s
-	)
+	for i in range(_hammers.size()):
+		var h = _hammers[i]
+		if not is_instance_valid(h):
+			continue
+		
+		# Smoothly blend the hover progress
+		if _hovered_hammer_idx == i:
+			_hammer_hover_progress[i] = move_toward(_hammer_hover_progress[i], 1.0, delta * 3.0)
+		else:
+			_hammer_hover_progress[i] = move_toward(_hammer_hover_progress[i], 0.0, delta * 4.0)
+			
+		var base = _hammer_base_pos[i]
+		if _hammer_hover_progress[i] > 0.0:
+			var t = Time.get_ticks_msec() * 0.003 + i * 2.0
+			var rise = HAMMER_HOVER_RISE * _hammer_hover_progress[i]
+			var bob_y = sin(t * 1.5) * 0.004 * _hammer_hover_progress[i]
+			var bob_x = cos(t * 1.2) * 0.002 * _hammer_hover_progress[i]
+			var bob_z = sin(t * 1.0) * 0.002 * _hammer_hover_progress[i]
+			
+			h.position = base + Vector3(bob_x, rise + bob_y, bob_z)
+		else:
+			h.position = base
 
 ## Applies hover effect: rise, gold material, intensified light
 func hover_hammer(i: int) -> void:
@@ -171,11 +195,7 @@ func unhover_hammer(i: int) -> void:
 		return
 	if _hovered_hammer_idx == i:
 		_hovered_hammer_idx = -1
-	# Restore position
-	if i < _hammer_base_pos.size() and is_instance_valid(_hammers[i]):
-		var tw = create_tween()
-		tw.tween_property(_hammers[i], "position", _hammer_base_pos[i], 0.15)\
-			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	# Position is restored smoothly via _process hover progress
 	# Dim OmniLight
 	if i < _hammer_omnis.size() and is_instance_valid(_hammer_omnis[i]):
 		var tw2 = create_tween()
@@ -243,6 +263,7 @@ func update_hammers(abilities: Array, p_idx: int = -1) -> void:
 	_hammer_base_pos.clear()
 	_hammer_omnis.clear()
 	_hammer_orig_mats.clear()
+	_hammer_hover_progress = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 	for s in _sparkles:
 		if is_instance_valid(s):
@@ -258,14 +279,14 @@ func update_hammers(abilities: Array, p_idx: int = -1) -> void:
 		return
 
 	# 6 slot positions: 0,1 = top drawer; 2,3 = middle; 4,5 = bottom
-	# Symmetrically centered at X = 0.0 (left slot: -0.06, right slot: +0.06)
+	# Shifted slightly to the right inside the cabinet (X offset +0.04)
 	var slots = [
-		{"shelf": 0, "pos": Vector3(-0.06, -0.07, -0.09)},
-		{"shelf": 0, "pos": Vector3(0.06,  -0.07, -0.09)},
-		{"shelf": 1, "pos": Vector3(-0.06, -0.07, -0.09)},
-		{"shelf": 1, "pos": Vector3(0.06,  -0.07, -0.09)},
-		{"shelf": 2, "pos": Vector3(-0.06, -0.07, -0.09)},
-		{"shelf": 2, "pos": Vector3(0.06,  -0.07, -0.09)}
+		{"shelf": 0, "pos": Vector3(-0.02, -0.07, -0.09)},
+		{"shelf": 0, "pos": Vector3(0.10,  -0.07, -0.09)},
+		{"shelf": 1, "pos": Vector3(-0.02, -0.07, -0.09)},
+		{"shelf": 1, "pos": Vector3(0.10,  -0.07, -0.09)},
+		{"shelf": 2, "pos": Vector3(-0.02, -0.07, -0.09)},
+		{"shelf": 2, "pos": Vector3(0.10,  -0.07, -0.09)}
 	]
 
 	_hammers.resize(6)

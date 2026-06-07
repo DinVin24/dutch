@@ -3055,9 +3055,8 @@ func _process(delta: float) -> void:
 						else:
 							skeleton.set_bone_pose_scale(neck_idx, Vector3(1.0, 1.0, 1.0))
 					if p_idx == local_p_idx:
-						_set_avatar_body_visible(avatar, false)
-						if GameManager.is_multiplayer:
-							avatar.visible = false
+						_set_avatar_body_visible(avatar, true)
+						avatar.visible = true
 					else:
 						_set_avatar_body_visible(avatar, true)
 						if GameManager.is_multiplayer and p_idx < GameManager.num_players:
@@ -4107,8 +4106,8 @@ func _refresh_avatar_body_visibility() -> void:
 			_set_avatar_body_visible(avatar, false)
 			continue
 		if GameManager.is_multiplayer and p_idx == local_idx:
-			avatar.visible = false
-			_set_avatar_body_visible(avatar, false)
+			avatar.visible = true
+			_set_avatar_body_visible(avatar, true)
 		else:
 			avatar.visible = true
 			_set_avatar_body_visible(avatar, true)
@@ -4138,8 +4137,6 @@ func _set_avatar_body_visible(avatar: Node3D, body_visible: bool) -> void:
 		mesh.visible = body_visible
 
 func play_take_animation(player_idx: int) -> void:
-	if GameManager.is_multiplayer and player_idx == _human_ui_idx():
-		return
 	if player_avatars.has(player_idx) and is_instance_valid(player_avatars[player_idx]):
 		var char_node = player_avatars[player_idx]
 		var ap: AnimationPlayer = char_node.get_node("AnimationPlayer")
