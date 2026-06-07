@@ -113,7 +113,7 @@ var player_avatars: Dictionary = {}
 var avatar_arm_weights: Dictionary = {}
 var _camera_initialized: bool = false
 var _base_head_y: float = 0.0
-const FP_EYE_HEIGHT_OFFSET: float = 2.10  # meters above hips anchor (raised from 1.85)
+const FP_EYE_HEIGHT_OFFSET: float = 2.35  # meters above hips anchor (raised to top of head)
 var _look_yaw: float = 0.0
 var _look_pitch: float = 0.0
 
@@ -3118,11 +3118,10 @@ func _process(delta: float) -> void:
 						var forward = Vector3(-sin(camera.rotation.y), 0.0, -cos(camera.rotation.y)).normalized()
 						var right = Vector3(forward.z, 0.0, -forward.x).normalized()
 						
-						var target_camera_pos = Vector3(
-							eye_anchor.x,
-							_base_head_y,
-							eye_anchor.z
-						) + shake_offset
+						var forward_dir = -avatar.global_transform.basis.z.normalized()
+						var target_camera_pos = eye_anchor + forward_dir * 0.12
+						target_camera_pos.y = _base_head_y
+						target_camera_pos += shake_offset
 						
 						# Direct assignment to prevent relative lag
 						camera.global_position = target_camera_pos
@@ -3357,7 +3356,7 @@ func _input(event: InputEvent) -> void:
 			_look_yaw -= event.relative.x * 0.0025
 			_look_pitch -= event.relative.y * 0.0025
 			_look_yaw = clamp(_look_yaw, deg_to_rad(-105.0), deg_to_rad(105.0))
-			_look_pitch = clamp(_look_pitch, deg_to_rad(-50.0), deg_to_rad(22.0))
+			_look_pitch = clamp(_look_pitch, deg_to_rad(-35.0), deg_to_rad(22.0))
 
 func _on_jack_swap_resolved(p1: int, c1: int, p2: int, c2: int) -> void:
 	play_take_animation(GameManager.current_player_index)
@@ -4036,7 +4035,7 @@ func _make_upper_body_animation(src: Animation) -> Animation:
 			if kw.to_lower() in path_str.to_lower():
 				is_lower = true
 				break
-		if is_lower or ("hips" in path_str.to_lower() and (dst.track_get_type(ti) == Animation.TYPE_POSITION_3D or "position" in path_str.to_lower())):
+		if is_lower or dst.track_get_type(ti) == Animation.TYPE_POSITION_3D or "position" in path_str.to_lower():
 			dst.remove_track(ti)
 	return dst
 
