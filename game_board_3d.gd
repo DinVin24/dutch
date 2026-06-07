@@ -1031,6 +1031,7 @@ func _create_beer_placeholders():
 			var front_z := 1.35
 			var right_offset := b * beer_spacing
 			beer.position = Vector3(right_x_base + right_offset, beer_y_offset, front_z)
+			beer.rotation_degrees = Vector3(0, 0, 0)
 			beer.set_meta("base_scale", beer.scale)
 			beer.set_meta("base_y", beer_y_offset)
 			beer.set_meta("base_position", beer.position)
@@ -1412,20 +1413,36 @@ func _apply_beer_visual_state(beer_node: Node3D, state: BeerVisualState, animate
 	if not is_instance_valid(beer_node):
 		return
 	_remove_legacy_liquid_fill(beer_node)
-	beer_node.rotation_degrees.z = 0.0
+	
+	# Check if this beer is currently being drank
+	var is_drinking := false
+	for p_idx in _drink_beers:
+		if _drink_beers[p_idx] == beer_node:
+			is_drinking = true
+			break
+			
+	if not is_drinking:
+		if beer_node.has_meta("base_rotation"):
+			beer_node.rotation = beer_node.get_meta("base_rotation")
+		else:
+			beer_node.rotation_degrees = Vector3(0, 0, 0)
+		
 	beer_node.set_meta("beer_state", state)
 	var fill: float = BEER_LIQUID_FILL[state]
 	var base_scale: Vector3 = beer_node.get_meta("base_scale", beer_scale)
 	var base_y: float = beer_node.get_meta("base_y", beer_y_offset)
 	var target_scale := Vector3(base_scale.x, base_scale.y * fill, base_scale.z)
 	var target_y := base_y - (base_scale.y * (1.0 - fill) * 0.35)
+	
 	if animate:
 		var tween := create_tween().set_parallel(true)
 		tween.tween_property(beer_node, "scale", target_scale, 0.28).set_trans(Tween.TRANS_QUAD)
-		tween.tween_property(beer_node, "position:y", target_y, 0.28).set_trans(Tween.TRANS_QUAD)
+		if not is_drinking:
+			tween.tween_property(beer_node, "position:y", target_y, 0.28).set_trans(Tween.TRANS_QUAD)
 	else:
 		beer_node.scale = target_scale
-		beer_node.position.y = target_y
+		if not is_drinking:
+			beer_node.position.y = target_y
 
 func _animate_beer_emptying(beer_node: Node3D) -> void:
 	if not is_instance_valid(beer_node):
@@ -1456,7 +1473,18 @@ func _animate_beer_emptying(beer_node: Node3D) -> void:
 			spawn_particles("beer_spill", spill_pos)
 	)
 	tween.tween_interval(0.08)
-	tween.tween_property(beer_node, "rotation_degrees:z", -20.0, 0.18).set_trans(Tween.TRANS_QUAD)
+	
+	# Check if currently being drank before doing legacy table tilt
+	var is_drinking := false
+	for p_idx in _drink_beers:
+		if _drink_beers[p_idx] == beer_node:
+			is_drinking = true
+			break
+	if not is_drinking:
+		tween.tween_property(beer_node, "rotation_degrees:z", -20.0, 0.18).set_trans(Tween.TRANS_QUAD)
+	else:
+		tween.tween_interval(0.18)
+		
 	tween.tween_interval(0.22)
 	tween.tween_callback(func() -> void:
 		if is_instance_valid(beer_node):
@@ -3181,7 +3209,21 @@ func _process(delta: float) -> void:
 							var hand_trans = skeleton.global_transform * skeleton.get_bone_global_pose(hand_idx)
 							var hand_basis_normalized = hand_trans.basis.orthonormalized()
 							var target_gpos = hand_trans.origin + hand_basis_normalized * Vector3(0.05, 0.025, -0.01)
-							var target_gbasis = hand_basis_normalized * Basis.from_euler(Vector3(deg_to_rad(-90), deg_to_rad(90), 0)) * Basis.from_scale(beer_node.scale)
+							
+							# Calculate dynamic tilt of the beer mug from 0 to 100 degrees during the drinking animation
+							var tilt_angle := 0.0
+							if drink_t >= 0.5 and drink_t < 1.0:
+								var p = (drink_t - 0.5) / 0.5
+								tilt_angle = lerp(0.0, 100.0, p)
+							elif drink_t >= 1.0 and drink_t < 1.4:
+								tilt_angle = 100.0
+							elif drink_t >= 1.4 and drink_t < 1.8:
+								var p = (drink_t - 1.4) / 0.4
+								tilt_angle = lerp(100.0, 0.0, p)
+							
+							# Tilt relative to the seat basis to ensure stable, predictable world rotation
+							var seat_basis = beer_node.get_parent().global_transform.basis
+							var target_gbasis = seat_basis * Basis.from_euler(Vector3(0, 0, deg_to_rad(-tilt_angle))) * Basis.from_scale(beer_node.scale)
 							
 							var base_pos = beer_node.get_meta("base_position") if beer_node.has_meta("base_position") else beer_node.position
 							var base_rot = beer_node.get_meta("base_rotation", Vector3.ZERO)
