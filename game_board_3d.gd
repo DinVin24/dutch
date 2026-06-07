@@ -116,7 +116,7 @@ var _drink_timers: Dictionary = {}
 var _drink_beers: Dictionary = {}
 var _drink_camera_pitch_offset: float = 0.0
 var _base_head_y: float = 0.0
-const FP_EYE_HEIGHT_OFFSET: float = 3.65  # meters above hips anchor (raised much higher for overview)
+const FP_EYE_HEIGHT_OFFSET: float = 4.3  # meters above hips anchor (raised much higher for overview)
 var _look_yaw: float = 0.0
 var _look_pitch: float = 0.0
 
@@ -3242,15 +3242,17 @@ func _process(delta: float) -> void:
 					
 					if is_instance_valid(camera):
 						camera.near = 0.05
-						var head_pos = skeleton.global_transform * skeleton.get_bone_global_pose(head_idx).origin
-						var eye_anchor = head_pos
+						var hips_idx := skeleton.find_bone("mixamorig_Hips")
+						var eye_anchor = avatar.global_position
+						if hips_idx != -1:
+							eye_anchor = skeleton.global_transform * skeleton.get_bone_global_pose(hips_idx).origin
 						
 						if not _camera_initialized:
-							_base_head_y = head_pos.y + 0.15
+							_base_head_y = eye_anchor.y + FP_EYE_HEIGHT_OFFSET
 							_camera_initialized = true
 						
 						var forward_dir = avatar.global_transform.basis.z.normalized()
-						var target_camera_pos = eye_anchor - forward_dir * 0.15
+						var target_camera_pos = eye_anchor - forward_dir * 0.42
 						target_camera_pos.y = _base_head_y
 						target_camera_pos += shake_offset
 						camera.global_position = target_camera_pos
@@ -4189,8 +4191,8 @@ func _spawn_player_avatars() -> void:
 	var chair_rotations = {
 		0: 270.0,
 		1: 90.0,
-		2: 270.0,
-		3: 270.0
+		2: 90.0,
+		3: 90.0
 	}
 
 	for i in range(4):
