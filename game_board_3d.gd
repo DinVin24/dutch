@@ -159,6 +159,7 @@ func _ready():
 		_create_beer_placeholders()
 		return
 
+	process_priority = 100
 	player_hands = [[], [], [], []]
 
 	# Map cabinet nodes to player indices dynamically
@@ -3035,27 +3036,56 @@ func _process(delta: float) -> void:
 			0
 		)
 
+	# 1. Update drinking timers and calculate local drinking camera pitch offset first
+	var local_p_idx = _human_ui_idx()
 	_drink_camera_pitch_offset = 0.0
+	for p_idx in player_avatars:
+		if _drink_timers.has(p_idx):
+			_drink_timers[p_idx] -= delta
+			if _drink_timers[p_idx] <= 0.0:
+				var beer_node = _drink_beers.get(p_idx)
+				if is_instance_valid(beer_node):
+					_reset_beer_mug_transform(beer_node)
+				_drink_timers.erase(p_idx)
+				_drink_beers.erase(p_idx)
+			elif p_idx == local_p_idx:
+				var drink_t = 1.8 - _drink_timers[p_idx]
+				var max_tilt = deg_to_rad(20.0)
+				if drink_t < 0.5:
+					_drink_camera_pitch_offset = 0.0
+				elif drink_t < 1.0:
+					_drink_camera_pitch_offset = max_tilt * ((drink_t - 0.5) / 0.5)
+				elif drink_t < 1.4:
+					_drink_camera_pitch_offset = max_tilt
+				else:
+					_drink_camera_pitch_offset = max_tilt * (1.0 - (drink_t - 1.4) / 0.4)
+
+	# 2. Camera rotation update (subtract _drink_camera_pitch_offset to tilt UP)
 	if noclip_enabled and not DevConsole.window.visible:
 		_handle_noclip_movement(delta)
 	elif not noclip_enabled:
-		# Rotate camera smoothly towards the look angles accumulated from mouse motion
 		camera.rotation.y = lerp_angle(camera.rotation.y, _base_camera_rotation.y + _look_yaw, delta * 12.0)
-		camera.rotation.x = lerp_angle(camera.rotation.x, _base_camera_rotation.x + _look_pitch + _drink_camera_pitch_offset, delta * 12.0)
+		camera.rotation.x = lerp_angle(camera.rotation.x, _base_camera_rotation.x + _look_pitch - _drink_camera_pitch_offset, delta * 12.0)
 
-		# First-Person Camera and Head tracking for the local human player
+		# First-Person Camera active flag
 		var first_person_active = false
-		var local_p_idx = _human_ui_idx()
-		
-		# Ensure correct head/neck scaling and cleanup shadow attachments for all avatars
+
+		# 3. Process each spawned player avatar
 		for p_idx in player_avatars:
 			var avatar = player_avatars[p_idx]
-			if is_instance_valid(avatar):
+			if is_instance_valid(avatar) and avatar.visible:
 				var skeleton = avatar.get_node_or_null("Armature/Skeleton3D") as Skeleton3D
-				if skeleton:
+				var ap = avatar.get_node_or_null("AnimationPlayer") as AnimationPlayer
+				if skeleton and ap:
+					# Lock hips translation and rotation completely to rest position to prevent rising/shifting
+					var hips_idx = skeleton.find_bone("mixamorig_Hips")
+					if hips_idx != -1:
+						skeleton.set_bone_pose_position(hips_idx, Vector3(0.043546, -1.822579, -44.87878))
+						skeleton.set_bone_pose_rotation(hips_idx, Quaternion(-0.742863, -0.030465, -0.004276, 0.668737))
+
+					# Hide head/neck on the local first-person avatar to prevent camera clipping
 					var head_idx = skeleton.find_bone("mixamorig_Head")
 					var neck_idx = skeleton.find_bone("mixamorig_Neck")
-					
 					if head_idx != -1:
 						if p_idx == local_p_idx:
 							skeleton.set_bone_pose_scale(head_idx, Vector3.ZERO)
@@ -3069,24 +3099,110 @@ func _process(delta: float) -> void:
 							skeleton.set_bone_pose_scale(neck_idx, Vector3.ZERO)
 						else:
 							skeleton.set_bone_pose_scale(neck_idx, Vector3(1.0, 1.0, 1.0))
-					if p_idx == local_p_idx:
-						_set_avatar_body_visible(avatar, true)
-						avatar.visible = true
-					else:
-						_set_avatar_body_visible(avatar, true)
-						if GameManager.is_multiplayer and p_idx < GameManager.num_players:
-							avatar.visible = true
-					
-					# Lock hips translation completely to rest position to prevent rising/shifting during take animation
-					var hips_idx = skeleton.find_bone("mixamorig_Hips")
-					if hips_idx != -1:
-						skeleton.set_bone_pose_position(hips_idx, Vector3(0.043546, -1.822579, -44.87878))
-					
-					# Clean up shadows-only mesh helpers from previous worktree versions
-					var attachment = skeleton.get_node_or_null("HeadShadowAttachment")
-					if attachment:
-						attachment.queue_free()
 
+					# Update visibility
+					_set_avatar_body_visible(avatar, true)
+
+					# Update idle arm adjustments weight
+					if not avatar_arm_weights.has(p_idx):
+						avatar_arm_weights[p_idx] = 1.0
+					var target_w = 1.0 if ap.current_animation == "idle" else 0.0
+					avatar_arm_weights[p_idx] = move_toward(avatar_arm_weights[p_idx], target_w, delta * 3.33)
+
+					# Apply idle arm adjustments (hands down)
+					var w = avatar_arm_weights[p_idx]
+					if w > 0.0:
+						var left_arm = skeleton.find_bone("mixamorig_LeftArm")
+						var left_forearm = skeleton.find_bone("mixamorig_LeftForeArm")
+						var right_arm = skeleton.find_bone("mixamorig_RightArm")
+						var right_forearm = skeleton.find_bone("mixamorig_RightForeArm")
+						
+						if left_arm != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(left_arm)
+							var target_rot = Quaternion.from_euler(Vector3(0.0, deg_to_rad(60.0), deg_to_rad(60.0)))
+							skeleton.set_bone_pose_rotation(left_arm, anim_rot.slerp(target_rot, w))
+						if left_forearm != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(left_forearm)
+							skeleton.set_bone_pose_rotation(left_forearm, anim_rot.slerp(Quaternion.IDENTITY, w))
+						if right_arm != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(right_arm)
+							var target_rot = Quaternion.from_euler(Vector3(0.0, deg_to_rad(-60.0), deg_to_rad(-60.0)))
+							skeleton.set_bone_pose_rotation(right_arm, anim_rot.slerp(target_rot, w))
+						if right_forearm != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(right_forearm)
+							skeleton.set_bone_pose_rotation(right_forearm, anim_rot.slerp(Quaternion.IDENTITY, w))
+
+					# Apply drinking overrides
+					if _drink_timers.has(p_idx):
+						var drink_t = 1.8 - _drink_timers[p_idx]
+						var blend_w := 1.0
+						if drink_t < 0.15:
+							blend_w = drink_t / 0.15
+						elif drink_t > 1.65:
+							blend_w = (1.8 - drink_t) / 0.15
+							
+						var right_arm = skeleton.find_bone("mixamorig_RightArm")
+						var right_forearm = skeleton.find_bone("mixamorig_RightForeArm")
+						var neck = skeleton.find_bone("mixamorig_Neck")
+						var head = skeleton.find_bone("mixamorig_Head")
+						
+						if right_arm != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(right_arm)
+							var target_rot = _get_drink_bone_rotation("mixamorig_RightArm", drink_t)
+							skeleton.set_bone_pose_rotation(right_arm, anim_rot.slerp(target_rot, blend_w))
+						if right_forearm != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(right_forearm)
+							var target_rot = _get_drink_bone_rotation("mixamorig_RightForeArm", drink_t)
+							skeleton.set_bone_pose_rotation(right_forearm, anim_rot.slerp(target_rot, blend_w))
+						if neck != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(neck)
+							var target_rot = _get_drink_bone_rotation("mixamorig_Neck", drink_t)
+							skeleton.set_bone_pose_rotation(neck, anim_rot.slerp(target_rot, blend_w))
+						if head != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(head)
+							var target_rot = _get_drink_bone_rotation("mixamorig_Head", drink_t)
+							skeleton.set_bone_pose_rotation(head, anim_rot.slerp(target_rot, blend_w))
+
+					# Force recalculation of bone global positions so we can snap/lerp the beer mug accurately
+					skeleton.force_update_all_bone_transforms()
+
+					# Snap and smoothly interpolate the beer mug
+					if _drink_timers.has(p_idx) and _drink_beers.has(p_idx) and is_instance_valid(_drink_beers[p_idx]):
+						var beer_node = _drink_beers[p_idx]
+						var drink_t = 1.8 - _drink_timers[p_idx]
+						var hand_idx = skeleton.find_bone("mixamorig_RightHand")
+						if hand_idx != -1:
+							var hand_trans = skeleton.global_transform * skeleton.get_bone_global_pose(hand_idx)
+							var target_gpos = hand_trans.origin + hand_trans.basis * Vector3(0.015, 0.015, 0.0)
+							var target_gbasis = hand_trans.basis * Basis.from_euler(Vector3(deg_to_rad(-90), deg_to_rad(90), 0))
+							
+							var base_pos = beer_node.get_meta("base_position") if beer_node.has_meta("base_position") else beer_node.position
+							var base_rot = beer_node.get_meta("base_rotation", Vector3.ZERO)
+							
+							if drink_t < 0.5:
+								var blend = clamp((drink_t - 0.4) / 0.1, 0.0, 1.0) if drink_t > 0.4 else 0.0
+								if blend > 0.0:
+									var base_gpos = beer_node.get_parent().global_transform * base_pos
+									var base_gbasis = beer_node.get_parent().global_transform.basis * Basis.from_euler(base_rot)
+									beer_node.global_position = base_gpos.lerp(target_gpos, blend)
+									beer_node.global_basis = base_gbasis.slerp(target_gbasis, blend)
+								else:
+									_reset_beer_mug_transform(beer_node)
+							elif drink_t <= 1.4:
+								beer_node.global_position = target_gpos
+								beer_node.global_basis = target_gbasis
+							else:
+								var blend = clamp((1.8 - drink_t) / 0.1, 0.0, 1.0) if drink_t > 1.7 else 1.0
+								if blend < 1.0:
+									var base_gpos = beer_node.get_parent().global_transform * base_pos
+									var base_gbasis = beer_node.get_parent().global_transform.basis * Basis.from_euler(base_rot)
+									beer_node.global_position = base_gpos.lerp(target_gpos, blend)
+									beer_node.global_basis = base_gbasis.slerp(target_gbasis, blend)
+								else:
+									beer_node.global_position = target_gpos
+									beer_node.global_basis = target_gbasis
+
+		# 4. First-Person Camera Placement and Look tracking for local player
 		if not GameManager.is_multiplayer and player_avatars.has(local_p_idx) and is_instance_valid(player_avatars[local_p_idx]):
 			var avatar = player_avatars[local_p_idx]
 			var skeleton = avatar.get_node_or_null("Armature/Skeleton3D") as Skeleton3D
@@ -3095,91 +3211,45 @@ func _process(delta: float) -> void:
 				if head_idx != -1:
 					first_person_active = true
 					
-					# Rotate body Y (yaw) based on camera Y rotation with 35% damping (clamped to -50 to +50 degrees)
+					# Rotate body Y (yaw) based on camera Y rotation with 35% damping
 					var smooth_yaw = camera.rotation.y - _base_camera_rotation.y
-					var smooth_pitch = camera.rotation.x - _base_camera_rotation.x
 					var body_yaw = clamp(smooth_yaw * 0.35, deg_to_rad(-50.0), deg_to_rad(50.0))
 					avatar.rotation.y = deg_to_rad(180.0) + body_yaw
 					
-				# Rotate head bone to look exactly where the camera is looking in 3D world space
-				var cam_basis = camera.global_transform.basis
-				# Guard: skip quaternion ops when basis is degenerate (e.g. headless mode, uninitialized transforms)
-				if cam_basis.determinant() != 0.0:
-					var target_basis = cam_basis * Basis.from_euler(Vector3(0, PI, 0)) # Rotate 180 on Y because head faces +Z, camera looks -Z
-					var target_global_quat = target_basis.get_rotation_quaternion()
-					var parent_idx = skeleton.get_bone_parent(head_idx)
-					if parent_idx != -1:
-						var parent_global_pose = skeleton.global_transform * skeleton.get_bone_global_pose(parent_idx)
-						if parent_global_pose.basis.determinant() != 0.0:
-							var parent_global_quat = parent_global_pose.basis.get_rotation_quaternion()
-							var local_quat = parent_global_quat.inverse() * target_global_quat
-							skeleton.set_bone_pose_rotation(head_idx, local_quat)
+					# Rotate head bone to look exactly where the camera is looking
+					var cam_basis = camera.global_transform.basis
+					if cam_basis.determinant() != 0.0:
+						var target_basis = cam_basis * Basis.from_euler(Vector3(0, PI, 0))
+						var target_global_quat = target_basis.get_rotation_quaternion()
+						var parent_idx = skeleton.get_bone_parent(head_idx)
+						if parent_idx != -1:
+							var parent_global_pose = skeleton.global_transform * skeleton.get_bone_global_pose(parent_idx)
+							if parent_global_pose.basis.determinant() != 0.0:
+								var parent_global_quat = parent_global_pose.basis.get_rotation_quaternion()
+								var local_quat = parent_global_quat.inverse() * target_global_quat
+								skeleton.set_bone_pose_rotation(head_idx, local_quat)
 					
-					# Force skeleton update to get correct global bone pose in the same frame
+					# Force skeleton update again so camera is positioned at the final head location
 					skeleton.force_update_all_bone_transforms()
 					
-					# Eye-level camera from hips anchor (local body mesh hidden — no head clipping).
 					if is_instance_valid(camera):
 						camera.near = 0.05
-						var hips_idx := skeleton.find_bone("mixamorig_Hips")
-						var eye_anchor: Vector3 = avatar.global_position
-						if hips_idx != -1:
-							eye_anchor = skeleton.global_transform * skeleton.get_bone_global_pose(hips_idx).origin
+						var head_pos = skeleton.global_transform * skeleton.get_bone_global_pose(head_idx).origin
+						var eye_anchor = head_pos
 						
 						if not _camera_initialized:
-							_base_head_y = eye_anchor.y + FP_EYE_HEIGHT_OFFSET
+							_base_head_y = head_pos.y + 0.15
 							_camera_initialized = true
 						
-						var forward = Vector3(-sin(camera.rotation.y), 0.0, -cos(camera.rotation.y)).normalized()
-						var right = Vector3(forward.z, 0.0, -forward.x).normalized()
-						
 						var forward_dir = avatar.global_transform.basis.z.normalized()
-						var target_camera_pos = eye_anchor + forward_dir * 0.48
+						var target_camera_pos = eye_anchor - forward_dir * 0.15
 						target_camera_pos.y = _base_head_y
 						target_camera_pos += shake_offset
-						
-						# Direct assignment to prevent relative lag
 						camera.global_position = target_camera_pos
 
 		if not first_person_active and is_instance_valid(camera):
-			camera.near = 0.05 # Restore default near clip
+			camera.near = 0.05
 			camera.position = _effective_camera_base_local() + shake_offset
-
-		# Apply idle arm adjustments (hands down) for all spawned player avatars during idle animation
-		for p_idx in player_avatars:
-			var avatar = player_avatars[p_idx]
-			if is_instance_valid(avatar) and avatar.visible:
-				var ap = avatar.get_node_or_null("AnimationPlayer") as AnimationPlayer
-				if ap:
-					if _drink_timers.has(p_idx):
-						_drink_timers[p_idx] -= delta
-						if _drink_timers[p_idx] <= 0.0:
-							var beer_node = _drink_beers.get(p_idx)
-							if is_instance_valid(beer_node):
-								_reset_beer_mug_transform(beer_node)
-							_drink_timers.erase(p_idx)
-							_drink_beers.erase(p_idx)
-
-					if not avatar_arm_weights.has(p_idx):
-						avatar_arm_weights[p_idx] = 1.0
-					
-					var target_w = 1.0 if ap.current_animation == "idle" else 0.0
-					avatar_arm_weights[p_idx] = move_toward(avatar_arm_weights[p_idx], target_w, delta * 3.33)
-					
-					if p_idx == local_p_idx:
-						if _drink_timers.has(p_idx):
-							var drink_t = 1.8 - _drink_timers[p_idx]
-							var max_tilt = deg_to_rad(20.0)
-							if drink_t < 0.5:
-								_drink_camera_pitch_offset = 0.0
-							elif drink_t < 1.0:
-								_drink_camera_pitch_offset = max_tilt * ((drink_t - 0.5) / 0.5)
-							elif drink_t < 1.4:
-								_drink_camera_pitch_offset = max_tilt
-							else:
-								_drink_camera_pitch_offset = max_tilt * (1.0 - (drink_t - 1.4) / 0.4)
-						else:
-							_drink_camera_pitch_offset = 0.0
 
 func _update_cabinet_hover() -> void:
 	if not is_instance_valid(camera):
@@ -4111,8 +4181,8 @@ func _spawn_player_avatars() -> void:
 	var chair_rotations = {
 		0: 270.0,
 		1: 90.0,
-		2: 90.0,
-		3: 90.0
+		2: 270.0,
+		3: 270.0
 	}
 
 	for i in range(4):
@@ -4165,85 +4235,13 @@ func _spawn_player_avatars() -> void:
 		avatar_arm_weights[i] = 1.0
 
 		var skeleton = char_node.get_node_or_null("Armature/Skeleton3D") as Skeleton3D
-		if skeleton and ap:
-			skeleton.skeleton_updated.connect(_on_avatar_skeleton_updated.bind(i, skeleton, ap))
+		if ap:
+			ap.callback_mode_process = AnimationPlayer.ANIMATION_PROCESS_IDLE
 
 	take_inst.queue_free()
 	_refresh_avatar_body_visibility()
 
-func _on_avatar_skeleton_updated(p_idx: int, skeleton: Skeleton3D, ap: AnimationPlayer) -> void:
-	if not is_instance_valid(skeleton) or not is_instance_valid(ap):
-		return
-		
-	# 1. Lock hips translation and rotation completely to rest position
-	var hips_idx = skeleton.find_bone("mixamorig_Hips")
-	if hips_idx != -1:
-		skeleton.set_bone_pose_position(hips_idx, Vector3(0.043546, -1.822579, -44.87878))
-		skeleton.set_bone_pose_rotation(hips_idx, Quaternion(-0.742863, -0.030465, -0.004276, 0.668737))
 
-	# 2. Apply idle arm adjustments (hands down) for spawned player avatars during idle animation
-	var w = avatar_arm_weights.get(p_idx, 0.0)
-	if w > 0.0:
-		var left_arm = skeleton.find_bone("mixamorig_LeftArm")
-		var left_forearm = skeleton.find_bone("mixamorig_LeftForeArm")
-		var right_arm = skeleton.find_bone("mixamorig_RightArm")
-		var right_forearm = skeleton.find_bone("mixamorig_RightForeArm")
-		
-		if left_arm != -1:
-			var anim_rot = skeleton.get_bone_pose_rotation(left_arm)
-			var target_rot = Quaternion.from_euler(Vector3(0.0, deg_to_rad(60.0), deg_to_rad(60.0)))
-			skeleton.set_bone_pose_rotation(left_arm, anim_rot.slerp(target_rot, w))
-		if left_forearm != -1:
-			var anim_rot = skeleton.get_bone_pose_rotation(left_forearm)
-			skeleton.set_bone_pose_rotation(left_forearm, anim_rot.slerp(Quaternion.IDENTITY, w))
-		if right_arm != -1:
-			var anim_rot = skeleton.get_bone_pose_rotation(right_arm)
-			var target_rot = Quaternion.from_euler(Vector3(0.0, deg_to_rad(-60.0), deg_to_rad(-60.0)))
-			skeleton.set_bone_pose_rotation(right_arm, anim_rot.slerp(target_rot, w))
-		if right_forearm != -1:
-			var anim_rot = skeleton.get_bone_pose_rotation(right_forearm)
-			skeleton.set_bone_pose_rotation(right_forearm, anim_rot.slerp(Quaternion.IDENTITY, w))
-
-	# 3. Drinking animation overrides
-	if _drink_timers.has(p_idx):
-		var drink_t = 1.8 - _drink_timers[p_idx]
-		var blend_w := 1.0
-		if drink_t < 0.15:
-			blend_w = drink_t / 0.15
-		elif drink_t > 1.65:
-			blend_w = (1.8 - drink_t) / 0.15
-			
-		var right_arm = skeleton.find_bone("mixamorig_RightArm")
-		var right_forearm = skeleton.find_bone("mixamorig_RightForeArm")
-		var neck = skeleton.find_bone("mixamorig_Neck")
-		var head = skeleton.find_bone("mixamorig_Head")
-		
-		if right_arm != -1:
-			var anim_rot = skeleton.get_bone_pose_rotation(right_arm)
-			var target_rot = _get_drink_bone_rotation("mixamorig_RightArm", drink_t)
-			skeleton.set_bone_pose_rotation(right_arm, anim_rot.slerp(target_rot, blend_w))
-		if right_forearm != -1:
-			var anim_rot = skeleton.get_bone_pose_rotation(right_forearm)
-			var target_rot = _get_drink_bone_rotation("mixamorig_RightForeArm", drink_t)
-			skeleton.set_bone_pose_rotation(right_forearm, anim_rot.slerp(target_rot, blend_w))
-		if neck != -1:
-			var anim_rot = skeleton.get_bone_pose_rotation(neck)
-			var target_rot = _get_drink_bone_rotation("mixamorig_Neck", drink_t)
-			skeleton.set_bone_pose_rotation(neck, anim_rot.slerp(target_rot, blend_w))
-		if head != -1:
-			var anim_rot = skeleton.get_bone_pose_rotation(head)
-			var target_rot = _get_drink_bone_rotation("mixamorig_Head", drink_t)
-			skeleton.set_bone_pose_rotation(head, anim_rot.slerp(target_rot, blend_w))
-			
-		if _drink_beers.has(p_idx) and is_instance_valid(_drink_beers[p_idx]):
-			var beer_node = _drink_beers[p_idx]
-			if drink_t >= 0.5:
-				var hand_idx = skeleton.find_bone("mixamorig_RightHand")
-				if hand_idx != -1:
-					var hand_trans = skeleton.global_transform * skeleton.get_bone_global_pose(hand_idx)
-					var offset_pos = hand_trans.basis * Vector3(0.015, 0.015, 0.0)
-					beer_node.global_position = hand_trans.origin + offset_pos
-					beer_node.global_basis = hand_trans.basis * Basis.from_euler(Vector3(deg_to_rad(-90), deg_to_rad(90), 0))
 
 func _refresh_avatar_body_visibility() -> void:
 	var local_idx := _human_ui_idx()
