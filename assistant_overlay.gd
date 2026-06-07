@@ -6,6 +6,7 @@ extends Control
 ## GameAssistant. Local only — never synced over the network.
 
 signal opened
+signal panel_closed
 
 const ACCENT := Color(0.95, 0.78, 0.25)
 const CYAN := Color(0.0, 1.0, 1.0)
@@ -25,7 +26,6 @@ const GREETING := "Hi, I'm Chippy! Ask me anything about the rules, or tap a que
 var _open := false
 var _history: Array = []
 
-var _help_btn: Button
 var _panel: PanelContainer
 var _chippy_label: Label
 var _answer_label: RichTextLabel
@@ -34,13 +34,25 @@ var _input: LineEdit
 var _send_btn: Button
 var _close_btn: Button
 var _chips_grid: GridContainer
+var _bound_help_btn: Button = null
+var _thinking_label: Label
+var _steps_label: Label
+var _busy := false
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_build_help_button()
+	z_index = 25
 	_build_panel()
 	_render_history()
+
+func bind_help_button(btn: Button) -> void:
+	_bound_help_btn = btn
+
+func reparent_panel_to(hud: Control) -> void:
+	if is_instance_valid(_panel) and is_instance_valid(hud):
+		_panel.reparent(hud)
+		_panel.z_index = 44
 
 # ── Public API ───────────────────────────────────────────────────────────────
 
@@ -54,13 +66,10 @@ func toggle_panel() -> void:
 		open_panel()
 
 func open_panel() -> void:
-	if not visible or _help_btn == null or not _help_btn.visible:
-		return
 	_open = true
 	if is_instance_valid(_panel):
 		_panel.visible = true
-	if is_instance_valid(_help_btn):
-		_help_btn.text = "X"
+		_panel.show()
 	if is_instance_valid(_input):
 		_input.grab_focus()
 	opened.emit()
@@ -69,84 +78,48 @@ func close_panel() -> void:
 	_open = false
 	if is_instance_valid(_panel):
 		_panel.visible = false
-	if is_instance_valid(_help_btn):
-		_help_btn.text = "?"
+		_panel.hide()
+	panel_closed.emit()
 
-## Show or hide the whole assistant (e.g. on pause / game over).
+func bring_to_front(hud: Control, help_btn: Button) -> void:
+	if not is_instance_valid(hud):
+		return
+	if is_instance_valid(_panel) and _panel.get_parent() == hud:
+		hud.move_child(_panel, -1)
+		_panel.z_index = 47
+	if is_instance_valid(help_btn):
+		hud.move_child(help_btn, -1)
+		help_btn.z_index = 48
+
+## Enable/disable the assistant panel (help button visibility is managed by the board).
 func set_available(available: bool) -> void:
-	visible = available
-	if is_instance_valid(_help_btn):
-		_help_btn.visible = available
 	if not available:
 		close_panel()
 
-## True if the point hits the help button or the open panel (for HUD click-guard).
+## True if the point hits the open Q&A panel (help button is checked by the board).
 func consumes_point(screen_pos: Vector2) -> bool:
-	if is_instance_valid(_help_btn) and _help_btn.visible \
-			and _help_btn.get_global_rect().has_point(screen_pos):
-		return true
 	if _open and is_instance_valid(_panel) \
 			and _panel.get_global_rect().has_point(screen_pos):
 		return true
 	return false
 
-## Position the "?" button above the emote button and the panel above the "?".
-func apply_layout(scale: float, margin: float, emote_btn_h: float) -> void:
-	var btn_w := 150.0 * scale
-	var btn_h := 40.0 * scale
-	if is_instance_valid(_help_btn):
-		_help_btn.offset_right = -margin
-		_help_btn.offset_left = -btn_w - margin
-		_help_btn.offset_bottom = -(emote_btn_h + margin * 2.0)
-		_help_btn.offset_top = _help_btn.offset_bottom - btn_h
-		_help_btn.custom_minimum_size = Vector2(btn_w, btn_h)
-		_help_btn.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(22))
-
-	if is_instance_valid(_panel):
-		var vp := get_viewport().get_visible_rect().size
-		var panel_w := 360.0 * scale
-		var panel_h := minf(380.0 * scale, vp.y - emote_btn_h - btn_h - margin * 6.0)
-		_panel.offset_right = -margin
-		_panel.offset_left = -panel_w - margin
-		_panel.offset_bottom = -(emote_btn_h + btn_h + margin * 3.0)
-		_panel.offset_top = _panel.offset_bottom - panel_h
+## Position the Q&A panel above the help button stack.
+func apply_layout(scale: float, margin: float, emote_btn_h: float, help_btn_h: float, tutorial_mode: bool) -> void:
+	if not is_instance_valid(_panel):
+		return
+	var vp := get_viewport().get_visible_rect().size
+	var panel_w := 360.0 * scale
+	var help_stack_bottom := emote_btn_h + help_btn_h + margin * 3.0
+	if tutorial_mode:
+		help_stack_bottom += 280.0 * scale
+	var panel_h := minf(380.0 * scale, vp.y - help_stack_bottom - margin * 2.0)
+	_panel.offset_right = -margin
+	_panel.offset_left = -panel_w - margin
+	_panel.offset_bottom = -help_stack_bottom
+	_panel.offset_top = _panel.offset_bottom - panel_h
+	_panel.custom_minimum_size = Vector2(panel_w, maxf(panel_h, 220.0 * scale))
 
 # ── UI construction ──────────────────────────────────────────────────────────
-
-func _build_help_button() -> void:
-	_help_btn = Button.new()
-	_help_btn.name = "AssistantHelpButton"
-	_help_btn.text = "?"
-	_help_btn.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_help_btn.offset_left = -170.0
-	_help_btn.offset_top = -118.0
-	_help_btn.offset_right = -20.0
-	_help_btn.offset_bottom = -78.0
-	_help_btn.custom_minimum_size = Vector2(150, 40)
-	_help_btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	_help_btn.add_theme_font_size_override("font_size", 22)
-	_help_btn.add_theme_color_override("font_color", CYAN)
-	_help_btn.add_theme_color_override("font_hover_color", Color.WHITE)
-	_help_btn.add_theme_color_override("font_pressed_color", CYAN.lightened(0.25))
-
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.05, 0.07, 0.1, 0.85)
-	normal.set_border_width_all(2)
-	normal.border_color = Color(CYAN.r, CYAN.g, CYAN.b, 0.6)
-	normal.set_corner_radius_all(10)
-	normal.shadow_color = Color(0, 0, 0, 0.45)
-	normal.shadow_size = 6
-	var hover := normal.duplicate()
-	hover.bg_color = Color(0.04, 0.12, 0.14, 0.95)
-	hover.border_color = CYAN
-	var pressed := hover.duplicate()
-	pressed.bg_color = Color(0.04, 0.18, 0.2, 0.95)
-	_help_btn.add_theme_stylebox_override("normal", normal)
-	_help_btn.add_theme_stylebox_override("hover", hover)
-	_help_btn.add_theme_stylebox_override("pressed", pressed)
-
-	_help_btn.pressed.connect(toggle_panel)
-	add_child(_help_btn)
 
 func _build_panel() -> void:
 	_panel = PanelContainer.new()
@@ -217,6 +190,22 @@ func _build_panel() -> void:
 	rule.color = Color(CYAN.r, CYAN.g, CYAN.b, 0.35)
 	rule.custom_minimum_size = Vector2(0, 1)
 	vbox.add_child(rule)
+
+	# Thinking indicator (shown briefly while Chippy "reasons")
+	_thinking_label = Label.new()
+	_thinking_label.text = "Chippy is thinking..."
+	_thinking_label.add_theme_font_size_override("font_size", 12)
+	_thinking_label.add_theme_color_override("font_color", ACCENT)
+	_thinking_label.visible = false
+	vbox.add_child(_thinking_label)
+
+	# Reasoning steps (last few), small + dim
+	_steps_label = Label.new()
+	_steps_label.add_theme_font_size_override("font_size", 10)
+	_steps_label.add_theme_color_override("font_color", Color(0.55, 0.6, 0.7))
+	_steps_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_steps_label.visible = false
+	vbox.add_child(_steps_label)
 
 	# Answer / history scroll
 	_scroll = ScrollContainer.new()
@@ -319,20 +308,53 @@ func _on_chip_pressed(query: String) -> void:
 
 func _submit(question: String) -> void:
 	var q := question.strip_edges()
-	if q == "":
+	if q == "" or _busy:
 		return
-	var result: Dictionary = GameAssistant.ask(q)
+	_busy = true
+
+	# Show the "thinking" state up front so Chippy feels like it's reasoning.
+	if is_instance_valid(_thinking_label):
+		_thinking_label.visible = true
+	if is_instance_valid(_steps_label):
+		_steps_label.visible = false
+	if is_instance_valid(_chippy_label):
+		_chippy_label.text = _resolve_face("cool")
+	if is_instance_valid(_input):
+		_input.clear()
+	if is_instance_valid(_send_btn):
+		_send_btn.disabled = true
+
+	var result: Dictionary = await GameAssistant.ask_async(q)
+
+	if is_instance_valid(_thinking_label):
+		_thinking_label.visible = false
+	if is_instance_valid(_send_btn):
+		_send_btn.disabled = false
+
 	_history.append({"q": q, "result": result})
 	while _history.size() > HISTORY_MAX:
 		_history.pop_front()
-	if is_instance_valid(_input):
-		_input.clear()
 	if is_instance_valid(_chippy_label):
 		_chippy_label.text = _resolve_face(str(result.get("face", "happy")))
+	_render_steps(result.get("thinking_steps", []))
 	_render_history()
+	_busy = false
 	await get_tree().process_frame
 	if is_instance_valid(_scroll):
 		_scroll.scroll_vertical = int(_scroll.get_v_scroll_bar().max_value)
+
+func _render_steps(steps: Array) -> void:
+	if not is_instance_valid(_steps_label):
+		return
+	if steps.is_empty():
+		_steps_label.visible = false
+		return
+	var shown: Array = steps.slice(maxi(0, steps.size() - 3))
+	var parts: Array = []
+	for s in shown:
+		parts.append("> " + str(s))
+	_steps_label.text = "\n".join(parts)
+	_steps_label.visible = true
 
 func _render_history() -> void:
 	if not is_instance_valid(_answer_label):

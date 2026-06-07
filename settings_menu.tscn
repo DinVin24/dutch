@@ -283,6 +283,21 @@ text = "Game Assistant (?)"
 layout_mode = 2
 button_pressed = true
 
+[node name="DeepReasoningRow" type="HBoxContainer" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="DeepReasoningLabel" type="Label" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/DeepReasoningRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1.0)
+theme_override_font_sizes/font_size = 17
+text = "Assistant Deep Reasoning"
+
+[node name="DeepReasoningCheck" type="CheckBox" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/DeepReasoningRow"]
+layout_mode = 2
+button_pressed = true
+
 [node name="KeybindDivider" type="ColorRect" parent="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 1)
@@ -441,6 +456,7 @@ script = ExtResource("2_sfx")
 [connection signal="value_changed" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/AUDIO/AudioMargin/AudioVBox/AudioGrid/SFXSlider" to="." method="_on_sfx_value_changed"]
 [connection signal="toggled" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/DevConsoleRow/DevConsoleCheck" to="." method="_on_dev_console_toggled"]
 [connection signal="toggled" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/GameAssistantRow/GameAssistantCheck" to="." method="_on_game_assistant_toggled"]
+[connection signal="toggled" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/DeepReasoningRow/DeepReasoningCheck" to="." method="_on_deep_reasoning_toggled"]
 [connection signal="pressed" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/EndTurnBind" to="." method="_on_keybind_button_pressed" binds= ["game_end_turn", "Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/EndTurnBind"]]
 [connection signal="pressed" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/JumpInBind" to="." method="_on_keybind_button_pressed" binds= ["game_jump_in", "Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/JumpInBind"]]
 [connection signal="pressed" from="Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/CallDutchBind" to="." method="_on_keybind_button_pressed" binds= ["game_call_dutch", "Center/OuterMargin/PanelShell/InnerMargin/Panel/Tabs/CONTROLS/ControlsMargin/ControlsVBox/KeybindsGrid/CallDutchBind"]]

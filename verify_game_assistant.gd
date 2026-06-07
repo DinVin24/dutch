@@ -86,20 +86,80 @@ func _run() -> void:
 			await process_frame
 	if gm.current_state != gm.GameState.TURN_START_DRAW:
 		gm.change_state(gm.GameState.TURN_START_DRAW, true)
+	gm.current_player_index = 0
 	for _i in HOLD_FRAMES:
 		await process_frame
 
+	# ── Deep reasoning: GameContext snapshot ────────────────────────────────
+	var context := root.get_node_or_null("GameContext")
+	if context == null:
+		_fail("GameContext autoload missing")
+		return
+	gm.assistant_deep_reasoning = true
+	var snap: Dictionary = context.build_snapshot(0)
+	if not snap.get("valid", false):
+		_fail("GameContext snapshot invalid during live game")
+		return
+	if not snap.get("is_my_turn", false):
+		_fail("Snapshot should report it is player 0's turn")
+		return
+	if not ("draw" in snap.get("allowed_actions", [])):
+		_fail("Snapshot allowed_actions should include 'draw' in TURN_START_DRAW")
+		return
+	_log("OK context snapshot: state=%s allowed=%s" % [snap.get("fsm_state", ""), str(snap.get("allowed_actions", []))])
+
+	# ── What-now intent ─────────────────────────────────────────────────────
+	var what_now: Dictionary = assistant.ask("ce fac acum")
+	if not str(what_now.get("answer", "")).to_lower().contains("draw"):
+		_fail("What-now in TURN_START_DRAW should mention drawing, got: %s" % what_now.get("answer", ""))
+		return
+	_log("OK what-now mentions draw")
+
+	# ── Situational allowed: can I draw now ─────────────────────────────────
+	var can_draw: Dictionary = assistant.ask("can i draw right now")
+	if not str(can_draw.get("answer", "")).contains("CAN draw"):
+		_fail("Should confirm drawing is allowed, got: %s" % can_draw.get("answer", ""))
+		return
+	_log("OK situational confirms draw allowed")
+
+	# ── Anti-hallucination: can I call dutch now (NOT allowed here) ──────────
+	var bad_dutch: Dictionary = assistant.ask("can i call dutch right now")
+	var bad_ans: String = str(bad_dutch.get("answer", ""))
+	if bad_ans.contains("CAN call Dutch"):
+		_fail("Anti-hallucination: must NOT claim Dutch is allowed in TURN_START_DRAW")
+		return
+	if not bad_ans.contains("can't call Dutch"):
+		_fail("Should clearly deny calling Dutch, got: %s" % bad_ans)
+		return
+	_log("OK anti-hallucination: Dutch correctly denied")
+
+	# ── Deep mode OFF -> simple, no synthesized tags ─────────────────────────
+	gm.assistant_deep_reasoning = false
+	var simple: Dictionary = assistant.ask("what is dutch")
+	if str(simple.get("topic_id", "")) != "dutch":
+		_fail("Simple mode should still answer Dutch, got '%s'" % simple.get("topic_id", ""))
+		return
+	if str(simple.get("answer", "")).contains("[Situation]"):
+		_fail("Simple mode answer should not contain synthesized [Situation] tags")
+		return
+	_log("OK deep mode OFF falls back to simple answers")
+	gm.assistant_deep_reasoning = true
+
 	var overlay: Control = board.get("_assistant_overlay")
+	var help_btn: Button = board.get("_assistant_help_btn")
 	if overlay == null or not is_instance_valid(overlay):
 		_fail("Assistant overlay not created")
 		return
-	if not overlay.visible:
-		_fail("Assistant overlay should be visible in-game")
+	if help_btn == null or not is_instance_valid(help_btn):
+		_fail("Assistant help button not created")
 		return
-	_log("OK assistant overlay present and visible")
+	if not help_btn.visible:
+		_fail("Assistant help button should be visible in-game")
+		return
+	_log("OK assistant overlay present and help button visible")
 
-	# Open via the "?" button toggle
-	overlay.open_panel()
+	# Open via the help button toggle
+	board._toggle_assistant_panel()
 	for _i in HOLD_FRAMES:
 		await process_frame
 	if not overlay.is_open():
@@ -135,10 +195,18 @@ func _run() -> void:
 
 	# Settings toggle hides the assistant
 	gm.show_game_assistant = false
+	board._update_assistant_visibility()
 	for _i in HOLD_FRAMES:
 		await process_frame
-	if overlay.visible:
-		_fail("Assistant should hide when show_game_assistant is off")
+	if gm.show_game_assistant:
+		_fail("show_game_assistant flag was not cleared")
+		return
+	var help_after: Button = board.get("_assistant_help_btn")
+	if help_after == null or not is_instance_valid(help_after):
+		_fail("Assistant help button missing after settings toggle")
+		return
+	if help_after.visible:
+		_fail("Assistant help button should hide when show_game_assistant is off")
 		return
 	_log("OK assistant hidden when disabled in settings")
 

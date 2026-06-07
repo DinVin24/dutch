@@ -4,8 +4,10 @@ extends Node
 ## Entries are loaded from res://data/game_knowledge.json. A tiny embedded
 ## fallback keeps the assistant functional if the file is missing.
 ##
-## Each entry: { id, tags[], patterns[], answer, face }
+## Each entry: { id, tags[], patterns[], answer, face, related[], situational_triggers[] }
 ## "face" is a keyword resolved to a Chippy ASCII face by the assistant UI.
+## "related" lists ids of connected topics; "situational_triggers" are action
+## keywords (e.g. "jump_in") that link a topic to the live game context.
 
 const KNOWLEDGE_PATH := "res://data/game_knowledge.json"
 
@@ -60,6 +62,8 @@ func _read_from_file() -> Array:
 			"patterns": raw.get("patterns", []),
 			"face": str(raw.get("face", "happy")),
 			"answer": str(raw.get("answer", "")),
+			"related": raw.get("related", []),
+			"situational_triggers": raw.get("situational_triggers", []),
 		})
 	return loaded
 
@@ -69,5 +73,13 @@ func all_entries() -> Array:
 func get_entry(entry_id: String) -> Dictionary:
 	for e in entries:
 		if e.get("id", "") == entry_id:
+			return e
+	return {}
+
+## Returns the entry whose situational_triggers contains the given action key,
+## or an empty dictionary if none match.
+func entry_for_trigger(trigger: String) -> Dictionary:
+	for e in entries:
+		if trigger in e.get("situational_triggers", []):
 			return e
 	return {}

@@ -48,7 +48,9 @@ func load_and_apply_settings() -> void:
 
 	# Gameplay
 	if config.has_section_key("gameplay", "show_game_assistant"):
-		GameManager.show_game_assistant = bool(config.get_value("gameplay", "show_game_assistant"))
+		GameManager.show_game_assistant = bool(config.get_value("gameplay", "show_game_assistant", true))
+	if config.has_section_key("gameplay", "assistant_deep_reasoning"):
+		GameManager.assistant_deep_reasoning = bool(config.get_value("gameplay", "assistant_deep_reasoning", true))
 
 	for action in CONFIGURABLE_ACTIONS:
 		if config.has_section_key("keybinds", action):
@@ -77,6 +79,7 @@ func save_settings() -> void:
 
 	# Gameplay
 	config.set_value("gameplay", "show_game_assistant", GameManager.show_game_assistant)
+	config.set_value("gameplay", "assistant_deep_reasoning", GameManager.assistant_deep_reasoning)
 
 	for action in CONFIGURABLE_ACTIONS:
 		var events = InputMap.action_get_events(action)

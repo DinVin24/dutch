@@ -101,6 +101,7 @@ var jump_in_was_own_draw_phase: bool = false
 var easy_mode: bool = false # Easy Mode: Player 0's cards are always visible
 var tutorial_mode: bool = false # Tutorial Mode: TutorialOverlay is instantiated on the board
 var show_game_assistant: bool = true # Permanent Chippy Q&A "?" button on the board
+var assistant_deep_reasoning: bool = true # Chippy uses the 4-step offline reasoning pipeline
 var global_ability_counts: Dictionary = {
 	"perfect_match": 0,
 	"polarity_shift": 0
