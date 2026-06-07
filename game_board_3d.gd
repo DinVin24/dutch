@@ -112,6 +112,9 @@ var _ability_desc_panel: PanelContainer = null
 var player_avatars: Dictionary = {}
 var avatar_arm_weights: Dictionary = {}
 var _camera_initialized: bool = false
+var _drink_timers: Dictionary = {}
+var _drink_beers: Dictionary = {}
+var _drink_camera_pitch_offset: float = 0.0
 var _base_head_y: float = 0.0
 const FP_EYE_HEIGHT_OFFSET: float = 3.65  # meters above hips anchor (raised much higher for overview)
 var _look_yaw: float = 0.0
@@ -1028,6 +1031,8 @@ func _create_beer_placeholders():
 			beer.position = Vector3(right_x_base + right_offset, beer_y_offset, front_z)
 			beer.set_meta("base_scale", beer.scale)
 			beer.set_meta("base_y", beer_y_offset)
+			beer.set_meta("base_position", beer.position)
+			beer.set_meta("base_rotation", beer.rotation)
 			_apply_beer_visual_state(beer, BeerVisualState.FULL, false)
 			pos_node.add_child(beer)
 			player_beers_nodes[i].append(beer)
@@ -1351,7 +1356,7 @@ func _on_ability_finished() -> void:
 	$DiscardArea/Area3D.input_ray_pickable = GameManager.can_player_discard_drawn_card(_human_ui_idx())
 
 func _on_player_drank_beer(player_idx, remaining):
-	play_take_animation(player_idx)
+	play_drink_animation(player_idx, remaining)
 	if player_idx < 0 or player_idx >= 4:
 		return
 	var beers_array = player_beers_nodes[player_idx]
@@ -1361,7 +1366,9 @@ func _on_player_drank_beer(player_idx, remaining):
 			beers_array[i].visible = true
 			_apply_beer_visual_state(beers_array[i], BeerVisualState.FULL, false)
 		elif beers_array[i].visible and i >= remaining:
-			_animate_beer_emptying(beers_array[i])
+			get_tree().create_timer(0.5, false).timeout.connect(func():
+				_animate_beer_emptying(beers_array[i])
+			)
 		else:
 			beers_array[i].visible = false
 	if remaining < prev_remaining:
@@ -1390,8 +1397,14 @@ func _reset_beer_mug_transform(beer_node: Node3D) -> void:
 		return
 	_remove_legacy_liquid_fill(beer_node)
 	beer_node.scale = beer_node.get_meta("base_scale", beer_scale)
-	beer_node.position.y = beer_node.get_meta("base_y", beer_y_offset)
-	beer_node.rotation_degrees.z = 0.0
+	if beer_node.has_meta("base_position"):
+		beer_node.position = beer_node.get_meta("base_position")
+	else:
+		beer_node.position.y = beer_node.get_meta("base_y", beer_y_offset)
+	if beer_node.has_meta("base_rotation"):
+		beer_node.rotation = beer_node.get_meta("base_rotation")
+	else:
+		beer_node.rotation_degrees.z = 0.0
 
 func _apply_beer_visual_state(beer_node: Node3D, state: BeerVisualState, animate: bool) -> void:
 	if not is_instance_valid(beer_node):
@@ -3021,12 +3034,13 @@ func _process(delta: float) -> void:
 			0
 		)
 
+	_drink_camera_pitch_offset = 0.0
 	if noclip_enabled and not DevConsole.window.visible:
 		_handle_noclip_movement(delta)
 	elif not noclip_enabled:
 		# Rotate camera smoothly towards the look angles accumulated from mouse motion
 		camera.rotation.y = lerp_angle(camera.rotation.y, _base_camera_rotation.y + _look_yaw, delta * 12.0)
-		camera.rotation.x = lerp_angle(camera.rotation.x, _base_camera_rotation.x + _look_pitch, delta * 12.0)
+		camera.rotation.x = lerp_angle(camera.rotation.x, _base_camera_rotation.x + _look_pitch + _drink_camera_pitch_offset, delta * 12.0)
 
 		# First-Person Camera and Head tracking for the local human player
 		var first_person_active = false
@@ -3137,6 +3151,20 @@ func _process(delta: float) -> void:
 				var skeleton = avatar.get_node_or_null("Armature/Skeleton3D") as Skeleton3D
 				var ap = avatar.get_node_or_null("AnimationPlayer") as AnimationPlayer
 				if skeleton and ap:
+					var is_drinking := false
+					var drink_t := 0.0
+					if _drink_timers.has(p_idx):
+						_drink_timers[p_idx] -= delta
+						if _drink_timers[p_idx] <= 0.0:
+							var beer_node = _drink_beers.get(p_idx)
+							if is_instance_valid(beer_node):
+								_reset_beer_mug_transform(beer_node)
+							_drink_timers.erase(p_idx)
+							_drink_beers.erase(p_idx)
+						else:
+							is_drinking = true
+							drink_t = 1.8 - _drink_timers[p_idx]
+
 					if not avatar_arm_weights.has(p_idx):
 						avatar_arm_weights[p_idx] = 1.0
 					
@@ -3164,6 +3192,56 @@ func _process(delta: float) -> void:
 						if right_forearm != -1:
 							var anim_rot = skeleton.get_bone_pose_rotation(right_forearm)
 							skeleton.set_bone_pose_rotation(right_forearm, anim_rot.slerp(Quaternion.IDENTITY, w))
+							
+					if is_drinking:
+						var blend_w := 1.0
+						if drink_t < 0.15:
+							blend_w = drink_t / 0.15
+						elif drink_t > 1.65:
+							blend_w = (1.8 - drink_t) / 0.15
+							
+						var right_arm = skeleton.find_bone("mixamorig_RightArm")
+						var right_forearm = skeleton.find_bone("mixamorig_RightForeArm")
+						var neck = skeleton.find_bone("mixamorig_Neck")
+						var head = skeleton.find_bone("mixamorig_Head")
+						
+						if right_arm != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(right_arm)
+							var target_rot = _get_drink_bone_rotation("mixamorig_RightArm", drink_t)
+							skeleton.set_bone_pose_rotation(right_arm, anim_rot.slerp(target_rot, blend_w))
+						if right_forearm != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(right_forearm)
+							var target_rot = _get_drink_bone_rotation("mixamorig_RightForeArm", drink_t)
+							skeleton.set_bone_pose_rotation(right_forearm, anim_rot.slerp(target_rot, blend_w))
+						if neck != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(neck)
+							var target_rot = _get_drink_bone_rotation("mixamorig_Neck", drink_t)
+							skeleton.set_bone_pose_rotation(neck, anim_rot.slerp(target_rot, blend_w))
+						if head != -1:
+							var anim_rot = skeleton.get_bone_pose_rotation(head)
+							var target_rot = _get_drink_bone_rotation("mixamorig_Head", drink_t)
+							skeleton.set_bone_pose_rotation(head, anim_rot.slerp(target_rot, blend_w))
+							
+						if _drink_beers.has(p_idx) and is_instance_valid(_drink_beers[p_idx]):
+							var beer_node = _drink_beers[p_idx]
+							if drink_t >= 0.5:
+								var hand_idx = skeleton.find_bone("mixamorig_RightHand")
+								if hand_idx != -1:
+									var hand_trans = skeleton.global_transform * skeleton.get_bone_global_pose(hand_idx)
+									var offset_pos = hand_trans.basis * Vector3(0.015, 0.015, 0.0)
+									beer_node.global_position = hand_trans.origin + offset_pos
+									beer_node.global_basis = hand_trans.basis * Basis.from_euler(Vector3(deg_to_rad(-90), deg_to_rad(90), 0))
+									
+						if p_idx == local_p_idx:
+							var max_tilt = deg_to_rad(20.0)
+							if drink_t < 0.5:
+								_drink_camera_pitch_offset = 0.0
+							elif drink_t < 1.0:
+								_drink_camera_pitch_offset = max_tilt * ((drink_t - 0.5) / 0.5)
+							elif drink_t < 1.4:
+								_drink_camera_pitch_offset = max_tilt
+							else:
+								_drink_camera_pitch_offset = max_tilt * (1.0 - (drink_t - 1.4) / 0.4)
 
 func _update_cabinet_hover() -> void:
 	if not is_instance_valid(camera):
@@ -4095,8 +4173,8 @@ func _spawn_player_avatars() -> void:
 	var chair_rotations = {
 		0: 270.0,
 		1: 90.0,
-		2: 90.0,
-		3: 90.0
+		2: 270.0,
+		3: 270.0
 	}
 
 	for i in range(4):
@@ -4200,6 +4278,61 @@ func play_take_animation(player_idx: int) -> void:
 		if ap:
 			ap.play("take", 0.2)
 			ap.queue("idle")
+
+func play_drink_animation(player_idx: int, remaining: int) -> void:
+	_drink_timers[player_idx] = 1.8
+	var beers_array = player_beers_nodes[player_idx]
+	if remaining < beers_array.size() and is_instance_valid(beers_array[remaining]):
+		_drink_beers[player_idx] = beers_array[remaining]
+	
+	if player_avatars.has(player_idx) and is_instance_valid(player_avatars[player_idx]):
+		var char_node = player_avatars[player_idx]
+		var ap: AnimationPlayer = char_node.get_node("AnimationPlayer")
+		if ap:
+			ap.play("idle", 0.3)
+
+func _get_drink_bone_rotation(bone_name: String, t: float) -> Quaternion:
+	var rot := Vector3.ZERO
+	if bone_name == "mixamorig_RightArm":
+		if t < 0.5:
+			var p = t / 0.5
+			rot = Vector3(-15, -30, -20) * p
+		elif t < 1.0:
+			var p = (t - 0.5) / 0.5
+			rot = Vector3(-15, -30, -20).lerp(Vector3(-75, -55, -40), p)
+		elif t < 1.4:
+			rot = Vector3(-75, -55, -40)
+		else:
+			var p = (t - 1.4) / 0.4
+			rot = Vector3(-75, -55, -40).lerp(Vector3.ZERO, p)
+			
+	elif bone_name == "mixamorig_RightForeArm":
+		if t < 0.5:
+			var p = t / 0.5
+			rot = Vector3(0, 30, 0) * p
+		elif t < 1.0:
+			var p = (t - 0.5) / 0.5
+			rot = Vector3(0, 30, 0).lerp(Vector3(0, 95, 0), p)
+		elif t < 1.4:
+			rot = Vector3(0, 95, 0)
+		else:
+			var p = (t - 1.4) / 0.4
+			rot = Vector3(0, 95, 0).lerp(Vector3.ZERO, p)
+			
+	elif bone_name == "mixamorig_Neck" or bone_name == "mixamorig_Head":
+		var max_tilt = Vector3(-20, 0, 0) if bone_name == "mixamorig_Neck" else Vector3(-15, 0, 0)
+		if t < 0.5:
+			rot = Vector3.ZERO
+		elif t < 1.0:
+			var p = (t - 0.5) / 0.5
+			rot = max_tilt * p
+		elif t < 1.4:
+			rot = max_tilt
+		else:
+			var p = (t - 1.4) / 0.4
+			rot = max_tilt * (1.0 - p)
+			
+	return Quaternion.from_euler(Vector3(deg_to_rad(rot.x), deg_to_rad(rot.y), deg_to_rad(rot.z)))
 
 func _on_mp_connection_status_changed(lag_ms: int, status: String) -> void:
 	_update_mp_connection_label(lag_ms, status)
