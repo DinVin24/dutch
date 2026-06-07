@@ -3180,7 +3180,7 @@ func _process(delta: float) -> void:
 						if hand_idx != -1:
 							var hand_trans = skeleton.global_transform * skeleton.get_bone_global_pose(hand_idx)
 							var hand_basis_normalized = hand_trans.basis.orthonormalized()
-							var target_gpos = hand_trans.origin + hand_basis_normalized * Vector3(0.05, 0.05, 0.0)
+							var target_gpos = hand_trans.origin + hand_basis_normalized * Vector3(0.05, 0.025, -0.01)
 							var target_gbasis = hand_basis_normalized * Basis.from_euler(Vector3(deg_to_rad(-90), deg_to_rad(90), 0)) * Basis.from_scale(beer_node.scale)
 							
 							var base_pos = beer_node.get_meta("base_position") if beer_node.has_meta("base_position") else beer_node.position
@@ -4383,12 +4383,12 @@ func _get_drink_bone_rotation(bone_name: String, t: float) -> Quaternion:
 			rot = Vector3.ZERO
 		elif t < 1.0:
 			var p = (t - 0.5) / 0.5
-			rot = Vector3(0, 0, 30) * p
+			rot = Vector3(0, -10, 35) * p
 		elif t < 1.4:
-			rot = Vector3(0, 0, 30)
+			rot = Vector3(0, -10, 35)
 		else:
 			var p = (t - 1.4) / 0.4
-			rot = Vector3(0, 0, 30).lerp(Vector3.ZERO, p)
+			rot = Vector3(0, -10, 35).lerp(Vector3.ZERO, p)
 			
 	return Quaternion.from_euler(Vector3(deg_to_rad(rot.x), deg_to_rad(rot.y), deg_to_rad(rot.z)))
 
