@@ -68,6 +68,8 @@ var _emote_wheel_panel: PanelContainer = null
 var _emote_wheel_open: bool = false
 var _emote_cooldown_label: Label = null
 var _emote_buttons: Array[Button] = []
+var _emote_toggle_btn: Button = null
+var _emote_close_btn: Button = null
 var noclip_enabled: bool = false
 var base_camera_transform: Transform3D
 var camera_rot_x: float = 0.0
@@ -874,13 +876,22 @@ func _apply_responsive_hud_layout() -> void:
 		if desc_label:
 			desc_label.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(18))
 
+	var emote_btn_w := 150.0 * scale
+	var emote_btn_h := 48.0 * scale
+	if is_instance_valid(_emote_toggle_btn):
+		_emote_toggle_btn.offset_left = -emote_btn_w - margin
+		_emote_toggle_btn.offset_right = -margin
+		_emote_toggle_btn.offset_top = -emote_btn_h - margin
+		_emote_toggle_btn.offset_bottom = -margin
+		_emote_toggle_btn.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(18))
+		_emote_toggle_btn.custom_minimum_size = Vector2(emote_btn_w, emote_btn_h)
 	if is_instance_valid(_emote_wheel_panel):
-		var wheel_w := 248.0 * scale
-		var wheel_h := 238.0 * scale
+		var wheel_w := 268.0 * scale
+		var wheel_h := 268.0 * scale
 		_emote_wheel_panel.offset_left = -wheel_w - margin
 		_emote_wheel_panel.offset_right = -margin
-		_emote_wheel_panel.offset_top = -wheel_h - margin
-		_emote_wheel_panel.offset_bottom = -margin
+		_emote_wheel_panel.offset_top = -wheel_h - emote_btn_h - margin * 2.0
+		_emote_wheel_panel.offset_bottom = -emote_btn_h - margin * 2.0
 
 	if is_instance_valid(_jack_swap_banner):
 		_jack_swap_banner.offset_top = 100.0 * scale
@@ -903,7 +914,57 @@ func _apply_responsive_hud_layout() -> void:
 		top_center.offset_left = -vp.x * 0.45
 		top_center.offset_right = vp.x * 0.45
 
+func _create_emote_toggle_button() -> void:
+	_emote_toggle_btn = Button.new()
+	_emote_toggle_btn.name = "EmoteToggleButton"
+	_emote_toggle_btn.text = "EMOTE [T]"
+	_emote_toggle_btn.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_emote_toggle_btn.offset_left = -170.0
+	_emote_toggle_btn.offset_top = -68.0
+	_emote_toggle_btn.offset_right = -20.0
+	_emote_toggle_btn.offset_bottom = -20.0
+	_emote_toggle_btn.custom_minimum_size = Vector2(150, 48)
+	_emote_toggle_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	_emote_toggle_btn.add_theme_font_size_override("font_size", 18)
+	_emote_toggle_btn.add_theme_color_override("font_color", EMOTE_WHEEL_ACCENT)
+	_emote_toggle_btn.add_theme_color_override("font_hover_color", Color.WHITE)
+	_emote_toggle_btn.add_theme_color_override("font_pressed_color", EMOTE_WHEEL_ACCENT.lightened(0.25))
+
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.05, 0.06, 0.1, 0.85)
+	normal.border_width_left = 2
+	normal.border_width_right = 2
+	normal.border_width_top = 2
+	normal.border_width_bottom = 2
+	normal.border_color = Color(EMOTE_WHEEL_ACCENT.r, EMOTE_WHEEL_ACCENT.g, EMOTE_WHEEL_ACCENT.b, 0.7)
+	normal.corner_radius_top_left = 10
+	normal.corner_radius_top_right = 10
+	normal.corner_radius_bottom_left = 10
+	normal.corner_radius_bottom_right = 10
+	normal.shadow_color = Color(0, 0, 0, 0.45)
+	normal.shadow_size = 6
+
+	var hover := normal.duplicate()
+	hover.bg_color = Color(0.12, 0.1, 0.04, 0.95)
+	hover.border_color = EMOTE_WHEEL_ACCENT
+
+	var pressed := hover.duplicate()
+	pressed.bg_color = Color(0.2, 0.16, 0.04, 0.95)
+
+	var disabled := normal.duplicate()
+	disabled.bg_color = Color(0.05, 0.06, 0.1, 0.45)
+	disabled.border_color = Color(EMOTE_WHEEL_ACCENT.r, EMOTE_WHEEL_ACCENT.g, EMOTE_WHEEL_ACCENT.b, 0.2)
+
+	_emote_toggle_btn.add_theme_stylebox_override("normal", normal)
+	_emote_toggle_btn.add_theme_stylebox_override("hover", hover)
+	_emote_toggle_btn.add_theme_stylebox_override("pressed", pressed)
+	_emote_toggle_btn.add_theme_stylebox_override("disabled", disabled)
+
+	_emote_toggle_btn.pressed.connect(_toggle_emote_wheel)
+	$GameUI/MainHUD.add_child(_emote_toggle_btn)
+
 func _create_emote_wheel_ui() -> void:
+	_create_emote_toggle_button()
 	_emote_wheel_panel = PanelContainer.new()
 	_emote_wheel_panel.name = "EmoteWheel"
 	_emote_wheel_panel.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
@@ -938,14 +999,45 @@ func _create_emote_wheel_ui() -> void:
 	vbox.add_theme_constant_override("separation", 10)
 	_emote_wheel_panel.add_child(vbox)
 
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 8)
+	vbox.add_child(header)
+
 	var title := Label.new()
 	title.text = "> EMOTES <"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.add_theme_font_size_override("font_size", 15)
 	title.add_theme_color_override("font_color", EMOTE_WHEEL_ACCENT)
 	title.add_theme_color_override("font_shadow_color", Color(EMOTE_WHEEL_ACCENT.r, EMOTE_WHEEL_ACCENT.g, EMOTE_WHEEL_ACCENT.b, 0.25))
 	title.add_theme_constant_override("shadow_offset_y", 1)
-	vbox.add_child(title)
+	header.add_child(title)
+
+	_emote_close_btn = Button.new()
+	_emote_close_btn.text = "X"
+	_emote_close_btn.custom_minimum_size = Vector2(28, 28)
+	_emote_close_btn.add_theme_font_size_override("font_size", 14)
+	_emote_close_btn.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))
+	_emote_close_btn.add_theme_color_override("font_hover_color", Color.WHITE)
+	var close_normal := StyleBoxFlat.new()
+	close_normal.bg_color = Color(0.18, 0.05, 0.06, 0.65)
+	close_normal.border_width_left = 1
+	close_normal.border_width_right = 1
+	close_normal.border_width_top = 1
+	close_normal.border_width_bottom = 1
+	close_normal.border_color = Color(1.0, 0.3, 0.4, 0.6)
+	close_normal.corner_radius_top_left = 6
+	close_normal.corner_radius_top_right = 6
+	close_normal.corner_radius_bottom_left = 6
+	close_normal.corner_radius_bottom_right = 6
+	var close_hover := close_normal.duplicate()
+	close_hover.bg_color = Color(0.42, 0.08, 0.1, 0.85)
+	close_hover.border_color = Color(1.0, 0.5, 0.55, 0.95)
+	_emote_close_btn.add_theme_stylebox_override("normal", close_normal)
+	_emote_close_btn.add_theme_stylebox_override("hover", close_hover)
+	_emote_close_btn.add_theme_stylebox_override("pressed", close_hover)
+	_emote_close_btn.pressed.connect(_close_emote_wheel)
+	header.add_child(_emote_close_btn)
 
 	var grid := GridContainer.new()
 	grid.columns = 2
@@ -2847,6 +2939,10 @@ func _unhandled_input(event):
 	if event.is_action_pressed("ui_cancel"):
 		if DevConsole.window.is_visible():
 			return
+		if _emote_wheel_open:
+			_close_emote_wheel()
+			get_viewport().set_input_as_handled()
+			return
 		if GameManager.can_player_cancel_jump_in(GameManager.local_player_idx):
 			_send_action("cancel_jump_in")
 			_show_message("Jump-in cancelled.")
@@ -2965,7 +3061,7 @@ func _handle_game_keyboard_input(event: InputEvent) -> void:
 		_toggle_emote_wheel()
 		get_viewport().set_input_as_handled()
 
-	elif _emote_wheel_open and event.keycode >= KEY_1 and event.keycode <= KEY_4:
+	elif event is InputEventKey and event.keycode >= KEY_1 and event.keycode <= KEY_4:
 		var emote_idx: int = event.keycode - KEY_1
 		if emote_idx < GAME_EMOTES.size():
 			_on_emote_wheel_pressed(GAME_EMOTES[emote_idx].id)
@@ -3778,18 +3874,35 @@ func _toggle_emote_wheel() -> void:
 		return
 	if GameManager.current_state == GameManager.GameState.GAME_OVER:
 		return
-	_emote_wheel_open = not _emote_wheel_open
+	if _emote_wheel_open:
+		_close_emote_wheel()
+	else:
+		_open_emote_wheel()
+
+func _open_emote_wheel() -> void:
+	if pause_menu_instance != null:
+		return
+	if GameManager.current_state == GameManager.GameState.GAME_OVER:
+		return
+	_emote_wheel_open = true
 	if is_instance_valid(_emote_wheel_panel):
-		_emote_wheel_panel.visible = _emote_wheel_open
+		_emote_wheel_panel.visible = true
+	if is_instance_valid(_emote_toggle_btn):
+		_emote_toggle_btn.text = "CLOSE [T]"
+	_apply_gameplay_mouse_mode()
+
+func _close_emote_wheel() -> void:
+	_emote_wheel_open = false
+	if is_instance_valid(_emote_wheel_panel):
+		_emote_wheel_panel.visible = false
+	if is_instance_valid(_emote_toggle_btn):
+		_emote_toggle_btn.text = "EMOTE [T]"
 	_apply_gameplay_mouse_mode()
 
 func _on_emote_wheel_pressed(emote_id: String) -> void:
 	if not GameManager.request_emote(emote_id):
 		return
-	_emote_wheel_open = false
-	if is_instance_valid(_emote_wheel_panel):
-		_emote_wheel_panel.visible = false
-	_apply_gameplay_mouse_mode()
+	_close_emote_wheel()
 
 func _on_victory_emote_pressed(winner_id: int, emote_id: String) -> void:
 	GameManager.emit_player_emote(winner_id, emote_id, false)
@@ -3804,15 +3917,24 @@ func _update_emote_wheel_state() -> void:
 			and GameManager.current_state != GameManager.GameState.INITIALIZING
 	if not in_game or pause_menu_instance != null:
 		if _emote_wheel_open:
-			_emote_wheel_open = false
-			_emote_wheel_panel.visible = false
-			_apply_gameplay_mouse_mode()
+			_close_emote_wheel()
+		if is_instance_valid(_emote_toggle_btn):
+			_emote_toggle_btn.visible = false
+		return
+	if is_instance_valid(_emote_toggle_btn):
+		_emote_toggle_btn.visible = true
 
 	var remaining := GameManager.get_emote_cooldown_remaining(_human_ui_idx())
 	var on_cooldown := remaining > 0.0
 	for btn in _emote_buttons:
 		if is_instance_valid(btn):
 			btn.disabled = on_cooldown
+	if is_instance_valid(_emote_toggle_btn):
+		_emote_toggle_btn.disabled = on_cooldown
+		if on_cooldown:
+			_emote_toggle_btn.text = "WAIT %.1fs" % remaining
+		else:
+			_emote_toggle_btn.text = "CLOSE [T]" if _emote_wheel_open else "EMOTE [T]"
 	if is_instance_valid(_emote_cooldown_label):
 		if on_cooldown:
 			_emote_cooldown_label.text = "%.1fs" % remaining
@@ -4397,6 +4519,9 @@ func _is_mouse_over_hud(screen_pos: Vector2) -> bool:
 		return true
 	if _emote_wheel_open and is_instance_valid(_emote_wheel_panel) \
 			and _emote_wheel_panel.get_global_rect().has_point(screen_pos):
+		return true
+	if is_instance_valid(_emote_toggle_btn) and _emote_toggle_btn.visible \
+			and _emote_toggle_btn.get_global_rect().has_point(screen_pos):
 		return true
 	return false
 
