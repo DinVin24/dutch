@@ -1,19 +1,28 @@
 description: 'Dutch Player Agent Bot Evaluations'
 
+evaluateOptions:
+  timeoutMs: 300000
+
 prompts:
-  - file://prompts/bot_prompt.txt
+  - file://prompts/bot_prompt.json
 
 providers:
   - id: openai:chat:qwen/qwen3.5-9b
     config:
-      apiBaseUrl: ${DUTCH_LM_STUDIO_URL}
+      apiBaseUrl: http://127.0.0.1:1234/v1
       apiKey: lm-studio
+      max_tokens: 1500
+      timeout: 300000
+      body:
+        chat_template_kwargs:
+          enable_thinking: false
+
 
 tests:
   - vars:
       player_idx: 1
       allowed_actions: ['draw_card']
-      context: '{"fsm_state": "TURN_START_DRAW"}'
+      fsm_state: 'TURN_START_DRAW'
     options:
       disableVarExpansion: true
     assert:
@@ -23,7 +32,7 @@ tests:
   - vars:
       player_idx: 1
       allowed_actions: ['discard_drawn_card', 'swap_drawn_card']
-      context: '{"fsm_state": "TURN_RESOLVE_DRAWN"}'
+      fsm_state: 'TURN_RESOLVE_DRAWN'
     options:
       disableVarExpansion: true
     assert:
@@ -33,7 +42,7 @@ tests:
   - vars:
       player_idx: 1
       allowed_actions: ['peek_ability']
-      context: '{"fsm_state": "TURN_PEEK_ABILITY"}'
+      fsm_state: 'TURN_PEEK_ABILITY'
     options:
       disableVarExpansion: true
     assert:
@@ -43,7 +52,7 @@ tests:
   - vars:
       player_idx: 1
       allowed_actions: ['swap_ability']
-      context: '{"fsm_state": "TURN_SWAP_ABILITY"}'
+      fsm_state: 'TURN_SWAP_ABILITY'
     options:
       disableVarExpansion: true
     assert:
@@ -53,7 +62,7 @@ tests:
   - vars:
       player_idx: 1
       allowed_actions: ['confirm_dutch', 'forfeit_dutch']
-      context: '{"fsm_state": "TURN_CONFIRM_DUTCH"}'
+      fsm_state: 'TURN_CONFIRM_DUTCH'
     options:
       disableVarExpansion: true
     assert:
@@ -63,7 +72,7 @@ tests:
   - vars:
       player_idx: 1
       allowed_actions: ['buy_ability']
-      context: '{"fsm_state": "TURN_START_DRAW"}'
+      fsm_state: 'TURN_START_DRAW'
     options:
       disableVarExpansion: true
     assert:
@@ -73,9 +82,10 @@ tests:
   - vars:
       player_idx: 1
       allowed_actions: ['use_ability']
-      context: '{"fsm_state": "TURN_END_CHOICE"}'
+      fsm_state: 'TURN_END_CHOICE'
     options:
       disableVarExpansion: true
     assert:
       - type: contains
         value: 'use_ability'
+
