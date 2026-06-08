@@ -3,12 +3,45 @@
 This document tracks the technical state of the Dutch card game, including the Finite State Machine (FSM), manager responsibilities, and scene hierarchy.
 
 ## 🏗️ Core Architecture
+```mermaid
+graph TD
+    GameManager[GameManager Autoload] -->|Controls| FSM[Finite State Machine]
+    GameManager -->|Manages| Players[Player Data]
+    GameManager -->|Signals| GameBoard[GameBoard3D]
+    DeckManager[DeckManager Autoload] -->|Provides Cards| GameManager
+    BotController[BotController] -->|Observes| GameManager
+    BotController -->|Sends Actions| GameManager
+    NetworkManager[NetworkManager] -->|Syncs State| GameManager
+```
 - **GameManager (Autoload)**: Owns the FSM and overall game flow. All state transitions happen here.
 - **DeckManager (Autoload)**: Manages the deck and discard pile. Handles card creation and randomization.
 - **EconomyManager (Pending)**: Will handle money, beer consumption, and ability purchases.
 - **BotController**: Attaches to the game board at runtime to process bot turns and memory.
 
 ## 🔄 Finite State Machine (FSM)
+```mermaid
+stateDiagram-v2
+    [*] --> DEAL_CARDS
+    DEAL_CARDS --> INITIAL_PEEK
+    INITIAL_PEEK --> TURN_START_DRAW
+    
+    TURN_START_DRAW --> TURN_RESOLVE_DRAWN : Player draws card
+    TURN_RESOLVE_DRAWN --> TURN_END_CHOICE : Discards normal card
+    TURN_RESOLVE_DRAWN --> TURN_PEEK_ABILITY : Discards Queen
+    TURN_RESOLVE_DRAWN --> TURN_SWAP_ABILITY : Discards Jack
+    
+    TURN_PEEK_ABILITY --> TURN_END_CHOICE
+    TURN_SWAP_ABILITY --> TURN_END_CHOICE
+    
+    TURN_END_CHOICE --> TURN_CONFIRM_DUTCH : Player calls Dutch
+    TURN_END_CHOICE --> TURN_START_DRAW : Ends turn (Next Player)
+    
+    state "Interrupt (Anytime)" as Interrupt {
+        TURN_JUMP_IN_SELECTION
+    }
+    
+    TURN_CONFIRM_DUTCH --> GAME_OVER
+```
 Current States:
 - `DEAL_CARDS`: Initial card distribution (4 cards per player).
 - `INITIAL_PEEK`: Player selects 2 cards to see briefly.
