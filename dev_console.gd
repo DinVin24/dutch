@@ -83,7 +83,7 @@ func _on_input_text_submitted(new_text):
 	input.clear()
 	
 	if cmd == "help":
-		output.append_text("\n[color=yellow]Available commands: help, clear, exit, noclip, cards, give, remove, kill[/color]")
+		output.append_text("\n[color=yellow]Available commands: help, clear, exit, noclip, cards, give, remove, kill, setup[/color]")
 	elif cmd == "clear":
 		output.clear()
 	elif cmd == "exit":
@@ -102,6 +102,8 @@ func _on_input_text_submitted(new_text):
 		_cmd_remove(args)
 	elif cmd == "kill":
 		_cmd_kill(args)
+	elif cmd == "setup":
+		_cmd_setup(args)
 	else:
 		output.append_text("\n[color=red]command not recognized, use 'help' for all the commands[/color]")
 	
@@ -260,6 +262,73 @@ func _cmd_kill(args: Array):
 	# Force beers to 1 and drink to properly trigger natural elimination
 	GameManager.players_info[player.id].beers = 1
 	GameManager.drink_beer(player.id)
+
+func _cmd_setup(args: Array):
+	if args.size() < 1:
+		output.append_text("\n[color=red]Usage: setup <scenario>\nScenarios: jumpin, queen, jack, king, joker, dutch, endgame[/color]")
+		return
+	
+	var scenario = args[0].to_lower()
+	var players = GameManager.players_info
+	if players.is_empty():
+		output.append_text("\n[color=red]No active game session found.[/color]")
+		return
+		
+	var p_idx = GameManager.local_player_idx if GameManager.local_player_idx >= 0 else 0
+	var player = players[p_idx]
+	
+	match scenario:
+		"jumpin":
+			# Put a 5 of Spades in discard, give player a 5 of Hearts
+			var c1 = CardData.new("5", "Spades")
+			c1.is_face_up = true
+			var c2 = CardData.new("5", "Hearts")
+			c2.is_face_up = false
+			GameManager.deck_manager.discard_pile.append(c1)
+			if GameManager.deck_manager.has_signal("discard_pile_updated"):
+				GameManager.deck_manager.discard_pile_updated.emit()
+			else:
+				# fallback if signal is not in deck manager but handled via board
+				var scene = get_tree().current_scene
+				if scene.has_method("_update_discard_visual"):
+					scene._update_discard_visual()
+			player.hand.append(c2)
+			GameManager.hand_updated.emit(player.id)
+			output.append_text("\n[color=cyan]Setup Jump-In: Gave 5 of Hearts, Discarded 5 of Spades.[/color]")
+		"queen":
+			var c = CardData.new("Queen", "Hearts")
+			player.hand.append(c)
+			GameManager.hand_updated.emit(player.id)
+			output.append_text("\n[color=cyan]Setup Queen: Gave Queen of Hearts.[/color]")
+		"jack":
+			var c = CardData.new("Jack", "Spades")
+			player.hand.append(c)
+			GameManager.hand_updated.emit(player.id)
+			output.append_text("\n[color=cyan]Setup Jack: Gave Jack of Spades.[/color]")
+		"king":
+			var c = CardData.new("King", "Clubs")
+			player.hand.append(c)
+			GameManager.hand_updated.emit(player.id)
+			output.append_text("\n[color=cyan]Setup King: Gave King of Clubs.[/color]")
+		"joker":
+			var c = CardData.new("Joker", "Red")
+			player.hand.append(c)
+			GameManager.hand_updated.emit(player.id)
+			output.append_text("\n[color=cyan]Setup Joker: Gave Red Joker.[/color]")
+		"dutch":
+			player.hand.clear()
+			player.hand.append(CardData.new("Ace", "Spades"))
+			player.hand.append(CardData.new("2", "Hearts"))
+			GameManager.hand_updated.emit(player.id)
+			output.append_text("\n[color=cyan]Setup Dutch: Hand cleared and given Ace+2 (3 points total).[/color]")
+		"endgame":
+			for i in range(players.size()):
+				if i != player.id:
+					players[i].beers = 1
+					GameManager.drink_beer(i)
+			output.append_text("\n[color=cyan]Setup Endgame: Reduced all bots to 1 beer and forced a drink. Next failure eliminates them.[/color]")
+		_:
+			output.append_text("\n[color=red]Unknown scenario: " + scenario + "[/color]")
 
 func _find_player(p_name: String):
 	for p in GameManager.players_info:
