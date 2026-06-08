@@ -71,15 +71,15 @@ shader_parameter/time = 0.0
 
 [node name="GameBoard3D" type="Node3D" unique_id=1162522278]
 script = ExtResource("1_script")
-beer_scale = Vector3(4.5, 4.5, 4.5)
+beer_scale = Vector3(3.8, 3.8, 3.8)
 beer_spacing = 0.55
-beer_y_offset = 0.75
+beer_y_offset = 0.64
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=125711330]
 environment = SubResource("Environment_1")
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=701076918]
-transform = Transform3D(1, 0, 0, 0, 0.91904604, 0.3941503, 0, -0.3941503, 0.91904604, 0, 3.6862063, 8.394507)
+transform = Transform3D(1, 0, 0, 0, 0.84525, 0.53437, 0, -0.53437, 0.84525, 0, 4.3, 6.8)
 fov = 60.0
 
 [node name="Table" parent="." unique_id=1261982012 instance=ExtResource("3_table")]
