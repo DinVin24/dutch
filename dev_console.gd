@@ -265,7 +265,7 @@ func _cmd_kill(args: Array):
 
 func _cmd_setup(args: Array):
 	if args.size() < 1:
-		output.append_text("\n[color=red]Usage: setup <scenario>\nScenarios: jumpin, queen, jack, king, joker, dutch, endgame[/color]")
+		output.append_text("\n[color=red]Usage: setup <scenario>\nScenarios: jumpin, queen, jack, king, dutch, endgame[/color]")
 		return
 	
 	var scenario = args[0].to_lower()
@@ -310,11 +310,6 @@ func _cmd_setup(args: Array):
 			player.hand.append(c)
 			GameManager.hand_updated.emit(player.id)
 			output.append_text("\n[color=cyan]Setup King: Gave King of Clubs.[/color]")
-		"joker":
-			var c = CardData.new("Joker", "Red")
-			player.hand.append(c)
-			GameManager.hand_updated.emit(player.id)
-			output.append_text("\n[color=cyan]Setup Joker: Gave Red Joker.[/color]")
 		"dutch":
 			player.hand.clear()
 			player.hand.append(CardData.new("Ace", "Spades"))
