@@ -14,20 +14,20 @@ This document tracks the technical state of the Dutch card game, including the F
 ### 📊 Component Architecture Diagram
 ```mermaid
 graph TD
-    subgraph Core Managers (Autoloads)
+    subgraph "Core Managers (Autoloads)"
         GM[GameManager] -->|Manages FSM| FSM[Finite State Machine]
         GM -->|Uses| DM[DeckManager]
         GM -->|Listens to| NM[NetworkManager]
     end
 
-    subgraph Visuals & UI
+    subgraph "Visuals & UI"
         GB[GameBoard3D] -->|Listens to FSM| GM
         GB -->|Spawns| C3[Card3D]
         DC[DevConsole] -->|Debug State Overrides| GM
         AO[AssistantOverlay UI] -->|Queries| GA[GameAssistant]
     end
 
-    subgraph AI Agent System
+    subgraph "AI Agent System"
         GA -->|Checks CONFIDENCE| GK[GameKnowledge]
         GA -->|Checks SCENERY| EK[EnvironmentKnowledge]
         GA -->|Fallback / Refine| LM[LmStudioClient]
@@ -40,7 +40,7 @@ graph TD
         GC -->|Gathers snapshot| GM
     end
     
-    subgraph Multiplayer Networking
+    subgraph "Multiplayer Networking"
         NM -->|Syncs state & RPCs| GM
         NM -->|Signaling & WebRTC| WS[Signaling Server]
     end
