@@ -155,6 +155,7 @@ var _turn_vfx_tween: Tween = null
 # Targeting state
 var _is_waiting_for_target: bool = false
 var _is_preparing_ability: bool = false # Interaction guard for reveals
+var _last_click_time_msec: int = 0
 var _pending_ability: Dictionary = {} # {id, token, activator}
 var _debug_overlay_visible: bool = false
 var _debug_overlay_layer: CanvasLayer = null
@@ -2497,6 +2498,7 @@ func _update_hand_visuals(player_idx: int, force_layout: bool = false):
 				(pending_card.data != null and pending_card.data.rank == data.rank and pending_card.data.suit == data.suit)
 			):
 				var card_node = pending_card
+				card_node.name = "HandCard_" + str(card_node.get_instance_id())
 				var start_global_pos = card_node.global_position
 				var start_global_rot = card_node.global_rotation
 				
@@ -2581,8 +2583,10 @@ func _update_hand_visuals(player_idx: int, force_layout: bool = false):
 				skipped_relayout = true
 				continue
 			if force_layout:
-				card_node.is_being_peeked = false
-				card_node.is_flipping = false
+				var is_peeking_phase = GameManager.current_state in [GameManager.GameState.INITIAL_PEEK, GameManager.GameState.TURN_PEEK_ABILITY]
+				if not is_peeking_phase:
+					card_node.is_being_peeked = false
+					card_node.is_flipping = false
 				card_node.set_highlight(false)
 				if card_node.hover_tween and card_node.hover_tween.is_valid():
 					card_node.hover_tween.kill()
@@ -2750,10 +2754,15 @@ func _try_finish_initial_peek() -> void:
 		GameManager.complete_initial_peek()
 
 func _on_card_clicked(node, data):
+	var now = Time.get_ticks_msec()
+	if now - _last_click_time_msec < 300:
+		return
+	_last_click_time_msec = now
+
 	play_take_animation(_human_ui_idx())
 	if not is_instance_valid(node): return
 	
-	var is_pending: bool = (node == pending_card or node.name == "PendingCard")
+	var is_pending: bool = (node == pending_card)
 	var p_idx = -1
 	for i in range(4):
 		if node in player_hands[i]:
@@ -2820,16 +2829,27 @@ func _on_card_clicked(node, data):
 		GameManager.GameState.TURN_PEEK_ABILITY:
 			if is_pending or not GameManager.can_human_interact_with_hand_card(p_idx, -2 if is_pending else player_hands[p_idx].find(node), data.is_face_up):
 				return
+			
+			if node.is_being_peeked:
+				_clear_all_highlights()
+				node.is_being_peeked = false
+				node.animate_flip(false, -1.0, false)
+				_is_preparing_ability = false
+				_refresh_human_interactivity()
+				_send_action("complete_peek_ability")
+				_hide_message()
+				return
+				
+			if _is_preparing_ability:
+				_show_message("Hide the peeked card first (click it again).")
+				return
+				
 			_set_all_cards_interactive(false)
+			node.set_interactive(true) # ensure it can be clicked again to hide
+			_is_preparing_ability = true
 			node.is_being_peeked = true
-			# Queen peek is temporary information; never replicate it via CardData.
 			node.animate_flip(true, -1.0, false)
-			await get_tree().create_timer(3.5, false).timeout
-			_clear_all_highlights()
-			node.is_being_peeked = false
-			node.animate_flip(false, -1.0, false)
-			_refresh_human_interactivity()
-			_send_action("complete_peek_ability")
+			_show_message("Click the card again to hide it.")
 
 		GameManager.GameState.TURN_SWAP_ABILITY:
 			var c_idx = -2 if is_pending else (player_hands[p_idx].find(node) if p_idx != -1 else -1)
@@ -2848,7 +2868,7 @@ func _on_card_clicked(node, data):
 				_clear_all_highlights()
 
 func _on_memory_shift_required(p_idx, _c_idx):
-	_update_hand_visuals(p_idx)
+	pass # Bug 2 Fix: Do not forcefully update hand visuals here. Let _on_card_discarded handle it.
 
 func _on_deck_input_event(_camera, event, _position, _normal, _shape_idx):
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -3343,6 +3363,8 @@ func _on_jump_in_failed(player_idx, card_idx, _card_data):
 		shake(0.2, 0.3)
 		if not (GameManager.easy_mode and player_idx == _human_ui_idx()):
 			await get_tree().create_timer(0.35, false).timeout
+		card_node.set_highlight(false)
+		card_node.set_interactive(player_idx == _human_ui_idx())
 		_update_hand_visuals(player_idx, true)
 
 
@@ -4180,8 +4202,9 @@ func _on_emote_wheel_pressed(emote_id: String) -> void:
 		return
 	_close_emote_wheel()
 
-func _on_victory_emote_pressed(winner_id: int, emote_id: String) -> void:
-	GameManager.emit_player_emote(winner_id, emote_id, false)
+func _on_victory_emote_pressed(_winner_id: int, emote_id: String) -> void:
+	# Bug 3 Fix: Always emit as the local human player rather than the winner
+	GameManager.emit_player_emote(_human_ui_idx(), emote_id, false)
 
 func _on_player_emoted(player_idx: int, emote_id: String) -> void:
 	_play_player_emote(player_idx, emote_id)
