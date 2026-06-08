@@ -16,12 +16,12 @@ jobs:
 
       - name: Download Godot Linux Binary
         run: |
-          # Downloading Godot 4 (Using 4.2.2 as a stable fallback, adjust if 4.6 is specifically hosted elsewhere)
-          wget https://github.com/godotengine/godot/releases/download/4.2.2-stable/Godot_v4.2.2-stable_linux.x86_64.zip
-          unzip Godot_v4.2.2-stable_linux.x86_64.zip
-          chmod +x Godot_v4.2.2-stable_linux.x86_64
+          # Downloading Godot 4.6.1 to match your project version
+          wget https://github.com/godotengine/godot/releases/download/4.6.1-stable/Godot_v4.6.1-stable_linux.x86_64.zip
+          unzip Godot_v4.6.1-stable_linux.x86_64.zip
+          chmod +x Godot_v4.6.1-stable_linux.x86_64
           # Export the required GODOT_BIN environment variable for your script
-          echo "GODOT_BIN=$GITHUB_WORKSPACE/Godot_v4.2.2-stable_linux.x86_64" >> $GITHUB_ENV
+          echo "GODOT_BIN=$GITHUB_WORKSPACE/Godot_v4.6.1-stable_linux.x86_64" >> $GITHUB_ENV
 
       - name: Make QA Script Executable
         run: chmod +x run_experimental_qa.sh
