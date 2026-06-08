@@ -919,6 +919,10 @@ func _apply_responsive_hud_layout() -> void:
 		_assistant_help_btn.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(22))
 	if is_instance_valid(_assistant_overlay):
 		_assistant_overlay.apply_layout(scale, margin, emote_btn_h, help_btn_h, GameManager.tutorial_mode)
+	if GameManager.tutorial_mode:
+		var tutorial_overlay := $GameUI.get_node_or_null("TutorialOverlay")
+		if is_instance_valid(tutorial_overlay) and tutorial_overlay.has_method("apply_layout"):
+			tutorial_overlay.apply_layout(scale, margin, emote_btn_h, help_btn_h)
 
 	if is_instance_valid(_jack_swap_banner):
 		_jack_swap_banner.offset_top = 100.0 * scale

@@ -233,6 +233,20 @@ func _build_ui() -> void:
 	_skip_btn.pressed.connect(_on_skip_pressed)
 
 
+func apply_layout(scale: float, margin: float, emote_btn_h: float, help_btn_h: float) -> void:
+	if not is_instance_valid(_panel):
+		return
+	var vp := get_viewport().get_visible_rect().size
+	var panel_w := minf(406.0 * scale, vp.x - margin * 2.0)
+	var panel_h := minf(256.0 * scale, vp.y * 0.42)
+	_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_panel.offset_right = -margin
+	_panel.offset_left = _panel.offset_right - panel_w
+	_panel.offset_top = margin + 56.0 * scale
+	_panel.offset_bottom = _panel.offset_top + panel_h
+	_panel.custom_minimum_size = Vector2(panel_w, panel_h)
+
+
 func _make_btn(label: String, color: Color) -> Button:
 	var btn = Button.new()
 	btn.text = label
