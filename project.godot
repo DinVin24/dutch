@@ -15,14 +15,6 @@ run/main_scene="res://press_any_key.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://assets/images/icon.svg"
 
-[display]
-
-window/size/viewport_width=1280
-window/size/viewport_height=720
-window/stretch/mode="canvas_items"
-window/stretch/aspect="expand"
-window/handheld/orientation=1
-
 [autoload]
 
 SettingsManager="*res://settings_manager.gd"
@@ -38,6 +30,14 @@ AgentToolRegistry="*res://agent_tool_registry.gd"
 GameAssistant="*res://game_assistant.gd"
 DebugLayoutTest="*res://debug_layout_test.gd"
 DevConsole="*res://dev_console.tscn"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=1
 
 [input]
 
