@@ -21,5 +21,9 @@ echo "Launching Modular QA Pipeline..."
 # Ensure binary is executable
 chmod +x "$GODOT_BIN"
 
+# Build class cache for Godot 4 (required in CI environments so it recognizes class_name)
+echo "Building class cache..."
+"$GODOT_BIN" --headless --path "$PROJECT_DIR" --editor --quit || true
+
 # Run Godot with the pipeline script in HEADLESS mode for pure logic verification
 "$GODOT_BIN" --headless --path "$PROJECT_DIR" -s res://qa_pipeline.gd epic3
