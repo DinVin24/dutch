@@ -136,14 +136,14 @@
 - [ ] **Story**: As a winner, I want to trigger a unique emote animation and celebrate in spatial voice chat.
 
 ## Epic 16: Interactive Tutorial Mode [KAN-76]
-- [/] **Story**: As a first-time player, I want a Tutorial option on the main menu start screen (alongside Normal/Easy), so that I can opt into a guided experience without reading a manual. [KAN-77]
+- [x] **Story**: As a first-time player, I want a Tutorial option on the main menu start screen (alongside Normal/Easy), so that I can opt into a guided experience without reading a manual. [KAN-77]
   * **Acceptance Criteria**:
     * **Given** I click START_FILE
     * **When** the difficulty prompt appears
     * **Then** a TUTORIAL button is visible alongside Normal and Easy
     * **When** I click TUTORIAL
     * **Then** the game loads in Easy Mode with the TutorialOverlay active
-- [/] **Story**: As a first-time player, I want a funny little guide character (Chippy the Card Goblin) to appear on screen during the tutorial game and explain what's happening at each stage, so I understand how to play without the game feeling bloated or overwhelming. [KAN-78]
+- [x] **Story**: As a first-time player, I want a funny little guide character (Chippy the Card Goblin) to appear on screen during the tutorial game and explain what's happening at each stage, so I understand how to play without the game feeling bloated or overwhelming. [KAN-78]
   * **Acceptance Criteria**:
     * **Given** a tutorial game is active
     * **When** the FSM transitions to a new game state (deal, peek, draw, resolve, jump-in, dutch, etc.)
