@@ -1,7 +1,7 @@
 extends Node
 
 const MAX_PLAYERS = 4
-const SIGNALING_SERVER_URL = "wss://dutch-signaling.onrender.com"
+const SIGNALING_SERVER_URL = "wss://signal.maestriisigma.ro"
 
 signal player_connected(id: int, info: Dictionary)
 signal player_disconnected(id: int)
