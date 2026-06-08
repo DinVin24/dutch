@@ -5,17 +5,17 @@ extends Node
 ## response normalization, and safe removal of model reasoning text.
 
 const DEFAULT_BASE_URL := "http://127.0.0.1:1234/v1"
-const DEFAULT_MODEL := "qwen/qwen3.5-9b"
+const DEFAULT_MODEL := "llama-3.2-1b-instruct"
 
 const PROFILES := {
 	"fast": {
 		"temperature": 0.15,
-		"max_tokens": 220,
+		"max_tokens": 256,
 		"timeout_sec": 30.0,
 	},
 	"strategic": {
 		"temperature": 0.2,
-		"max_tokens": 420,
+		"max_tokens": 512,
 		"timeout_sec": 45.0,
 	},
 }
