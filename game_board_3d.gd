@@ -155,6 +155,7 @@ var _turn_vfx_tween: Tween = null
 # Targeting state
 var _is_waiting_for_target: bool = false
 var _is_preparing_ability: bool = false # Interaction guard for reveals
+var _last_click_time_msec: int = 0
 var _pending_ability: Dictionary = {} # {id, token, activator}
 var _debug_overlay_visible: bool = false
 var _debug_overlay_layer: CanvasLayer = null
@@ -2493,6 +2494,7 @@ func _update_hand_visuals(player_idx: int, force_layout: bool = false):
 				(pending_card.data != null and pending_card.data.rank == data.rank and pending_card.data.suit == data.suit)
 			):
 				var card_node = pending_card
+				card_node.name = "HandCard_" + str(card_node.get_instance_id())
 				var start_global_pos = card_node.global_position
 				var start_global_rot = card_node.global_rotation
 				
@@ -2746,10 +2748,15 @@ func _try_finish_initial_peek() -> void:
 		GameManager.complete_initial_peek()
 
 func _on_card_clicked(node, data):
+	var now = Time.get_ticks_msec()
+	if now - _last_click_time_msec < 300:
+		return
+	_last_click_time_msec = now
+
 	play_take_animation(_human_ui_idx())
 	if not is_instance_valid(node): return
 	
-	var is_pending: bool = (node == pending_card or node.name == "PendingCard")
+	var is_pending: bool = (node == pending_card)
 	var p_idx = -1
 	for i in range(4):
 		if node in player_hands[i]:
