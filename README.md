@@ -57,7 +57,7 @@ The game can use the OpenAI-compatible LM Studio server for two separate agents:
 Chippy also has a grounded catalog of the authored 3D scene, including the tavern, table, chairs, player drawers, ability hammers, cards, beers, chicken, avatars, indicators, HUD, and visual effects.
 
 Setup:
-1. Load `qwen/qwen3.5-9b` in LM Studio.
+1. Load `llama-3.2-1b-instruct` in LM Studio.
 2. Start the Local Server on `http://127.0.0.1:1234`.
 3. Launch the game normally. Both agents fall back to deterministic behavior if the server is unavailable.
 
@@ -65,7 +65,7 @@ The client sends `chat_template_kwargs.enable_thinking=false` by default to redu
 
 ```bash
 export DUTCH_LM_STUDIO_URL=http://127.0.0.1:1234/v1
-export DUTCH_LM_STUDIO_MODEL=qwen/qwen3.5-9b
+export DUTCH_LM_STUDIO_MODEL=llama-3.2-1b-instruct
 ```
 
 Targeted verification:

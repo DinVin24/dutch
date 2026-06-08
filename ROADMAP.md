@@ -65,7 +65,7 @@ gantt
     - [ ] Lobby System: Host a room and view a list of Joinable rooms.
     - [ ] Player Identity: Picking and displaying a Username.
 2.  **Progression & Saving**:
-    - [ ] **Persistent Settings**: Save Volume, Resolution, and Keybinds.
+    - [x] **Persistent Settings**: Save Volume, Resolution, and Keybinds.
     - [ ] **Player Stats**: Save "Matches Won" to player profiles to show off skill.
 
 ---
