@@ -3779,6 +3779,7 @@ func _input(event: InputEvent) -> void:
 			camera.basis = Basis() # Reset
 			camera.rotate_y(camera_rot_y)
 			camera.rotate_object_local(Vector3.RIGHT, camera_rot_x)
+		elif Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 			_handle_touch_look(event.relative)
 	elif event is InputEventScreenTouch:
 		if event.pressed:
@@ -4641,7 +4642,7 @@ func _apply_gameplay_mouse_mode() -> void:
 	if ResponsiveUI.is_touch_device():
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		return
-	Input.mouse_mode = Input.MOUSE_MODE_CONFINED
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _get_screen_ray_position() -> Vector2:
 	if ResponsiveUI.is_touch_device() and _touch_positions.has(0) and not _touch_look_active:
