@@ -116,9 +116,11 @@ var _drink_timers: Dictionary = {}
 var _drink_beers: Dictionary = {}
 var _drink_camera_pitch_offset: float = 0.0
 var _base_head_y: float = 0.0
-const FP_EYE_HEIGHT_OFFSET: float = 3.9  # meters above hips anchor (raised much higher for overview)
+const FP_EYE_HEIGHT_OFFSET: float = 1.85  # meters above hips anchor (lowered to player eye level)
 var _look_yaw: float = 0.0
 var _look_pitch: float = 0.0
+var beer_hand_offset: Vector3 = Vector3(0.0, 0.42, -0.08)
+var fp_camera_forward_offset: float = 0.08
 
 @onready var camera = $Camera3D
 var _current_ability_message: String = ""
@@ -3087,12 +3089,12 @@ func _process(delta: float) -> void:
 				else:
 					_drink_camera_pitch_offset = max_tilt * (1.0 - (drink_t - 1.4) / 0.4)
 
-	# 2. Camera rotation update (subtract _drink_camera_pitch_offset to tilt UP)
+	# 2. Camera rotation update (add _drink_camera_pitch_offset to tilt UP)
 	if noclip_enabled and not DevConsole.window.visible:
 		_handle_noclip_movement(delta)
 	elif not noclip_enabled:
 		camera.rotation.y = lerp_angle(camera.rotation.y, _base_camera_rotation.y + _look_yaw, delta * 12.0)
-		camera.rotation.x = lerp_angle(camera.rotation.x, _base_camera_rotation.x + _look_pitch - _drink_camera_pitch_offset, delta * 12.0)
+		camera.rotation.x = lerp_angle(camera.rotation.x, _base_camera_rotation.x + _look_pitch + _drink_camera_pitch_offset, delta * 12.0)
 
 		# First-Person Camera active flag
 		var first_person_active = false
@@ -3208,7 +3210,7 @@ func _process(delta: float) -> void:
 						if hand_idx != -1:
 							var hand_trans = skeleton.global_transform * skeleton.get_bone_global_pose(hand_idx)
 							var hand_basis_normalized = hand_trans.basis.orthonormalized()
-							var target_gpos = hand_trans.origin + hand_basis_normalized * Vector3(0.07, 0.42, -0.01)
+							var target_gpos = hand_trans.origin + hand_basis_normalized * beer_hand_offset
 							
 							# Calculate dynamic tilt of the beer mug from 0 to 100 degrees during the drinking animation
 							var tilt_angle := 0.0
@@ -3223,7 +3225,7 @@ func _process(delta: float) -> void:
 							
 							# Tilt relative to the seat basis to ensure stable, predictable world rotation
 							var seat_basis = beer_node.get_parent().global_transform.basis
-							var target_gbasis = seat_basis * Basis.from_euler(Vector3(deg_to_rad(-tilt_angle), 0, 0)) * Basis.from_scale(beer_node.scale)
+							var target_gbasis = seat_basis * Basis.from_euler(Vector3(deg_to_rad(tilt_angle), 0, 0)) * Basis.from_scale(beer_node.scale)
 							
 							var base_pos = beer_node.get_meta("base_position") if beer_node.has_meta("base_position") else beer_node.position
 							var base_rot = beer_node.get_meta("base_rotation", Vector3.ZERO)
@@ -3291,18 +3293,17 @@ func _process(delta: float) -> void:
 					
 					if is_instance_valid(camera):
 						camera.near = 0.05
-						var hips_idx := skeleton.find_bone("mixamorig_Hips")
-						var eye_anchor = avatar.global_position
-						if hips_idx != -1:
-							eye_anchor = skeleton.global_transform * skeleton.get_bone_global_pose(hips_idx).origin
+						var head_pos = avatar.global_position
+						if head_idx != -1:
+							head_pos = (skeleton.global_transform * skeleton.get_bone_global_pose(head_idx)).origin
 						
 						if not _camera_initialized:
-							_base_head_y = eye_anchor.y + FP_EYE_HEIGHT_OFFSET
+							_base_head_y = head_pos.y
 							_camera_initialized = true
 						
 						var forward_dir = avatar.global_transform.basis.z.normalized()
-						var target_camera_pos = eye_anchor - forward_dir * 0.52
-						target_camera_pos.y = _base_head_y
+						var target_camera_pos = head_pos + forward_dir * (fp_camera_forward_offset + 0.22)
+						target_camera_pos.y = _base_head_y + 0.65
 						target_camera_pos += shake_offset
 						camera.global_position = target_camera_pos
 
