@@ -378,12 +378,14 @@ func assert_state(expected: int):
 		var got = states[gm.current_state] if gm.current_state < states.size() else "ERR"
 		var exp = states[expected] if expected < states.size() else "ERR"
 		print("[QA FAIL] Expected State %s, got %s" % [exp, got])
+		quit(1)
 	else:
 		print("[QA PASS] FSM State: %s" % states[expected])
 
 func assert_player(expected: int):
 	if gm.current_player_index != expected:
 		print("[QA FAIL] Expected Player %d, got %d" % [expected, gm.current_player_index])
+		quit(1)
 	else:
 		print("[QA PASS] Player Turn: %d" % expected)
 
