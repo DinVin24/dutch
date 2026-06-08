@@ -1,0 +1,31 @@
+description: 'Dutch Player Agent Bot Evaluations'
+
+prompts:
+  - file://prompts/bot_prompt.txt
+
+providers:
+  - id: openai:chat:qwen/qwen3.5-9b
+    config:
+      apiBaseUrl: ${DUTCH_LM_STUDIO_URL}
+      apiKey: lm-studio
+
+tests:
+  - vars:
+      player_idx: 1
+      allowed_actions: ['draw_card']
+      context: '{"fsm_state": "TURN_START_DRAW"}'
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: 'draw_card'
+
+  - vars:
+      player_idx: 1
+      allowed_actions: ['discard_drawn_card', 'swap_drawn_card']
+      context: '{"fsm_state": "TURN_RESOLVE_DRAWN"}'
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains-any
+        value: ['discard_drawn_card', 'swap_drawn_card']

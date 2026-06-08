@@ -1,0 +1,43 @@
+description: 'Chippy Rules Coach Evaluations'
+
+prompts:
+  - file://prompts/chippy_prompt.txt
+
+providers:
+  - id: openai:chat:qwen/qwen3.5-9b
+    config:
+      apiBaseUrl: ${DUTCH_LM_STUDIO_URL}
+      apiKey: lm-studio
+
+tests:
+  - vars:
+      question: 'How does Jump-In work?'
+    assert:
+      - type: icontains
+        value: 'jump'
+      - type: contains-any
+        value: ['match', 'discard']
+
+  - vars:
+      question: 'What does the Queen do?'
+    assert:
+      - type: contains
+        value: 'peek'
+
+  - vars:
+      question: 'Can I call Dutch right now?'
+      allowed_actions: ['draw', 'call_dutch']
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: 'CAN call'
+
+  - vars:
+      question: 'Can I call Dutch right now?'
+      allowed_actions: ['draw']
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains-any
+        value: ["can't call", "cannot call"]
