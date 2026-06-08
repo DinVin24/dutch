@@ -1080,8 +1080,9 @@ func player_draw_card():
 	drawn_card_data = card_info
 	drawn_card_data.is_face_up = true
 	
-	change_state(GameState.TURN_RESOLVE_DRAWN)
-	print("GameManager: [DRAW SUCCESS] Player ", current_player_index, " state moved to RESOLVE.")
+	# BUG: Intenționat blocăm state machine-ul!
+	# change_state(GameState.TURN_RESOLVE_DRAWN)
+	print("GameManager: [BUG] Player ", current_player_index, " state stuck!")
 	card_drawn_to_pending.emit(current_player_index, drawn_card_data)
 
 func player_discard_drawn_card():
