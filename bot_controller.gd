@@ -109,6 +109,7 @@ func _on_game_state_changed(new_state: int) -> void:
 		idx = gm.current_player_index
 		
 	if idx == -1 or not gm.players_info[idx].is_bot: return  # Human handles their own turns
+	if _is_llm_player(idx): return
 
 	match new_state:
 		GameManager.GameState.TURN_RESOLVE_DRAWN:
@@ -126,6 +127,7 @@ func _on_game_state_changed(new_state: int) -> void:
 func _on_turn_started(bot_idx: int) -> void:
 	if gm.is_multiplayer and not gm.multiplayer.is_server(): return
 	if not gm.players_info[bot_idx].is_bot: return
+	if _is_llm_player(bot_idx): return
 	# Proactive buy logic: if I have money, buy an egg!
 	if gm.players_info[bot_idx].money >= 50:
 		await _wait(0.5)
@@ -169,6 +171,7 @@ func _try_jump_ins(card_data: CardData) -> void:
 
 	for bot_idx in range(gm.num_players):
 		if not gm.players_info[bot_idx].is_bot: continue
+		if _is_llm_player(bot_idx): continue
 		if not gm.can_player_start_jump_in(bot_idx):
 			continue
 		
@@ -195,6 +198,9 @@ func _try_jump_ins(card_data: CardData) -> void:
 			await _maybe_bot_emote(bot_idx, 0.55)
 			await _wait_after_bot_action()
 			break  # Only one jump-in per discard event
+
+func _is_llm_player(player_idx: int) -> bool:
+	return gm.llm_player_enabled and player_idx == gm.llm_player_index
 
 # ─── Bot Turn Actions ─────────────────────────────────────────
 

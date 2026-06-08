@@ -1,0 +1,91 @@
+description: 'Dutch Player Agent Bot Evaluations'
+
+evaluateOptions:
+  timeoutMs: 300000
+
+prompts:
+  - file://prompts/bot_prompt.json
+
+providers:
+  - id: openai:chat:qwen/qwen3.5-9b
+    config:
+      apiBaseUrl: http://127.0.0.1:1234/v1
+      apiKey: lm-studio
+      max_tokens: 1500
+      timeout: 300000
+      body:
+        chat_template_kwargs:
+          enable_thinking: false
+
+
+tests:
+  - vars:
+      player_idx: 1
+      allowed_actions: ['draw_card']
+      fsm_state: 'TURN_START_DRAW'
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: 'draw_card'
+
+  - vars:
+      player_idx: 1
+      allowed_actions: ['discard_drawn_card', 'swap_drawn_card']
+      fsm_state: 'TURN_RESOLVE_DRAWN'
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains-any
+        value: ['discard_drawn_card', 'swap_drawn_card']
+
+  - vars:
+      player_idx: 1
+      allowed_actions: ['peek_ability']
+      fsm_state: 'TURN_PEEK_ABILITY'
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: 'complete_queen_peek'
+
+  - vars:
+      player_idx: 1
+      allowed_actions: ['swap_ability']
+      fsm_state: 'TURN_SWAP_ABILITY'
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: 'complete_jack_swap'
+
+  - vars:
+      player_idx: 1
+      allowed_actions: ['confirm_dutch', 'forfeit_dutch']
+      fsm_state: 'TURN_CONFIRM_DUTCH'
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: 'confirm_dutch'
+
+  - vars:
+      player_idx: 1
+      allowed_actions: ['buy_ability']
+      fsm_state: 'TURN_START_DRAW'
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: 'buy_ability'
+
+  - vars:
+      player_idx: 1
+      allowed_actions: ['use_ability']
+      fsm_state: 'TURN_END_CHOICE'
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: 'use_ability'
+

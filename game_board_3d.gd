@@ -33,6 +33,7 @@ const COLLISION_LAYER_CHICKEN := 32  # Layer 6 — separate from cards/deck so c
 const CHICKEN_HITBOX_RADIUS := 15.0  # Local units; ~0.75m at 0.05 model scale
 
 var bot_controller: BotController = null
+var llm_player_agent: LlmPlayerAgent = null
 var action_panel: PanelContainer
 var end_turn_btn: Button
 var jump_in_btn: Button
@@ -70,6 +71,8 @@ var _emote_cooldown_label: Label = null
 var _emote_buttons: Array[Button] = []
 var _emote_toggle_btn: Button = null
 var _emote_close_btn: Button = null
+var _assistant_overlay: Control = null
+var _assistant_help_btn: Button = null
 var noclip_enabled: bool = false
 var base_camera_transform: Transform3D
 var camera_rot_x: float = 0.0
@@ -274,6 +277,10 @@ func _ready():
 	bot_controller = BotController.new()
 	bot_controller.gm = GameManager
 	add_child(bot_controller)
+
+	llm_player_agent = LlmPlayerAgent.new()
+	llm_player_agent.gm = GameManager
+	add_child(llm_player_agent)
 
 	$Camera3D.current = true
 	$GameUI/MainHUD.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -812,6 +819,7 @@ func _create_hud_ui():
 	_ability_desc_panel.hide()
 
 	_create_emote_wheel_ui()
+	_create_assistant_ui()
 	_create_touch_hint()
 	_apply_responsive_hud_layout()
 	if not get_viewport().size_changed.is_connected(_apply_responsive_hud_layout):
@@ -892,13 +900,32 @@ func _apply_responsive_hud_layout() -> void:
 		_emote_toggle_btn.offset_bottom = -margin
 		_emote_toggle_btn.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(18))
 		_emote_toggle_btn.custom_minimum_size = Vector2(emote_btn_w, emote_btn_h)
+	# The permanent "?" button sits between EMOTE and the emote wheel, so the
+	# wheel opens above both. Keep this in sync with assistant_overlay.apply_layout.
+	var help_btn_h := 40.0 * scale
 	if is_instance_valid(_emote_wheel_panel):
 		var wheel_w := 268.0 * scale
 		var wheel_h := 268.0 * scale
+		var wheel_stack_bottom := emote_btn_h + help_btn_h + margin * 3.0
+		if GameManager.tutorial_mode:
+			wheel_stack_bottom += 280.0 * scale
 		_emote_wheel_panel.offset_left = -wheel_w - margin
 		_emote_wheel_panel.offset_right = -margin
-		_emote_wheel_panel.offset_top = -wheel_h - emote_btn_h - margin * 2.0
-		_emote_wheel_panel.offset_bottom = -emote_btn_h - margin * 2.0
+		_emote_wheel_panel.offset_bottom = -wheel_stack_bottom
+		_emote_wheel_panel.offset_top = _emote_wheel_panel.offset_bottom - wheel_h
+	var help_btn_w := 150.0 * scale
+	if is_instance_valid(_assistant_help_btn):
+		var help_stack_bottom := emote_btn_h + margin * 2.0
+		if GameManager.tutorial_mode:
+			help_stack_bottom += 280.0 * scale
+		_assistant_help_btn.offset_right = -margin
+		_assistant_help_btn.offset_left = -help_btn_w - margin
+		_assistant_help_btn.offset_bottom = -help_stack_bottom
+		_assistant_help_btn.offset_top = _assistant_help_btn.offset_bottom - help_btn_h
+		_assistant_help_btn.custom_minimum_size = Vector2(help_btn_w, help_btn_h)
+		_assistant_help_btn.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(22))
+	if is_instance_valid(_assistant_overlay):
+		_assistant_overlay.apply_layout(scale, margin, emote_btn_h, help_btn_h, GameManager.tutorial_mode)
 
 	if is_instance_valid(_jack_swap_banner):
 		_jack_swap_banner.offset_top = 100.0 * scale
@@ -969,6 +996,91 @@ func _create_emote_toggle_button() -> void:
 
 	_emote_toggle_btn.pressed.connect(_toggle_emote_wheel)
 	$GameUI/MainHUD.add_child(_emote_toggle_btn)
+
+func _create_assistant_ui() -> void:
+	var overlay_script := preload("res://assistant_overlay.gd")
+	_assistant_overlay = overlay_script.new()
+	_assistant_overlay.name = "AssistantOverlay"
+	$GameUI/MainHUD.add_child(_assistant_overlay)
+	_assistant_overlay.opened.connect(_close_emote_wheel)
+	_assistant_overlay.opened.connect(_sync_assistant_help_button)
+	_assistant_overlay.opened.connect(_apply_gameplay_mouse_mode)
+	_assistant_overlay.panel_closed.connect(_sync_assistant_help_button)
+	_assistant_overlay.panel_closed.connect(_apply_gameplay_mouse_mode)
+	_create_assistant_help_button()
+	if is_instance_valid(_assistant_overlay):
+		_assistant_overlay.reparent_panel_to($GameUI/MainHUD)
+	_update_assistant_visibility()
+	_apply_responsive_hud_layout()
+
+func _create_assistant_help_button() -> void:
+	_assistant_help_btn = Button.new()
+	_assistant_help_btn.name = "AssistantHelpButton"
+	_assistant_help_btn.text = "? HELP"
+	_assistant_help_btn.z_index = 30
+	_assistant_help_btn.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_assistant_help_btn.offset_left = -170.0
+	_assistant_help_btn.offset_top = -118.0
+	_assistant_help_btn.offset_right = -20.0
+	_assistant_help_btn.offset_bottom = -78.0
+	_assistant_help_btn.custom_minimum_size = Vector2(150, 40)
+	_assistant_help_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	_assistant_help_btn.add_theme_font_size_override("font_size", 22)
+	_assistant_help_btn.add_theme_color_override("font_color", Color(0.0, 1.0, 1.0))
+	_assistant_help_btn.add_theme_color_override("font_hover_color", Color.WHITE)
+	_assistant_help_btn.add_theme_color_override("font_pressed_color", Color(0.5, 1.0, 1.0))
+
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.05, 0.07, 0.1, 0.92)
+	normal.set_border_width_all(2)
+	normal.border_color = Color(0.0, 1.0, 1.0, 0.75)
+	normal.set_corner_radius_all(10)
+	normal.shadow_color = Color(0, 0, 0, 0.45)
+	normal.shadow_size = 6
+	var hover := normal.duplicate()
+	hover.bg_color = Color(0.04, 0.12, 0.14, 0.98)
+	hover.border_color = Color(0.0, 1.0, 1.0)
+	var pressed := hover.duplicate()
+	pressed.bg_color = Color(0.04, 0.18, 0.2, 0.98)
+	_assistant_help_btn.add_theme_stylebox_override("normal", normal)
+	_assistant_help_btn.add_theme_stylebox_override("hover", hover)
+	_assistant_help_btn.add_theme_stylebox_override("pressed", pressed)
+	_assistant_help_btn.pressed.connect(_toggle_assistant_panel)
+	$GameUI/MainHUD.add_child(_assistant_help_btn)
+	if is_instance_valid(_assistant_overlay):
+		_assistant_overlay.bind_help_button(_assistant_help_btn)
+
+func _toggle_assistant_panel() -> void:
+	if pause_menu_instance != null:
+		return
+	if GameManager.current_state == GameManager.GameState.GAME_OVER:
+		return
+	if not is_instance_valid(_assistant_overlay):
+		return
+	if _emote_wheel_open:
+		_close_emote_wheel()
+	var was_open: bool = _assistant_overlay.is_open()
+	_assistant_overlay.toggle_panel()
+	if not was_open and _assistant_overlay.is_open():
+		_assistant_overlay.bring_to_front($GameUI/MainHUD, _assistant_help_btn)
+	_apply_gameplay_mouse_mode()
+	_sync_assistant_help_button()
+
+func _sync_assistant_help_button() -> void:
+	if not is_instance_valid(_assistant_help_btn) or not is_instance_valid(_assistant_overlay):
+		return
+	_assistant_help_btn.text = "X" if _assistant_overlay.is_open() else "? HELP"
+
+func _update_assistant_visibility() -> void:
+	var in_game := GameManager.current_state != GameManager.GameState.GAME_OVER \
+			and GameManager.current_state != GameManager.GameState.INITIALIZING
+	var show := in_game and pause_menu_instance == null and GameManager.show_game_assistant
+	if is_instance_valid(_assistant_help_btn):
+		_assistant_help_btn.visible = show
+	if is_instance_valid(_assistant_overlay):
+		_assistant_overlay.set_available(show)
+	if not show and is_instance_valid(_assistant_overlay):
+		_sync_assistant_help_button()
 
 func _create_emote_wheel_ui() -> void:
 	_create_emote_toggle_button()
@@ -2987,6 +3099,12 @@ func _unhandled_input(event):
 			_close_emote_wheel()
 			get_viewport().set_input_as_handled()
 			return
+		if is_instance_valid(_assistant_overlay) and _assistant_overlay.is_open():
+			_assistant_overlay.close_panel()
+			_sync_assistant_help_button()
+			_apply_gameplay_mouse_mode()
+			get_viewport().set_input_as_handled()
+			return
 		if GameManager.can_player_cancel_jump_in(GameManager.local_player_idx):
 			_send_action("cancel_jump_in")
 			_show_message("Jump-in cancelled.")
@@ -3292,6 +3410,7 @@ func _process(delta: float) -> void:
 	_update_cabinet_hover()
 	_update_crosshair_raycast()
 	_update_action_buttons_state()
+	_update_assistant_visibility()
 	_update_emote_wheel_state()
 	_flush_status_message_hold()
 	
@@ -4035,6 +4154,9 @@ func _open_emote_wheel() -> void:
 	if GameManager.current_state == GameManager.GameState.GAME_OVER:
 		return
 	_emote_wheel_open = true
+	if is_instance_valid(_assistant_overlay):
+		_assistant_overlay.close_panel()
+		_sync_assistant_help_button()
 	if is_instance_valid(_emote_wheel_panel):
 		_emote_wheel_panel.visible = true
 	if is_instance_valid(_emote_toggle_btn):
@@ -4629,6 +4751,9 @@ func _apply_gameplay_mouse_mode() -> void:
 	if pause_menu_instance != null or GameManager.current_state == GameManager.GameState.GAME_OVER:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		return
+	if is_instance_valid(_assistant_overlay) and _assistant_overlay.is_open():
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		return
 	if _emote_wheel_open:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		return
@@ -4672,6 +4797,11 @@ func _is_mouse_over_hud(screen_pos: Vector2) -> bool:
 		return true
 	if is_instance_valid(_emote_toggle_btn) and _emote_toggle_btn.visible \
 			and _emote_toggle_btn.get_global_rect().has_point(screen_pos):
+		return true
+	if is_instance_valid(_assistant_help_btn) and _assistant_help_btn.visible \
+			and _assistant_help_btn.get_global_rect().has_point(screen_pos):
+		return true
+	if is_instance_valid(_assistant_overlay) and _assistant_overlay.consumes_point(screen_pos):
 		return true
 	return false
 

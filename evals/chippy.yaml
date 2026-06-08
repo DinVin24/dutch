@@ -1,0 +1,157 @@
+description: 'Chippy Rules Coach Evaluations'
+
+evaluateOptions:
+  timeoutMs: 300000
+
+prompts:
+  - file://prompts/chippy_prompt.json
+
+providers:
+  - id: openai:chat:qwen/qwen3.5-9b
+    config:
+      apiBaseUrl: http://127.0.0.1:1234/v1
+      apiKey: lm-studio
+      max_tokens: 1500
+      timeout: 300000
+      body:
+        chat_template_kwargs:
+          enable_thinking: false
+
+
+tests:
+  - vars:
+      question: 'How does Jump-In work?'
+      grounded_draft: "Jump-In: if you have a card of the SAME rank as the top discard, you can play it at any time, even out of turn. Match = your hand shrinks. Wrong card = penalty card plus you drink a beer."
+      topic: 'jump_in'
+    assert:
+      - type: icontains
+        value: 'jump'
+      - type: contains-any
+        value: ['match', 'discard']
+
+  - vars:
+      question: 'What does the Queen do?'
+      grounded_draft: "Queen: when you discard a Queen you may peek at ANY one face-down card on the table, yours or an opponent's. Use it to scout low cards."
+      topic: 'queen'
+    assert:
+      - type: contains
+        value: 'peek'
+
+  - vars:
+      question: 'What is the King of Diamonds?'
+      grounded_draft: "The King of Diamonds counts as 0 points, the best card to keep. It only helps if it is in your hand at the end."
+      topic: 'king_of_diamonds'
+    assert:
+      - type: contains
+        value: '0 points'
+
+  - vars:
+      question: 'How does scoring work?'
+      grounded_draft: "Card points equal the rank: Ace = 1 up to King = 13. The King of Diamonds is special and counts as 0. Lowest total wins."
+      topic: 'scoring'
+    assert:
+      - type: contains-any
+        value: ['Ace is 1', 'Ace=1', 'scoring', 'Ace']
+
+  - vars:
+      question: 'How do I buy abilities from the chicken?'
+      grounded_draft: "A chicken hovers over the table. Click it (its legs) on your turn to spend money and get a random Ability Card egg. Abilities are kept face down until you use them."
+      topic: 'chicken'
+    assert:
+      - type: contains
+        value: 'chicken legs'
+
+  - vars:
+      question: 'What abilities are there?'
+      grounded_draft: "Abilities (bought from the chicken): Bottoms Up, Refuel, Trim Off, Boulder, Uno Reverse, Skip, Perfect Match, Inflation, Half Off, Jumpscare, Shuffle, Polarity Shift. Ask about any one for details."
+      topic: 'abilities_overview'
+    assert:
+      - type: contains-any
+        value: ['Bottoms Up', 'Refuel', 'Polarity Shift']
+
+  - vars:
+      question: 'Can I draw a card right now?'
+      allowed_actions: ['draw']
+      grounded_draft: "On your turn: draw a card from the deck first. Then either DISCARD it, or SWAP it with one of your face-down cards. Then end your turn."
+      topic: 'turn_flow'
+      fsm_state: 'TURN_START_DRAW'
+      is_my_turn: true
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: 'CAN draw'
+
+  - vars:
+      question: 'Can I draw a card right now?'
+      allowed_actions: ['end_turn']
+      grounded_draft: "On your turn: draw a card from the deck first. Then either DISCARD it, or SWAP it with one of your face-down cards. Then end your turn."
+      topic: 'turn_flow'
+      fsm_state: 'TURN_RESOLVE_DRAWN'
+      is_my_turn: true
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: "can't draw"
+
+  - vars:
+      question: 'Can I end my turn right now?'
+      allowed_actions: ['end_turn']
+      grounded_draft: "On your turn: draw a card from the deck first. Then either DISCARD it, or SWAP it with one of your face-down cards. Then end your turn."
+      topic: 'turn_flow'
+      fsm_state: 'TURN_RESOLVE_DRAWN'
+      is_my_turn: true
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: 'CAN end'
+
+  - vars:
+      question: 'Can I end my turn right now?'
+      allowed_actions: ['draw']
+      grounded_draft: "On your turn: draw a card from the deck first. Then either DISCARD it, or SWAP it with one of your face-down cards. Then end your turn."
+      topic: 'turn_flow'
+      fsm_state: 'TURN_START_DRAW'
+      is_my_turn: true
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: "can't end"
+
+  - vars:
+      question: 'What is the table for?'
+      grounded_draft: "The tavern scenery (tables, chairs, cabinets, avatars) builds the run-down bar atmosphere."
+      topic: 'environment_scene'
+    assert:
+      - type: contains
+        value: 'tavern scenery'
+
+  - vars:
+      question: 'Can I call Dutch right now?'
+      allowed_actions: ['draw', 'call_dutch']
+      grounded_draft: "Call Dutch when you think you have the lowest score. Everyone gets one last turn, then you CONFIRM to end the game or FORFEIT (and you cannot call Dutch again)."
+      topic: 'dutch'
+      fsm_state: 'TURN_RESOLVE_DRAWN'
+      is_my_turn: true
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: 'CAN call'
+
+  - vars:
+      question: 'Can I call Dutch right now?'
+      allowed_actions: ['draw']
+      grounded_draft: "Call Dutch when you think you have the lowest score. Everyone gets one last turn, then you CONFIRM to end the game or FORFEIT (and you cannot call Dutch again)."
+      topic: 'dutch'
+      fsm_state: 'TURN_START_DRAW'
+      is_my_turn: true
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains-any
+        value: ["can't call", "cannot call"]
+

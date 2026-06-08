@@ -100,6 +100,11 @@ var win_condition_lowest_wins: bool = true
 var jump_in_was_own_draw_phase: bool = false
 var easy_mode: bool = false # Easy Mode: Player 0's cards are always visible
 var tutorial_mode: bool = false # Tutorial Mode: TutorialOverlay is instantiated on the board
+var show_game_assistant: bool = true # Permanent Chippy Q&A "?" button on the board
+var assistant_deep_reasoning: bool = true # Chippy uses the 4-step offline reasoning pipeline
+var assistant_lm_enabled: bool = true # Prefer local LM Studio, with deterministic fallback
+var llm_player_enabled: bool = true # One bot seat is controlled by the second local LLM agent
+var llm_player_index: int = 1
 var global_ability_counts: Dictionary = {
 	"perfect_match": 0,
 	"polarity_shift": 0

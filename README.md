@@ -49,6 +49,32 @@ Each player starts with **3 Beers**. Certain mistakes force you to "drink":
 - Run `git config core.hooksPath .githooks` after cloning.
 - See [DESIGN.md](DESIGN.md) for technical architecture and FSM details.
 
+## Local AI Agents (LM Studio)
+The game can use the OpenAI-compatible LM Studio server for two separate agents:
+- Chippy answers known rules instantly and uses the local model for ambiguous questions.
+- Dutch Player Agent controls bot seat 1 through FSM-validated game tools.
+
+Chippy also has a grounded catalog of the authored 3D scene, including the tavern, table, chairs, player drawers, ability hammers, cards, beers, chicken, avatars, indicators, HUD, and visual effects.
+
+Setup:
+1. Load `qwen/qwen3.5-9b` in LM Studio.
+2. Start the Local Server on `http://127.0.0.1:1234`.
+3. Launch the game normally. Both agents fall back to deterministic behavior if the server is unavailable.
+
+The client sends `chat_template_kwargs.enable_thinking=false` by default to reduce move latency. Override the endpoint or model when needed:
+
+```bash
+export DUTCH_LM_STUDIO_URL=http://127.0.0.1:1234/v1
+export DUTCH_LM_STUDIO_MODEL=qwen/qwen3.5-9b
+```
+
+Targeted verification:
+
+```bash
+godot4 --headless --path . --script res://verify_agent_tools.gd
+godot4 --headless --path . --script res://verify_lm_studio_client.gd
+```
+
 ## LAN Test Flow (Godot 4, ENet/UDP)
 - LAN test flow uses ENet over UDP on port `1234`.
 - Host listens on all interfaces; on Windows, allow inbound UDP `1234` for Godot/app in Defender Firewall.

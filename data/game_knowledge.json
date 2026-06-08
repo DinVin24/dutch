@@ -1,0 +1,244 @@
+{
+	"version": 1,
+	"entries": [
+		{
+			"id": "goal",
+			"tags": ["goal", "win", "obiectiv", "castig"],
+			"patterns": ["goal", "objective", "how do i win", "how to win", "win the game", "lowest score", "obiectiv", "scop", "cum castig", "cum se castiga", "cum castig jocul", "punctaj mic"],
+			"face": "cool",
+			"answer": "Goal: finish with the LOWEST score. Each card is worth its rank in points, so trim high cards and call Dutch when you think you are ahead. Discarding ALL your cards wins instantly.",
+			"related": ["scoring", "dutch", "win_instant"]
+		},
+		{
+			"id": "setup",
+			"tags": ["setup", "deal", "start", "impartire"],
+			"patterns": ["setup", "deal", "how many cards", "starting cards", "how does it start", "begin", "impartire", "cate carti", "cum incepe", "start joc", "carti la inceput"],
+			"face": "happy",
+			"answer": "Setup: each player gets 4 cards face down. At the very start you may secretly peek at 2 of your own cards. Memorise the low ones!"
+		},
+		{
+			"id": "initial_peek",
+			"tags": ["peek", "initial_peek", "uitat", "spionat"],
+			"patterns": ["initial peek", "peek my cards", "look at my cards", "start peek", "see my cards", "uitat carti", "ma uit la carti", "vad cartile mele", "peek inceput", "pot sa ma uit"],
+			"face": "cool",
+			"answer": "Initial peek: click 2 of YOUR cards to look at them secretly. They flip back down right away, so remember which ones are low value.",
+			"related": ["scoring", "turn_flow"],
+			"situational_triggers": ["initial_peek"]
+		},
+		{
+			"id": "turn_flow",
+			"tags": ["turn", "draw", "rand", "trage"],
+			"patterns": ["my turn", "what do i do", "how does a turn work", "draw a card", "draw card", "ce fac acum", "randul meu", "cum decurge un rand", "trag o carte", "trage carte"],
+			"face": "happy",
+			"answer": "On your turn: draw a card from the deck first. Then either DISCARD it, or SWAP it with one of your face-down cards. Then end your turn.",
+			"related": ["swap_vs_discard", "dutch", "queen", "jack"],
+			"situational_triggers": ["draw", "end_turn"]
+		},
+		{
+			"id": "swap_vs_discard",
+			"tags": ["swap", "discard", "schimb", "arunca"],
+			"patterns": ["swap or discard", "should i swap", "swap card", "discard card", "what is swap", "schimb sau arunc", "ce e swap", "schimb carte", "arunc carte", "ce inseamna swap"],
+			"face": "smug",
+			"answer": "Swap puts the drawn card into your hand and sends your old face-down card to the discard. Discard throws the drawn card straight away. Swap in low cards, discard high ones.",
+			"related": ["scoring", "beers", "turn_flow"],
+			"situational_triggers": ["swap_drawn", "discard_drawn"]
+		},
+		{
+			"id": "scoring",
+			"tags": ["scor", "points", "valori", "puncte"],
+			"patterns": ["scoring", "points", "card values", "how much is a card worth", "value of cards", "scor", "puncte", "valoare carti", "cat valoreaza", "valori carti", "cum se numara"],
+			"face": "cool",
+			"answer": "Card points equal the rank: Ace = 1 up to King = 13. The King of Diamonds is special and counts as 0. Lowest total wins.",
+			"related": ["king_of_diamonds", "goal"]
+		},
+		{
+			"id": "king_of_diamonds",
+			"tags": ["king", "diamonds", "rege", "zero"],
+			"patterns": ["king of diamonds", "king diamonds", "diamond king", "rege de caro", "regele de caro", "king 0", "rege zero", "carte de 0"],
+			"face": "smug",
+			"answer": "The King of Diamonds counts as 0 points, the best card to keep. It only helps if it is in your hand at the end.",
+			"related": ["scoring"]
+		},
+		{
+			"id": "queen",
+			"tags": ["queen", "regina", "peek_ability"],
+			"patterns": ["queen", "what does queen do", "queen ability", "regina", "ce face regina", "abilitate regina", "dama"],
+			"face": "cool",
+			"answer": "Queen: when you discard a Queen you may peek at ANY one face-down card on the table, yours or an opponent's. Use it to scout low cards.",
+			"related": ["jack", "turn_flow"],
+			"situational_triggers": ["peek_ability"]
+		},
+		{
+			"id": "jack",
+			"tags": ["jack", "valet", "swap_ability"],
+			"patterns": ["jack", "what does jack do", "jack ability", "valet", "ce face valetul", "abilitate valet", "swap any two"],
+			"face": "smug",
+			"answer": "Jack: when you discard a Jack you may blindly swap any TWO cards on the table. Nobody sees what moved, so trade your worst card for someone else's.",
+			"related": ["queen", "turn_flow"],
+			"situational_triggers": ["swap_ability"]
+		},
+		{
+			"id": "jump_in",
+			"tags": ["jump_in", "jumpin", "intra", "interrupt"],
+			"patterns": ["jump in", "jump-in", "jumpin", "how does jump in work", "what is jump in", "match discard", "jump in mode", "cum functioneaza jump in", "ce e jump in", "pot sa intru", "intra peste rand", "match la discard"],
+			"face": "scared",
+			"answer": "Jump-In: if you have a card of the SAME rank as the top discard, you can play it at any time, even out of turn. Match = your hand shrinks. Wrong card = penalty card plus you drink a beer.",
+			"related": ["beers", "win_instant"],
+			"situational_triggers": ["jump_in"]
+		},
+		{
+			"id": "dutch",
+			"tags": ["dutch", "call_dutch", "cheama", "end"],
+			"patterns": ["dutch", "call dutch", "calling dutch", "what is dutch", "how to call dutch", "end the game", "cheama dutch", "ce e dutch", "cum chem dutch", "termin jocul", "apel dutch"],
+			"face": "scared",
+			"answer": "Call Dutch when you think you have the lowest score. Everyone gets one last turn, then you CONFIRM to end the game or FORFEIT (and you cannot call Dutch again).",
+			"related": ["goal", "scoring"],
+			"situational_triggers": ["call_dutch", "confirm_dutch", "forfeit_dutch"]
+		},
+		{
+			"id": "beers",
+			"tags": ["beer", "beers", "bere", "penalty", "lives"],
+			"patterns": ["beer", "beers", "what are beers", "penalty", "lives", "drink", "bere", "bere ce e", "penalizare", "vieti", "beau bere", "ce sunt berile"],
+			"face": "dead",
+			"answer": "Beers are your lives, you start with 3. You drink one for a failed Jump-In or for instantly discarding a drawn card without using it. Drink all 3 and you are eliminated.",
+			"related": ["elimination", "jump_in"]
+		},
+		{
+			"id": "elimination",
+			"tags": ["elimination", "eliminat", "out"],
+			"patterns": ["elimination", "eliminated", "when am i out", "knocked out", "pass out", "eliminare", "eliminat", "cand ies", "scos din joc", "lesin"],
+			"face": "dead",
+			"answer": "When you drink your 3rd beer you pass out and are eliminated for the rest of the game. Avoid reckless Jump-Ins and pointless instant discards."
+		},
+		{
+			"id": "money",
+			"tags": ["money", "bani", "economy"],
+			"patterns": ["money", "how do i earn money", "earn cash", "economy", "bani", "cum fac bani", "cum castig bani", "economie", "bani din carti"],
+			"face": "smug",
+			"answer": "You earn money by discarding cards, based on their value. Aces pay a lot; the King of Spades, Hearts and Clubs pay nothing. Spend money at the chicken to buy abilities.",
+			"related": ["chicken", "abilities_overview"]
+		},
+		{
+			"id": "chicken",
+			"tags": ["chicken", "gaina", "buy", "ability_shop"],
+			"patterns": ["chicken", "what is the chicken", "buy ability", "buy from chicken", "gaina", "ce e gaina", "cumpar abilitate", "cumpar de la gaina", "magazin abilitati", "egg"],
+			"face": "cool",
+			"answer": "A chicken hovers over the table. Click it (its legs) on your turn to spend money and get a random Ability Card egg. Abilities are kept face down until you use them.",
+			"related": ["money", "abilities_overview"]
+		},
+		{
+			"id": "abilities_overview",
+			"tags": ["abilities", "abilitati", "powers"],
+			"patterns": ["abilities", "what abilities are there", "ability list", "powers", "special cards", "abilitati", "ce abilitati exista", "lista abilitati", "puteri", "carti speciale"],
+			"face": "party",
+			"answer": "Abilities (bought from the chicken): Bottoms Up, Refuel, Trim Off, Boulder, Uno Reverse, Skip, Perfect Match, Inflation, Half Off, Jumpscare, Shuffle, Polarity Shift. Ask about any one for details.",
+			"related": ["chicken", "money"]
+		},
+		{
+			"id": "ability_bottoms_up",
+			"tags": ["bottoms_up", "abilities"],
+			"patterns": ["bottoms up", "bottoms-up", "force drink", "ability bottoms"],
+			"face": "smug",
+			"answer": "Bottoms Up: force a chosen player to drink a beer, pushing them one step closer to elimination."
+		},
+		{
+			"id": "ability_refuel",
+			"tags": ["refuel", "abilities"],
+			"patterns": ["refuel", "extra beer", "gain beer", "ability refuel"],
+			"face": "happy",
+			"answer": "Refuel: gain an extra beer (up to a maximum of 3). Great for staying alive longer."
+		},
+		{
+			"id": "ability_trim_off",
+			"tags": ["trim_off", "abilities"],
+			"patterns": ["trim off", "trim-off", "remove highest card", "ability trim"],
+			"face": "cool",
+			"answer": "Trim Off: remove your highest-value card from your hand for an instant score drop. Very strong."
+		},
+		{
+			"id": "ability_boulder",
+			"tags": ["boulder", "abilities"],
+			"patterns": ["boulder", "give highest card", "ability boulder"],
+			"face": "smug",
+			"answer": "Boulder: give a chosen player the highest card currently left in the deck. Their problem now."
+		},
+		{
+			"id": "ability_uno_reverse",
+			"tags": ["uno_reverse", "abilities"],
+			"patterns": ["uno reverse", "reverse order", "reverse turn", "ability reverse"],
+			"face": "cool",
+			"answer": "Uno Reverse: reverse the turn order. Handy to make a dangerous opponent wait longer."
+		},
+		{
+			"id": "ability_skip",
+			"tags": ["skip", "abilities"],
+			"patterns": ["skip", "block turn", "skip turn", "ability skip"],
+			"face": "smug",
+			"answer": "Skip: block a chosen player's next turn entirely. They sit it out."
+		},
+		{
+			"id": "ability_perfect_match",
+			"tags": ["perfect_match", "abilities"],
+			"patterns": ["perfect match", "reset hand", "ace 2 3 4", "ability perfect"],
+			"face": "party",
+			"answer": "Perfect Match: resets hands. You receive Ace, 2, 3, 4 (very low) while others get random cards. Everyone keeps their money and abilities."
+		},
+		{
+			"id": "ability_inflation",
+			"tags": ["inflation", "abilities"],
+			"patterns": ["inflation", "double values", "ability inflation"],
+			"face": "smug",
+			"answer": "Inflation: double a chosen player's card values for scoring only. The original rank still counts for Jump-Ins."
+		},
+		{
+			"id": "ability_half_off",
+			"tags": ["half_off", "abilities"],
+			"patterns": ["half off", "half-off", "halve values", "ability half"],
+			"face": "cool",
+			"answer": "Half Off: halve a chosen player's card values for scoring only. Use it on yourself for an instant advantage."
+		},
+		{
+			"id": "ability_jumpscare",
+			"tags": ["jumpscare", "abilities"],
+			"patterns": ["jumpscare", "scare player", "ability jumpscare"],
+			"face": "scared",
+			"answer": "Jumpscare: you receive a card, but a chosen player gets jumpscared and one of their cards flips, revealing what they were hiding."
+		},
+		{
+			"id": "ability_shuffle",
+			"tags": ["shuffle", "abilities"],
+			"patterns": ["shuffle", "shuffle cards", "ability shuffle"],
+			"face": "smug",
+			"answer": "Shuffle: randomly shuffle all of a chosen player's cards, ruining their carefully memorised hand."
+		},
+		{
+			"id": "ability_polarity_shift",
+			"tags": ["polarity_shift", "abilities"],
+			"patterns": ["polarity shift", "polarity", "highest wins", "invert win", "ability polarity"],
+			"face": "party",
+			"answer": "Polarity Shift: invert the win condition so the HIGHEST score wins. A total game-changer if you are losing."
+		},
+		{
+			"id": "win_instant",
+			"tags": ["win", "empty_hand", "goal"],
+			"patterns": ["empty hand", "no cards", "discard all cards", "win instantly", "fara carti", "scap de carti", "termin cartile", "castig instant"],
+			"face": "party",
+			"answer": "If you get rid of ALL your cards (mostly through Jump-Ins and swaps), you win the game immediately.",
+			"related": ["jump_in", "goal"]
+		},
+		{
+			"id": "emotes",
+			"tags": ["emote", "emotes", "emoji"],
+			"patterns": ["emote", "emotes", "how to emote", "react", "emoticon", "cum dau emote", "reactii", "emote buton"],
+			"face": "happy",
+			"answer": "Use the EMOTE button (or T) at the bottom-right to open the emote wheel, then click one or press 1-4 to send a reaction to the table."
+		},
+		{
+			"id": "controls",
+			"tags": ["controls", "keys", "taste", "comenzi"],
+			"patterns": ["controls", "keys", "keybinds", "shortcuts", "comenzi", "taste", "scurtaturi", "ce taste"],
+			"face": "cool",
+			"answer": "Default keys: R draw, X discard the drawn card, A/E select a card, Q confirm, Enter end turn, Space Jump-In, D call Dutch, C confirm Dutch, F forfeit, T emotes. You can rebind them in Settings."
+		}
+	]
+}

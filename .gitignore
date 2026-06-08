@@ -32,3 +32,7 @@ debug/test_runs/
 
 # Godot UID artifacts (local)
 *.uid
+
+# Python cache ignores
+__pycache__/
+*.pyc
