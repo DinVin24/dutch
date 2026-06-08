@@ -29,3 +29,53 @@ tests:
     assert:
       - type: contains-any
         value: ['discard_drawn_card', 'swap_drawn_card']
+
+  - vars:
+      player_idx: 1
+      allowed_actions: ['peek_ability']
+      context: '{"fsm_state": "TURN_PEEK_ABILITY"}'
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: 'complete_queen_peek'
+
+  - vars:
+      player_idx: 1
+      allowed_actions: ['swap_ability']
+      context: '{"fsm_state": "TURN_SWAP_ABILITY"}'
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: 'complete_jack_swap'
+
+  - vars:
+      player_idx: 1
+      allowed_actions: ['confirm_dutch', 'forfeit_dutch']
+      context: '{"fsm_state": "TURN_CONFIRM_DUTCH"}'
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: 'confirm_dutch'
+
+  - vars:
+      player_idx: 1
+      allowed_actions: ['buy_ability']
+      context: '{"fsm_state": "TURN_START_DRAW"}'
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: 'buy_ability'
+
+  - vars:
+      player_idx: 1
+      allowed_actions: ['use_ability']
+      context: '{"fsm_state": "TURN_END_CHOICE"}'
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: 'use_ability'

@@ -25,6 +25,72 @@ tests:
         value: 'peek'
 
   - vars:
+      question: 'What is the King of Diamonds?'
+    assert:
+      - type: contains
+        value: '0 points'
+
+  - vars:
+      question: 'How does scoring work?'
+    assert:
+      - type: contains-any
+        value: ['Ace is 1', 'Ace=1', 'scoring', 'Ace']
+
+  - vars:
+      question: 'How do I buy abilities from the chicken?'
+    assert:
+      - type: contains
+        value: 'chicken legs'
+
+  - vars:
+      question: 'What abilities are there?'
+    assert:
+      - type: contains-any
+        value: ['Bottoms Up', 'Refuel', 'Polarity Shift']
+
+  - vars:
+      question: 'Can I draw a card right now?'
+      allowed_actions: ['draw']
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: 'CAN draw'
+
+  - vars:
+      question: 'Can I draw a card right now?'
+      allowed_actions: ['end_turn']
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: "can't draw"
+
+  - vars:
+      question: 'Can I end my turn right now?'
+      allowed_actions: ['end_turn']
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: 'CAN end'
+
+  - vars:
+      question: 'Can I end my turn right now?'
+      allowed_actions: ['draw']
+    options:
+      disableVarExpansion: true
+    assert:
+      - type: contains
+        value: "can't end"
+
+  - vars:
+      question: 'What is the table for?'
+    assert:
+      - type: contains
+        value: 'tavern scenery'
+
+  - vars:
       question: 'Can I call Dutch right now?'
       allowed_actions: ['draw', 'call_dutch']
     options:
