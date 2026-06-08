@@ -2579,8 +2579,10 @@ func _update_hand_visuals(player_idx: int, force_layout: bool = false):
 				skipped_relayout = true
 				continue
 			if force_layout:
-				card_node.is_being_peeked = false
-				card_node.is_flipping = false
+				var is_peeking_phase = GameManager.current_state in [GameManager.GameState.INITIAL_PEEK, GameManager.GameState.TURN_PEEK_ABILITY]
+				if not is_peeking_phase:
+					card_node.is_being_peeked = false
+					card_node.is_flipping = false
 				card_node.set_highlight(false)
 				if card_node.hover_tween and card_node.hover_tween.is_valid():
 					card_node.hover_tween.kill()
