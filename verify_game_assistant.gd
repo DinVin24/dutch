@@ -65,6 +65,50 @@ func _run() -> void:
 		return
 	_log("OK gibberish falls back with suggestions")
 
+	var fast_started := Time.get_ticks_msec()
+	var fast_answer: Dictionary = await assistant.ask_async("what is dutch")
+	var fast_elapsed := Time.get_ticks_msec() - fast_started
+	if str(fast_answer.get("source", "")) not in ["deterministic_fast", "lm_studio"]:
+		_fail("Known Chippy question should use the local fast path or LM polish path")
+		return
+	if fast_elapsed > 3800:
+		_fail("Known Chippy answer exceeded the expected polish budget: %d ms" % fast_elapsed)
+		return
+	_log("OK known Chippy answer path=%s (%d ms)" % [fast_answer.get("source", ""), fast_elapsed])
+
+	var environment_answer: Dictionary = await assistant.ask_async(
+		"why do the walls have posters on them?",
+		280,
+		str(fast_answer.get("answer", ""))
+	)
+	if str(environment_answer.get("answer", "")) == str(fast_answer.get("answer", "")):
+		_fail("Environment question repeated the previous answer")
+		return
+	if not str(environment_answer.get("answer", "")).to_lower().contains("atmosphere"):
+		_fail("Environment question should explain the tavern scenery")
+		return
+	_log("OK environment question does not repeat previous answer")
+
+	var environment_cases := {
+		"what are the drawers next to me for?": ["three", "ability"],
+		"what does the chicken do?": ["50", "ability"],
+		"what is the table for?": ["deck", "discard"],
+		"what is the gray dot in the center?": ["crosshair", "interactive"],
+		"what objects are in the scene?": ["cabinets", "avatars"],
+	}
+	for environment_question in environment_cases:
+		var scene_answer: Dictionary = await assistant.ask_async(environment_question)
+		var answer_text := str(scene_answer.get("answer", "")).to_lower()
+		for expected_fragment in environment_cases[environment_question]:
+			if not answer_text.contains(expected_fragment):
+				_fail("Scene answer for '%s' missing '%s': %s" % [
+					environment_question,
+					expected_fragment,
+					answer_text,
+				])
+				return
+	_log("OK grounded 3D scene catalog answers representative objects")
+
 	# Board + UI
 	var gm := root.get_node_or_null("GameManager")
 	gm.easy_mode = false
@@ -164,6 +208,12 @@ func _run() -> void:
 		await process_frame
 	if not overlay.is_open():
 		_fail("Panel did not open")
+		return
+	var assistant_panel: PanelContainer = overlay.get("_panel")
+	var panel_rect := assistant_panel.get_global_rect()
+	var help_rect := help_btn.get_global_rect()
+	if panel_rect.end.y >= help_rect.position.y - 8.0:
+		_fail("Assistant panel should leave visible space above the help button")
 		return
 	_log("OK panel opened")
 

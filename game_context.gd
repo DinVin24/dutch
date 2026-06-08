@@ -41,6 +41,19 @@ func build_snapshot(player_idx: int = -1) -> Dictionary:
 		allowed.append("peek_ability")
 	if gm.can_player_complete_swap_ability(idx):
 		allowed.append("swap_ability")
+	var ability_states := [
+		gm.GameState.TURN_START_DRAW,
+		gm.GameState.TURN_RESOLVE_DRAWN,
+		gm.GameState.TURN_PEEK_ABILITY,
+		gm.GameState.TURN_SWAP_ABILITY,
+		gm.GameState.TURN_END_CHOICE,
+	]
+	if gm.current_player_index == idx and gm.current_state in ability_states:
+		var abilities: Array = info.get("abilities", [])
+		if abilities.any(func(ability): return str(ability) != ""):
+			allowed.append("use_ability")
+		if int(info.get("money", 0)) >= 50 and abilities.count("") > 0:
+			allowed.append("buy_ability")
 
 	var top_rank := ""
 	if gm.deck_manager != null:

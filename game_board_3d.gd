@@ -33,6 +33,7 @@ const COLLISION_LAYER_CHICKEN := 32  # Layer 6 — separate from cards/deck so c
 const CHICKEN_HITBOX_RADIUS := 15.0  # Local units; ~0.75m at 0.05 model scale
 
 var bot_controller: BotController = null
+var llm_player_agent: LlmPlayerAgent = null
 var action_panel: PanelContainer
 var end_turn_btn: Button
 var jump_in_btn: Button
@@ -270,6 +271,10 @@ func _ready():
 	bot_controller = BotController.new()
 	bot_controller.gm = GameManager
 	add_child(bot_controller)
+
+	llm_player_agent = LlmPlayerAgent.new()
+	llm_player_agent.gm = GameManager
+	add_child(llm_player_agent)
 
 	$Camera3D.current = true
 	$GameUI/MainHUD.mouse_filter = Control.MOUSE_FILTER_IGNORE

@@ -1,7 +1,8 @@
 extends Node
 
-## Offline answer engine for the in-game assistant (Chippy Q&A).
-## No cloud LLM. Two modes:
+## Chippy rules coach. Answers known rules immediately from the grounded local
+## engine and uses LM Studio only to clarify ambiguous questions.
+## Offline fallback modes:
 ##   - Simple: question matched against GameKnowledge with token/pattern scoring.
 ##   - Deep (default): a 4-step offline pipeline that simulates reasoning:
 ##       1. IntentClassifier   - what is the player asking? (rule / situational / what-now / follow-up)
@@ -13,7 +14,9 @@ extends Node
 
 const CONFIDENCE_THRESHOLD := 0.34
 const TOP_K := 3
-
+const CHIPPY_LM_TIMEOUT_SEC := 3.2
+const CHIPPY_LM_MAX_TOKENS := 180
+const CHIPPY_MIN_RESPONSE_MS := 2200
 # Question intents detected before retrieval.
 const INTENT_RULE := "rule_lookup"
 const INTENT_SITUATIONAL := "situational"
@@ -97,12 +100,175 @@ func ask(question: String) -> Dictionary:
 
 ## Async wrapper used by the UI to show a brief "thinking" animation.
 ## Returns the same dictionary as ask() after a short, skippable delay.
-func ask_async(question: String, think_ms: int = 280) -> Dictionary:
-	var result := ask(question)
+func ask_async(question: String, think_ms: int = 280, previous_answer: String = "") -> Dictionary:
+	var started_ms := Time.get_ticks_msec()
+	var gm := get_node_or_null("/root/GameManager")
+	var grounded_result := _environment_answer(question)
+	var local_result := ask(question)
+	if grounded_result.is_empty():
+		grounded_result = local_result
+	var grounded_confident := _is_confident_local_answer(grounded_result)
+	if gm != null and bool(gm.get("assistant_lm_enabled")):
+		var lm_result: Dictionary = {}
+		if grounded_confident:
+			lm_result = await _ask_lm_refine_grounded(question, previous_answer, grounded_result)
+		else:
+			lm_result = await _ask_lm(question, previous_answer, grounded_result)
+		if lm_result.get("ok", false):
+			await _wait_for_polish_budget(started_ms)
+			return lm_result.get("result", {})
+	if grounded_confident:
+		grounded_result["source"] = "deterministic_fast"
+		return grounded_result
 	var tree := get_tree()
 	if tree != null and think_ms > 0:
 		await tree.create_timer(think_ms / 1000.0).timeout
-	return result
+	local_result["source"] = "deterministic_fallback"
+	return local_result
+
+func _ask_lm(question: String, previous_answer: String, grounded_result: Dictionary) -> Dictionary:
+	var snap: Dictionary = GameContext.build_snapshot()
+	var grounded_answer := str(grounded_result.get("answer", "")).strip_edges()
+	var grounded_topic := str(grounded_result.get("topic_id", "")).strip_edges()
+	var compact_context := _compact_chippy_context(snap, grounded_topic)
+	var messages: Array = [
+		{"role": "system", "content": _chippy_system_prompt()},
+		{"role": "user", "content": "Game context: %s\nGrounded draft: %s\nTopic: %s\nPrevious answer to avoid repeating: %s\nQuestion: %s" % [
+			JSON.stringify(compact_context),
+			grounded_answer if grounded_answer != "" else "(none)",
+			grounded_topic if grounded_topic != "" else "(none)",
+			previous_answer if previous_answer != "" else "(none)",
+			question.strip_edges(),
+		]},
+	]
+	var completion: Dictionary = await LmStudioClient.chat_completion(
+		messages,
+		[],
+		"fast",
+		{"max_tokens": CHIPPY_LM_MAX_TOKENS, "timeout_sec": CHIPPY_LM_TIMEOUT_SEC}
+	)
+	if not completion.get("ok", false):
+		return completion
+	var content := str(completion.get("content", "")).strip_edges()
+	if content == "":
+		return {"ok": false, "error": "empty_lm_answer"}
+	if previous_answer != "" and _answers_match(content, previous_answer):
+		return {"ok": false, "error": "repeated_previous_answer"}
+	return {
+		"ok": true,
+		"result": {
+			"answer": content,
+			"confidence": 1.0,
+			"topic_id": "lm_studio",
+			"face": "cool",
+			"thinking_steps": [],
+			"suggestions": [],
+			"source": "lm_studio",
+			"model": LmStudioClient.model,
+		},
+	}
+
+func _ask_lm_refine_grounded(question: String, previous_answer: String, grounded_result: Dictionary) -> Dictionary:
+	var grounded_answer := str(grounded_result.get("answer", "")).strip_edges()
+	var grounded_topic := str(grounded_result.get("topic_id", "")).strip_edges()
+	var messages: Array = [
+		{"role": "system", "content": _chippy_refine_prompt()},
+		{"role": "user", "content": "Question: %s\nGrounded draft: %s\nTopic: %s\nPrevious answer to avoid repeating: %s" % [
+			question.strip_edges(),
+			grounded_answer if grounded_answer != "" else "(none)",
+			grounded_topic if grounded_topic != "" else "(none)",
+			previous_answer if previous_answer != "" else "(none)",
+		]},
+	]
+	var completion: Dictionary = await LmStudioClient.chat_completion(
+		messages,
+		[],
+		"fast",
+		{"max_tokens": 80, "timeout_sec": 3.0}
+	)
+	if not completion.get("ok", false):
+		return completion
+	var content := str(completion.get("content", "")).strip_edges()
+	if content == "":
+		return {"ok": false, "error": "empty_lm_answer"}
+	if previous_answer != "" and _answers_match(content, previous_answer):
+		return {"ok": false, "error": "repeated_previous_answer"}
+	return {
+		"ok": true,
+		"result": {
+			"answer": content,
+			"confidence": 1.0,
+			"topic_id": "lm_studio",
+			"face": "cool",
+			"thinking_steps": [],
+			"suggestions": [],
+			"source": "lm_studio",
+			"model": LmStudioClient.model,
+		},
+	}
+
+func _compact_chippy_context(snap: Dictionary, grounded_topic: String) -> Dictionary:
+	if grounded_topic.begins_with("environment_"):
+		return {"kind": "environment"}
+	var compact := {
+		"fsm_state": snap.get("fsm_state", ""),
+		"is_my_turn": snap.get("is_my_turn", false),
+		"allowed_actions": snap.get("allowed_actions", []),
+		"action_hint": snap.get("action_hint", ""),
+	}
+	if grounded_topic in ["dutch", "turn_flow", "swap_vs_discard", "queen", "jack", "jump_in", "lm_studio"]:
+		compact["top_discard_rank"] = snap.get("top_discard_rank", "")
+		compact["drawn_card_rank"] = snap.get("drawn_card_rank", "")
+	return compact
+
+func _wait_for_polish_budget(started_ms: int) -> void:
+	var remaining_ms := CHIPPY_MIN_RESPONSE_MS - (Time.get_ticks_msec() - started_ms)
+	if remaining_ms <= 0:
+		return
+	var tree := get_tree()
+	if tree != null:
+		await tree.create_timer(remaining_ms / 1000.0).timeout
+
+func _is_confident_local_answer(result: Dictionary) -> bool:
+	return str(result.get("topic_id", "")) != "" \
+		or float(result.get("confidence", 0.0)) >= CONFIDENCE_THRESHOLD
+
+func _environment_answer(question: String) -> Dictionary:
+	var entry: Dictionary = EnvironmentKnowledge.lookup(question)
+	if entry.is_empty():
+		return {}
+	return {
+		"answer": str(entry.get("answer", "")),
+		"confidence": 1.0,
+		"topic_id": "environment_%s" % str(entry.get("id", "scene")),
+		"face": "cool",
+		"thinking_steps": [],
+		"suggestions": [],
+		"source": "deterministic_fast",
+	}
+
+func _answers_match(first: String, second: String) -> bool:
+	var a := _normalize(first)
+	var b := _normalize(second)
+	return a != "" and b != "" and (a == b or (a.length() > 24 and b.contains(a)) or (b.length() > 24 and a.contains(b)))
+
+func _chippy_system_prompt() -> String:
+	return """You are Chippy, the read-only rules coach inside the Dutch card game.
+Answer in the same language as the player, briefly and clearly.
+If a grounded draft is supplied, improve it into a more natural and helpful answer without changing its facts.
+Add one useful detail or short explanation when it helps, but stay concise.
+Answer only the current standalone question. Never repeat the previous answer unless the player explicitly asks you to.
+Never invent hidden cards, never claim an illegal action is legal, and never execute gameplay actions.
+Treat the supplied live game context as authoritative for gameplay questions.
+For questions about scenery, explain that visual details build the tavern atmosphere unless a documented gameplay role exists.
+Do not reveal private chain-of-thought. Return only the concise answer for the player."""
+
+func _chippy_refine_prompt() -> String:
+	return """You are Chippy, the in-game Dutch card helper.
+Rewrite the grounded draft into a better player-facing answer in the same language.
+Keep all facts from the grounded draft, but make the wording smoother and a bit more helpful.
+Use 1 or 2 short sentences. Do not add new rules or hidden information.
+Do not repeat the previous answer verbatim."""
 
 # ── Simple mode (backward compatible) ────────────────────────────────────────
 

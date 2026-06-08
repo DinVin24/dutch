@@ -2,8 +2,8 @@ extends Control
 
 ## Permanent in-game assistant UI (Chippy Q&A).
 ## A "?" toggle button sits bottom-right, just above the EMOTE button. Clicking
-## it opens a collapsible Q&A panel that answers rules questions offline via
-## GameAssistant. Local only — never synced over the network.
+## it opens a collapsible Q&A panel backed by the local LM Studio model, with
+## a deterministic offline fallback. Requests never leave this computer.
 
 signal opened
 signal panel_closed
@@ -109,7 +109,8 @@ func apply_layout(scale: float, margin: float, emote_btn_h: float, help_btn_h: f
 		return
 	var vp := get_viewport().get_visible_rect().size
 	var panel_w := 360.0 * scale
-	var help_stack_bottom := emote_btn_h + help_btn_h + margin * 3.0
+	var panel_gap := 28.0 * scale
+	var help_stack_bottom := emote_btn_h + help_btn_h + margin * 3.0 + panel_gap
 	if tutorial_mode:
 		help_stack_bottom += 280.0 * scale
 	var panel_h := minf(380.0 * scale, vp.y - help_stack_bottom - margin * 2.0)
@@ -193,7 +194,7 @@ func _build_panel() -> void:
 
 	# Thinking indicator (shown briefly while Chippy "reasons")
 	_thinking_label = Label.new()
-	_thinking_label.text = "Chippy is thinking..."
+	_thinking_label.text = "Chippy is asking the local model..."
 	_thinking_label.add_theme_font_size_override("font_size", 12)
 	_thinking_label.add_theme_color_override("font_color", ACCENT)
 	_thinking_label.visible = false
@@ -324,7 +325,10 @@ func _submit(question: String) -> void:
 	if is_instance_valid(_send_btn):
 		_send_btn.disabled = true
 
-	var result: Dictionary = await GameAssistant.ask_async(q)
+	var previous_answer := ""
+	if not _history.is_empty():
+		previous_answer = str((_history[-1].get("result", {}) as Dictionary).get("answer", ""))
+	var result: Dictionary = await GameAssistant.ask_async(q, 280, previous_answer)
 
 	if is_instance_valid(_thinking_label):
 		_thinking_label.visible = false
