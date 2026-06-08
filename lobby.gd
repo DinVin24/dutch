@@ -22,6 +22,9 @@ var _btn_original: Dictionary = {}
 var _btn_hover: Dictionary = {}
 
 func _ready():
+	get_tree().paused = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	NetworkManager.leave_game()
 	GameManager.play_menu_music()
 	NetworkManager.players_updated.connect(_update_lobby_ui)
 	NetworkManager.match_settings_updated.connect(_update_lobby_ui)
@@ -58,6 +61,28 @@ func _ready():
 	if saved_code != "":
 		code_edit.text = saved_code
 	name_edit.grab_focus()
+	if not get_viewport().size_changed.is_connected(_apply_responsive_layout):
+		get_viewport().size_changed.connect(_apply_responsive_layout)
+	call_deferred("_apply_responsive_layout")
+
+func _apply_responsive_layout() -> void:
+	var left_margin: Control = $LeftMargin
+	left_margin.anchor_right = 0.95 if ResponsiveUI.is_narrow_screen() else 0.48
+	$LeftMargin/VBox/Title.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(64))
+	for node_path in [
+		"SetupPanel/HBoxName/Label",
+		"SetupPanel/HBoxConnection/HostButton",
+		"SetupPanel/HBoxConnection/JoinButton",
+		"ActiveLobbyPanel/HBoxContainer/PlayersList/Label",
+		"ActiveLobbyPanel/HBoxContainer/Settings/SettingsTitle",
+		"ActiveLobbyPanel/StartButton",
+	]:
+		var node := get_node("LeftMargin/VBox/" + node_path)
+		if node is Label:
+			node.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(22))
+		elif node is Button:
+			node.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(30))
+	$LeftMargin/VBox/BackButton.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(24))
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
@@ -103,7 +128,7 @@ func _on_host_pressed():
 		name_edit.grab_focus()
 		return
 	_clear_status()
-	var player_name := name_edit.text.strip_edges()
+	var player_name: String = name_edit.text.strip_edges()
 	SettingsManager.set_player_name(player_name)
 	NetworkManager.set_local_player_name(player_name)
 	if NetworkManager.host_game():
@@ -122,7 +147,7 @@ func _on_join_pressed():
 		code_edit.grab_focus()
 		return
 	_clear_status()
-	var player_name := name_edit.text.strip_edges()
+	var player_name: String = name_edit.text.strip_edges()
 	SettingsManager.set_player_name(player_name)
 	NetworkManager.set_local_player_name(player_name)
 	if NetworkManager.join_game(code_edit.text):

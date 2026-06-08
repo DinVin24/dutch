@@ -29,6 +29,8 @@ const GAME_EMOTES := [
 	{"id": "chicken", "label": "Chicken", "glyph": "BOK", "color": Color(1.0, 0.65, 0.2)},
 ]
 const EMOTE_WHEEL_ACCENT := Color(0.95, 0.78, 0.25)
+const COLLISION_LAYER_CHICKEN := 32  # Layer 6 — separate from cards/deck so clicks are not blocked
+const CHICKEN_HITBOX_RADIUS := 15.0  # Local units; ~0.75m at 0.05 model scale
 
 var bot_controller: BotController = null
 var action_panel: PanelContainer
@@ -66,6 +68,8 @@ var _emote_wheel_panel: PanelContainer = null
 var _emote_wheel_open: bool = false
 var _emote_cooldown_label: Label = null
 var _emote_buttons: Array[Button] = []
+var _emote_toggle_btn: Button = null
+var _emote_close_btn: Button = null
 var noclip_enabled: bool = false
 var base_camera_transform: Transform3D
 var camera_rot_x: float = 0.0
@@ -101,7 +105,8 @@ const BEER_LIQUID_FILL := {
 var player_beers_nodes: Array = [[], [], [], []]
 var money_labels: Array = []
 var _chicken_node: Node3D = null
-var _chicken_zoom_active: bool = false
+var _chicken_area: Area3D = null
+var _hovered_chicken: bool = false
 var _hovered_shelf_index: int = -1
 var _hovered_cabinet_node: Node = null
 var _hovered_hammer_idx_board: int = -1
@@ -109,6 +114,11 @@ var _hovered_hammer_cabinet: Node = null
 var _cabinets: Dictionary = {}
 var _cabinet_prompt_label: Label = null
 var _ability_desc_panel: PanelContainer = null
+var _jack_swap_banner: Label = null
+var _touch_hint_label: Label = null
+var _touch_positions: Dictionary = {}
+var _touch_tap_starts: Dictionary = {}
+var _touch_look_active: bool = false
 var player_avatars: Dictionary = {}
 var avatar_arm_weights: Dictionary = {}
 var _camera_initialized: bool = false
@@ -124,6 +134,10 @@ var fp_camera_forward_offset: float = 0.08
 
 @onready var camera = $Camera3D
 var _current_ability_message: String = ""
+const DRAW_STATUS_HOLD_SEC := 2.8
+var _status_message_hold_until_msec: int = 0
+var _status_message_pending: String = ""
+var _status_message_hide_pending: bool = false
 var _shake_intensity: float = 0.0
 var _shake_timer: float = 0.0
 var _base_camera_pos: Vector3
@@ -543,7 +557,7 @@ func _on_multiplayer_sync_applied() -> void:
 		pending_card.scale = Vector3(1.5, 1.5, 1.5)
 		pending_card.set_interactive(is_local_turn)
 		if not is_local_turn and actor_idx >= 0 and actor_idx < GameManager.players_info.size():
-			_show_message(GameManager.players_info[actor_idx].name + " is drawing...")
+			_show_message(GameManager.players_info[actor_idx].name + " is drawing...", DRAW_STATUS_HOLD_SEC)
 		call_deferred("_reveal_synced_pending_card", is_local_turn)
 	
 	# --- Bug 5: Detect Dutch call and show feedback on client ---
@@ -798,8 +812,166 @@ func _create_hud_ui():
 	_ability_desc_panel.hide()
 
 	_create_emote_wheel_ui()
+	_create_touch_hint()
+	_apply_responsive_hud_layout()
+	if not get_viewport().size_changed.is_connected(_apply_responsive_hud_layout):
+		get_viewport().size_changed.connect(_apply_responsive_hud_layout)
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_SIZE_CHANGED:
+		call_deferred("_apply_responsive_hud_layout")
+
+func _create_touch_hint() -> void:
+	if not ResponsiveUI.is_touch_device():
+		return
+	_touch_hint_label = Label.new()
+	_touch_hint_label.name = "TouchHint"
+	_touch_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_touch_hint_label.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(16))
+	_touch_hint_label.add_theme_color_override("font_color", Color(0.72, 0.95, 1.0))
+	_touch_hint_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.75))
+	_touch_hint_label.text = "1 finger: tap to play  |  2 fingers: drag to look around"
+	_touch_hint_label.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_touch_hint_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$GameUI/MainHUD.add_child(_touch_hint_label)
+
+func _apply_responsive_hud_layout() -> void:
+	var scale := ResponsiveUI.get_ui_scale()
+	var margin := ResponsiveUI.get_margin()
+	var vp := get_viewport().get_visible_rect().size
+
+	var top_left := $GameUI/MainHUD/TopLeft
+	top_left.offset_left = margin
+	top_left.offset_top = margin
+	top_left.offset_right = margin + 280.0 * scale
+
+	if is_instance_valid(turn_label):
+		turn_label.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(32))
+	for ml in money_labels:
+		if is_instance_valid(ml):
+			ml.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(24))
+
+	if is_instance_valid(action_panel):
+		var panel_h := 200.0 * scale
+		action_panel.offset_left = margin
+		action_panel.offset_bottom = -margin
+		action_panel.offset_top = -margin - panel_h
+		action_panel.offset_right = margin + 300.0 * scale
+		action_panel.custom_minimum_size = Vector2(260.0 * scale, panel_h)
+
+	if is_instance_valid(_mp_connection_label):
+		_mp_connection_label.offset_left = -280.0 * scale
+		_mp_connection_label.offset_top = margin
+		_mp_connection_label.offset_right = -margin
+		_mp_connection_label.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(18))
+
+	if is_instance_valid(_cabinet_prompt_label):
+		var half_w := minf(vp.x * 0.42, 360.0 * scale)
+		_cabinet_prompt_label.offset_left = -half_w
+		_cabinet_prompt_label.offset_right = half_w
+		_cabinet_prompt_label.offset_top = -110.0 * scale
+		_cabinet_prompt_label.offset_bottom = -50.0 * scale
+		_cabinet_prompt_label.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(28))
+
+	if is_instance_valid(_ability_desc_panel):
+		var desc_w := 330.0 * scale
+		_ability_desc_panel.offset_left = -desc_w - margin
+		_ability_desc_panel.offset_right = -margin
+		_ability_desc_panel.offset_top = -180.0 * scale
+		_ability_desc_panel.offset_bottom = -margin
+		var desc_label := _ability_desc_panel.get_node_or_null("DescLabel")
+		if desc_label:
+			desc_label.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(18))
+
+	var emote_btn_w := 150.0 * scale
+	var emote_btn_h := 48.0 * scale
+	if is_instance_valid(_emote_toggle_btn):
+		_emote_toggle_btn.offset_left = -emote_btn_w - margin
+		_emote_toggle_btn.offset_right = -margin
+		_emote_toggle_btn.offset_top = -emote_btn_h - margin
+		_emote_toggle_btn.offset_bottom = -margin
+		_emote_toggle_btn.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(18))
+		_emote_toggle_btn.custom_minimum_size = Vector2(emote_btn_w, emote_btn_h)
+	if is_instance_valid(_emote_wheel_panel):
+		var wheel_w := 268.0 * scale
+		var wheel_h := 268.0 * scale
+		_emote_wheel_panel.offset_left = -wheel_w - margin
+		_emote_wheel_panel.offset_right = -margin
+		_emote_wheel_panel.offset_top = -wheel_h - emote_btn_h - margin * 2.0
+		_emote_wheel_panel.offset_bottom = -emote_btn_h - margin * 2.0
+
+	if is_instance_valid(_jack_swap_banner):
+		_jack_swap_banner.offset_top = 100.0 * scale
+		_jack_swap_banner.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(26))
+
+	if is_instance_valid(_touch_hint_label):
+		_touch_hint_label.offset_top = -36.0 * scale
+		_touch_hint_label.offset_bottom = -8.0 * scale
+		_touch_hint_label.offset_left = -vp.x * 0.45
+		_touch_hint_label.offset_right = vp.x * 0.45
+		_touch_hint_label.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(16))
+
+	for btn in [end_turn_btn, jump_in_btn, call_dutch_btn, confirm_dutch_btn, forfeit_dutch_btn]:
+		if is_instance_valid(btn):
+			btn.custom_minimum_size = Vector2(260.0 * scale, 45.0 * scale)
+			btn.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(22))
+
+	if is_instance_valid(top_center):
+		top_center.offset_top = 72.0 * scale
+		top_center.offset_left = -vp.x * 0.45
+		top_center.offset_right = vp.x * 0.45
+
+func _create_emote_toggle_button() -> void:
+	_emote_toggle_btn = Button.new()
+	_emote_toggle_btn.name = "EmoteToggleButton"
+	_emote_toggle_btn.text = "EMOTE [T]"
+	_emote_toggle_btn.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_emote_toggle_btn.offset_left = -170.0
+	_emote_toggle_btn.offset_top = -68.0
+	_emote_toggle_btn.offset_right = -20.0
+	_emote_toggle_btn.offset_bottom = -20.0
+	_emote_toggle_btn.custom_minimum_size = Vector2(150, 48)
+	_emote_toggle_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	_emote_toggle_btn.add_theme_font_size_override("font_size", 18)
+	_emote_toggle_btn.add_theme_color_override("font_color", EMOTE_WHEEL_ACCENT)
+	_emote_toggle_btn.add_theme_color_override("font_hover_color", Color.WHITE)
+	_emote_toggle_btn.add_theme_color_override("font_pressed_color", EMOTE_WHEEL_ACCENT.lightened(0.25))
+
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.05, 0.06, 0.1, 0.85)
+	normal.border_width_left = 2
+	normal.border_width_right = 2
+	normal.border_width_top = 2
+	normal.border_width_bottom = 2
+	normal.border_color = Color(EMOTE_WHEEL_ACCENT.r, EMOTE_WHEEL_ACCENT.g, EMOTE_WHEEL_ACCENT.b, 0.7)
+	normal.corner_radius_top_left = 10
+	normal.corner_radius_top_right = 10
+	normal.corner_radius_bottom_left = 10
+	normal.corner_radius_bottom_right = 10
+	normal.shadow_color = Color(0, 0, 0, 0.45)
+	normal.shadow_size = 6
+
+	var hover := normal.duplicate()
+	hover.bg_color = Color(0.12, 0.1, 0.04, 0.95)
+	hover.border_color = EMOTE_WHEEL_ACCENT
+
+	var pressed := hover.duplicate()
+	pressed.bg_color = Color(0.2, 0.16, 0.04, 0.95)
+
+	var disabled := normal.duplicate()
+	disabled.bg_color = Color(0.05, 0.06, 0.1, 0.45)
+	disabled.border_color = Color(EMOTE_WHEEL_ACCENT.r, EMOTE_WHEEL_ACCENT.g, EMOTE_WHEEL_ACCENT.b, 0.2)
+
+	_emote_toggle_btn.add_theme_stylebox_override("normal", normal)
+	_emote_toggle_btn.add_theme_stylebox_override("hover", hover)
+	_emote_toggle_btn.add_theme_stylebox_override("pressed", pressed)
+	_emote_toggle_btn.add_theme_stylebox_override("disabled", disabled)
+
+	_emote_toggle_btn.pressed.connect(_toggle_emote_wheel)
+	$GameUI/MainHUD.add_child(_emote_toggle_btn)
 
 func _create_emote_wheel_ui() -> void:
+	_create_emote_toggle_button()
 	_emote_wheel_panel = PanelContainer.new()
 	_emote_wheel_panel.name = "EmoteWheel"
 	_emote_wheel_panel.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
@@ -834,14 +1006,45 @@ func _create_emote_wheel_ui() -> void:
 	vbox.add_theme_constant_override("separation", 10)
 	_emote_wheel_panel.add_child(vbox)
 
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 8)
+	vbox.add_child(header)
+
 	var title := Label.new()
 	title.text = "> EMOTES <"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.add_theme_font_size_override("font_size", 15)
 	title.add_theme_color_override("font_color", EMOTE_WHEEL_ACCENT)
 	title.add_theme_color_override("font_shadow_color", Color(EMOTE_WHEEL_ACCENT.r, EMOTE_WHEEL_ACCENT.g, EMOTE_WHEEL_ACCENT.b, 0.25))
 	title.add_theme_constant_override("shadow_offset_y", 1)
-	vbox.add_child(title)
+	header.add_child(title)
+
+	_emote_close_btn = Button.new()
+	_emote_close_btn.text = "X"
+	_emote_close_btn.custom_minimum_size = Vector2(28, 28)
+	_emote_close_btn.add_theme_font_size_override("font_size", 14)
+	_emote_close_btn.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))
+	_emote_close_btn.add_theme_color_override("font_hover_color", Color.WHITE)
+	var close_normal := StyleBoxFlat.new()
+	close_normal.bg_color = Color(0.18, 0.05, 0.06, 0.65)
+	close_normal.border_width_left = 1
+	close_normal.border_width_right = 1
+	close_normal.border_width_top = 1
+	close_normal.border_width_bottom = 1
+	close_normal.border_color = Color(1.0, 0.3, 0.4, 0.6)
+	close_normal.corner_radius_top_left = 6
+	close_normal.corner_radius_top_right = 6
+	close_normal.corner_radius_bottom_left = 6
+	close_normal.corner_radius_bottom_right = 6
+	var close_hover := close_normal.duplicate()
+	close_hover.bg_color = Color(0.42, 0.08, 0.1, 0.85)
+	close_hover.border_color = Color(1.0, 0.5, 0.55, 0.95)
+	_emote_close_btn.add_theme_stylebox_override("normal", close_normal)
+	_emote_close_btn.add_theme_stylebox_override("hover", close_hover)
+	_emote_close_btn.add_theme_stylebox_override("pressed", close_hover)
+	_emote_close_btn.pressed.connect(_close_emote_wheel)
+	header.add_child(_emote_close_btn)
 
 	var grid := GridContainer.new()
 	grid.columns = 2
@@ -1100,13 +1303,16 @@ func _create_chicken_placeholder():
 				m.set_surface_override_material(i, mat)
 
 	var area = Area3D.new()
+	area.name = "ChickenArea3D"
+	area.collision_layer = COLLISION_LAYER_CHICKEN
+	area.collision_mask = 0
 	var col = CollisionShape3D.new()
 	var shape = SphereShape3D.new()
-	# Compensate for chicken scaling to keep a clickable area of ~0.6m radius
-	shape.radius = 12.0 
+	shape.radius = CHICKEN_HITBOX_RADIUS
 	col.shape = shape
 	area.add_child(col)
 	chicken.add_child(area)
+	_chicken_area = area
 	
 	area.input_event.connect(_on_chicken_clicked)
 	GameManager.ability_unlocked.connect(_on_ability_unlocked)
@@ -1146,41 +1352,27 @@ func _try_buy_ability(p_idx: int):
 		
 	_send_action("buy_ability")
 
-func _drop_egg_for(p_idx: int, ab: String):
+func _drop_egg_for(p_idx: int, ab: String) -> void:
+	var ab_name := _format_ability_name(ab)
 	if p_idx == _human_ui_idx():
-		_show_message("You got: " + ab.capitalize() + "! (Check your cabinet)")
+		_show_ability_purchase_alert(ab_name, ab)
 	else:
-		_show_message(GameManager.players_info[p_idx].name + " bought an ability!")
+		_show_message(GameManager.players_info[p_idx].name + " bought " + ab_name + "!")
 	
 	if is_instance_valid(_chicken_node):
-		spawn_particles("ability_buy", _chicken_node.global_position)
+		spawn_particles("ability_buy", _chicken_node.global_position + Vector3(0, 0.35, 0))
 		var tween = create_tween()
 		tween.tween_property(_chicken_node, "position:y", 1.38, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tween.tween_property(_chicken_node, "position:y", 0.58, 0.2).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
 
-		# Camera cinematic zoom - GUARD against re-entry
-		if not _chicken_zoom_active:
-			_chicken_zoom_active = true
-			var target_pos = _chicken_node.global_position + Vector3(0, 1.5, 2.5)
-			var cam_tween = create_tween()
-			var restore_cam_local = _effective_camera_base_local()
-			var original_fov = camera.fov
-			var original_rot = camera.rotation_degrees
-			
-			cam_tween.tween_property(camera, "global_position", target_pos, 0.3).set_trans(Tween.TRANS_CUBIC)
-			cam_tween.parallel().tween_property(camera, "rotation_degrees", Vector3(-20, 0, 0), 0.3).set_trans(Tween.TRANS_CUBIC)
-			cam_tween.parallel().tween_property(camera, "fov", 45.0, 0.3).set_trans(Tween.TRANS_CUBIC)
-			cam_tween.tween_interval(0.8)
-			cam_tween.tween_property(camera, "position", restore_cam_local, 0.4).set_trans(Tween.TRANS_QUAD)
-			cam_tween.parallel().tween_property(camera, "rotation_degrees", original_rot, 0.4).set_trans(Tween.TRANS_QUAD)
-			cam_tween.parallel().tween_property(camera, "fov", original_fov, 0.4).set_trans(Tween.TRANS_QUAD)
-			cam_tween.tween_callback(func():
-				camera.position = restore_cam_local
-				_chicken_zoom_active = false
-			)
 	# Spawn hammer in the player's cabinet
 	print("BOARD: syncing ability hammers for P", p_idx)
 	_update_ability_visuals(p_idx)
+	var cab: Node3D = _cabinets.get(p_idx)
+	if is_instance_valid(cab):
+		spawn_particles("ability_buy", cab.global_position + Vector3(0, 0.55, 0))
+		if p_idx == _human_ui_idx():
+			_play_ability_purchase_flash()
 	
 func _update_ability_visuals(p_idx: int):
 	# Abilities are now represented exclusively by hammers in the cabinet.
@@ -1234,7 +1426,7 @@ func _on_ability_token_clicked(token):
 func _use_hovered_hammer() -> void:
 	if _hovered_hammer_idx_board < 0 or not is_instance_valid(_hovered_hammer_cabinet):
 		return
-	var p_idx = GameManager.local_player_idx
+	var p_idx := _human_ui_idx()
 	# Only the current player may use abilities
 	if p_idx != GameManager.current_player_index:
 		_show_message("Not your turn to play abilities!")
@@ -1270,10 +1462,13 @@ func _use_hovered_hammer() -> void:
 
 ## hammer_collider: the Area3D Area3D that was clicked (has "hammer_index" meta).
 func _on_hammer_clicked(hammer_collider: Area3D) -> void:
+	var owner_idx: int = hammer_collider.get_meta("player_index", -1)
+	if owner_idx != _human_ui_idx():
+		return
 	var h_idx: int = hammer_collider.get_meta("hammer_index", -1)
 	if h_idx >= 0:
 		_hovered_hammer_idx_board = h_idx
-		_hovered_hammer_cabinet = _cabinets.get(GameManager.local_player_idx)
+		_hovered_hammer_cabinet = _cabinets.get(_human_ui_idx())
 		_use_hovered_hammer()
 
 func _create_player_targeting_areas():
@@ -1699,7 +1894,9 @@ func _on_card_drawn_to_pending(player_idx, card_data):
 	_update_deck_visual()
 
 	if player_idx != _human_ui_idx():
-		_show_message(GameManager.players_info[player_idx].name + " is drawing...")
+		_show_message(GameManager.players_info[player_idx].name + " is drawing...", DRAW_STATUS_HOLD_SEC)
+	else:
+		_show_message("You drew a card — choose swap or discard.", DRAW_STATUS_HOLD_SEC)
 
 	pending_card = card_scene.instantiate()
 	pending_card.name = "PendingCard"
@@ -1794,23 +1991,46 @@ func _on_card_discarded(player_idx, card_data):
 			CONNECT_ONE_SHOT
 		)
 
-func _show_message(text: String):
+func _show_message(text: String, hold_seconds: float = 0.0) -> void:
+	if hold_seconds <= 0.0 and Time.get_ticks_msec() < _status_message_hold_until_msec:
+		_status_message_pending = text
+		return
+	if hold_seconds > 0.0:
+		_status_message_hold_until_msec = Time.get_ticks_msec() + int(hold_seconds * 1000.0)
+	else:
+		_status_message_hold_until_msec = 0
+	_status_message_pending = ""
+	_status_message_hide_pending = false
+	_apply_status_message(text)
+
+func _apply_status_message(text: String) -> void:
 	_current_ability_message = text
 	for child in top_center.get_children():
 		child.queue_free()
 
 	var label = Label.new()
 	label.text = text
-	label.add_theme_font_size_override("font_size", 32)
+	label.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(32))
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.add_theme_color_override("font_color", Color(0.0, 1.0, 1.0))
 	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
 	label.add_theme_constant_override("shadow_offset_x", 3)
 	label.add_theme_constant_override("shadow_offset_y", 3)
 	top_center.add_child(label)
-	# Bug 5: responsive pos
 	top_center.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	label.show()
+
+func _flush_status_message_hold() -> void:
+	if Time.get_ticks_msec() < _status_message_hold_until_msec:
+		return
+	if _status_message_pending != "":
+		var pending := _status_message_pending
+		_status_message_pending = ""
+		_status_message_hold_until_msec = 0
+		_status_message_hide_pending = false
+		_apply_status_message(pending)
+	elif _status_message_hide_pending:
+		_hide_message(true)
 
 func _on_end_turn_pressed():
 	if GameManager.can_player_end_turn(GameManager.local_player_idx):
@@ -1909,6 +2129,8 @@ func _update_action_panel_style():
 
 func _on_game_state_changed(new_state):
 	_hide_message()
+	if new_state != GameManager.GameState.TURN_SWAP_ABILITY:
+		_hide_jack_swap_ui()
 	_update_draw_arrow_visibility()
 
 	_apply_gameplay_mouse_mode()
@@ -1971,8 +2193,12 @@ func _on_game_state_changed(new_state):
 			_update_turn_lights(-1, true)
 		GameManager.GameState.TURN_SWAP_ABILITY:
 			if GameManager.active_ability_player == _human_ui_idx():
-				_show_message("Select TWO cards to swap.")
+				_show_jack_swap_alert()
+				_update_jack_swap_banner(swap_sources.size())
 				_highlight_selectable_cards(true)
+			else:
+				var swapper_name: String = GameManager.players_info[GameManager.active_ability_player].name
+				_show_message(swapper_name + " played a Jack — swapping cards...")
 			_update_turn_lights(-1, true)
 			swap_sources.clear()
 		GameManager.GameState.GAME_OVER:
@@ -2052,7 +2278,13 @@ func _clear_all_highlights():
 				child.set_highlight(false)
 				child.set_interactive(false)
 
-func _hide_message():
+func _hide_message(force: bool = false) -> void:
+	if not force and Time.get_ticks_msec() < _status_message_hold_until_msec:
+		_status_message_hide_pending = true
+		return
+	_status_message_hold_until_msec = 0
+	_status_message_pending = ""
+	_status_message_hide_pending = false
 	_current_ability_message = ""
 	for child in top_center.get_children():
 		child.queue_free()
@@ -2490,11 +2722,13 @@ func _on_card_clicked(node, data):
 			if swap_sources.any(func(s): return s.node == node):
 				return
 			swap_sources.append({"node": node, "player": p_idx, "index": c_idx})
+			_update_jack_swap_banner(swap_sources.size())
 			if swap_sources.size() == 2:
 				var s1 = swap_sources[0]
 				var s2 = swap_sources[1]
 				_send_action("complete_swap_ability", {"p1": s1.player, "c1": s1.index, "p2": s2.player, "c2": s2.index})
 				swap_sources.clear()
+				_hide_jack_swap_ui()
 				_clear_all_highlights()
 
 func _on_memory_shift_required(p_idx, _c_idx):
@@ -2749,6 +2983,10 @@ func _unhandled_input(event):
 	if event.is_action_pressed("ui_cancel"):
 		if DevConsole.window.is_visible():
 			return
+		if _emote_wheel_open:
+			_close_emote_wheel()
+			get_viewport().set_input_as_handled()
+			return
 		if GameManager.can_player_cancel_jump_in(GameManager.local_player_idx):
 			_send_action("cancel_jump_in")
 			_show_message("Jump-in cancelled.")
@@ -2769,10 +3007,13 @@ func _unhandled_input(event):
 
 	# --- BOARD CLICK (free cursor; hold RMB to look around) ---
 	if not noclip_enabled and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		var screen_pos := _get_screen_ray_position()
-		if not _is_mouse_over_hud(screen_pos) and _handle_board_click_at_screen(screen_pos):
-			get_viewport().set_input_as_handled()
-			return
+		if ResponsiveUI.is_touch_device():
+			pass
+		else:
+			var screen_pos := _get_screen_ray_position()
+			if not _is_mouse_over_hud(screen_pos) and _handle_board_click_at_screen(screen_pos):
+				get_viewport().set_input_as_handled()
+				return
 
 	# DEBUG: Press L to toggle all face-down cards face-up; F3 toggles FSM debug panel.
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -2864,7 +3105,7 @@ func _handle_game_keyboard_input(event: InputEvent) -> void:
 		_toggle_emote_wheel()
 		get_viewport().set_input_as_handled()
 
-	elif _emote_wheel_open and event.keycode >= KEY_1 and event.keycode <= KEY_4:
+	elif event is InputEventKey and event.keycode >= KEY_1 and event.keycode <= KEY_4:
 		var emote_idx: int = event.keycode - KEY_1
 		if emote_idx < GAME_EMOTES.size():
 			_on_emote_wheel_pressed(GAME_EMOTES[emote_idx].id)
@@ -3052,6 +3293,7 @@ func _process(delta: float) -> void:
 	_update_crosshair_raycast()
 	_update_action_buttons_state()
 	_update_emote_wheel_state()
+	_flush_status_message_hold()
 	
 	if is_instance_valid(draw_arrow) and draw_arrow.visible:
 		draw_arrow.position.y = 1.2 + sin(Time.get_ticks_msec() * 0.005) * 0.15
@@ -3311,13 +3553,43 @@ func _process(delta: float) -> void:
 			camera.near = 0.05
 			camera.position = _effective_camera_base_local() + shake_offset
 
+func _board_raycast(screen_pos: Vector2, collision_mask: int) -> Dictionary:
+	if not is_instance_valid(camera):
+		return {}
+	var ray_origin: Vector3 = camera.project_ray_origin(screen_pos)
+	var ray_normal: Vector3 = camera.project_ray_normal(screen_pos)
+	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
+	query.collision_mask = collision_mask
+	query.collide_with_areas = true
+	query.collide_with_bodies = false
+	return space_state.intersect_ray(query)
+
+func _is_chicken_collider(collider: Object) -> bool:
+	if not is_instance_valid(_chicken_node) or collider == null:
+		return false
+	if collider == _chicken_area:
+		return true
+	return collider.get_parent() == _chicken_node
+
+func _set_chicken_hover(active: bool) -> void:
+	if active == _hovered_chicken:
+		return
+	_hovered_chicken = active
+	if active and is_instance_valid(_cabinet_prompt_label):
+		_cabinet_prompt_label.text = "[CLICK] Buy ability ($50)"
+		_cabinet_prompt_label.show()
+	elif not active and is_instance_valid(_cabinet_prompt_label) and _hovered_hammer_idx_board < 0 \
+			and _hovered_shelf_index < 0:
+		_cabinet_prompt_label.hide()
+
 func _update_cabinet_hover() -> void:
 	if not is_instance_valid(camera):
 		return
 	
-	var center := _get_screen_ray_position()
-	var ray_origin = camera.project_ray_origin(center)
-	var ray_normal = camera.project_ray_normal(center)
+	var screen_pos := _get_screen_ray_position()
+	var ray_origin: Vector3 = camera.project_ray_origin(screen_pos)
+	var ray_normal: Vector3 = camera.project_ray_normal(screen_pos)
 	var space_state := get_world_3d().direct_space_state
 	
 	# --- PASS 1: Hammer detection on layer 16 ---
@@ -3335,7 +3607,7 @@ func _update_cabinet_hover() -> void:
 			var h_idx: int = collider.get_meta("hammer_index")
 			var h_player_idx: int = collider.get_meta("player_index", -1)
 			# Only local player can hover/click their own hammers
-			if h_player_idx == GameManager.local_player_idx:
+			if h_player_idx == _human_ui_idx():
 				var cab_node = _cabinets.get(h_player_idx)
 				if is_instance_valid(cab_node):
 					if _hovered_hammer_idx_board != h_idx or _hovered_hammer_cabinet != cab_node:
@@ -3361,6 +3633,7 @@ func _update_cabinet_hover() -> void:
 							desc_label.text = _get_ability_desc(ab_id)
 						_ability_desc_panel.show()
 						
+					_set_chicken_hover(false)
 					return  # Hammer handled; skip drawer detection this frame
 	
 	# Not hovering a hammer this frame — unhover if we were before
@@ -3373,7 +3646,15 @@ func _update_cabinet_hover() -> void:
 		if is_instance_valid(_ability_desc_panel):
 			_ability_desc_panel.hide()
 	
-	# --- PASS 2: Drawer detection on layer 8 ---
+	# --- PASS 2: Chicken purchase (dedicated layer; follows mouse, not screen center) ---
+	if GameManager.current_player_index == _human_ui_idx():
+		var r_chicken := _board_raycast(screen_pos, COLLISION_LAYER_CHICKEN)
+		if r_chicken and _is_chicken_collider(r_chicken.collider):
+			_set_chicken_hover(true)
+			return
+	_set_chicken_hover(false)
+	
+	# --- PASS 3: Drawer detection on layer 8 ---
 	var q_drawer := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
 	q_drawer.collision_mask = 8
 	q_drawer.collide_with_areas = true
@@ -3498,11 +3779,25 @@ func _input(event: InputEvent) -> void:
 			camera.basis = Basis() # Reset
 			camera.rotate_y(camera_rot_y)
 			camera.rotate_object_local(Vector3.RIGHT, camera_rot_x)
-		elif Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
-			_look_yaw -= event.relative.x * 0.0025
-			_look_pitch -= event.relative.y * 0.0025
-			_look_yaw = clamp(_look_yaw, deg_to_rad(-105.0), deg_to_rad(105.0))
-			_look_pitch = clamp(_look_pitch, deg_to_rad(-45.0), deg_to_rad(22.0))
+			_handle_touch_look(event.relative)
+	elif event is InputEventScreenTouch:
+		if event.pressed:
+			_touch_positions[event.index] = event.position
+			_touch_tap_starts[event.index] = event.position
+		else:
+			if event.index == 0 and not _touch_look_active:
+				var start_pos: Vector2 = _touch_tap_starts.get(0, event.position)
+				if start_pos.distance_to(event.position) <= ResponsiveUI.get_touch_slop():
+					_handle_touch_tap(event.position)
+			_touch_positions.erase(event.index)
+			_touch_tap_starts.erase(event.index)
+			if _touch_positions.size() < 2:
+				_touch_look_active = false
+	elif event is InputEventScreenDrag:
+		_touch_positions[event.index] = event.position
+		if _touch_positions.size() >= 2:
+			_touch_look_active = true
+			_handle_touch_look(event.relative)
 
 func _on_jack_swap_resolved(p1: int, c1: int, p2: int, c2: int) -> void:
 	play_take_animation(GameManager.current_player_index)
@@ -3524,7 +3819,149 @@ func _on_jack_swap_resolved(p1: int, c1: int, p2: int, c2: int) -> void:
 
 	_update_hand_visuals(p1)
 	_update_hand_visuals(p2)
+	_hide_jack_swap_ui()
 
+
+func _jack_swap_target_hint() -> String:
+	var parts: PackedStringArray = []
+	var human_idx := _human_ui_idx()
+	for i in range(GameManager.num_players):
+		if i >= GameManager.players_info.size():
+			continue
+		if GameManager.players_info[i].is_eliminated:
+			continue
+		if i == human_idx:
+			parts.append("your hand")
+		else:
+			parts.append(GameManager.players_info[i].name)
+	if parts.is_empty():
+		return "any face-down card on the table"
+	return ", ".join(parts)
+
+func _update_jack_swap_banner(selected_count: int) -> void:
+	if GameManager.current_state != GameManager.GameState.TURN_SWAP_ABILITY \
+			or GameManager.active_ability_player != _human_ui_idx():
+		return
+	if not is_instance_valid(_jack_swap_banner):
+		_jack_swap_banner = Label.new()
+		_jack_swap_banner.name = "JackSwapBanner"
+		_jack_swap_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_jack_swap_banner.add_theme_font_size_override("font_size", 26)
+		_jack_swap_banner.add_theme_color_override("font_color", Color(1.0, 0.55, 0.75))
+		_jack_swap_banner.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.85))
+		_jack_swap_banner.add_theme_constant_override("shadow_offset_x", 2)
+		_jack_swap_banner.add_theme_constant_override("shadow_offset_y", 2)
+		_jack_swap_banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		_jack_swap_banner.offset_top = 118.0
+		_jack_swap_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		$GameUI/MainHUD.add_child(_jack_swap_banner)
+	if selected_count <= 0:
+		_jack_swap_banner.text = "JACK: Click 2 face-down cards — yours OR another player's hand!"
+	elif selected_count == 1 and not swap_sources.is_empty():
+		var s0: Dictionary = swap_sources[0]
+		var who := "your hand"
+		var p0: int = int(s0.get("player", -1))
+		if p0 >= 0 and p0 != _human_ui_idx() and p0 < GameManager.players_info.size():
+			who = String(GameManager.players_info[p0].name)
+		_jack_swap_banner.text = "JACK: 1/2 — first from %s — click another face-down card (any player)" % who
+	elif selected_count == 1:
+		_jack_swap_banner.text = "JACK: 1/2 selected — click a second card (any player, face-down)"
+	else:
+		_jack_swap_banner.text = "JACK: Swapping..."
+	_jack_swap_banner.show()
+
+func _hide_jack_swap_ui() -> void:
+	var old_alert = $GameUI/MainHUD.get_node_or_null("JackSwapAlert")
+	if old_alert:
+		old_alert.queue_free()
+	if is_instance_valid(_jack_swap_banner):
+		_jack_swap_banner.queue_free()
+		_jack_swap_banner = null
+
+func _show_jack_swap_alert() -> void:
+	var old_alert = $GameUI/MainHUD.get_node_or_null("JackSwapAlert")
+	if old_alert:
+		old_alert.queue_free()
+
+	var targets := _jack_swap_target_hint()
+	var center = CenterContainer.new()
+	center.name = "JackSwapAlert"
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$GameUI/MainHUD.add_child(center)
+
+	var panel = PanelContainer.new()
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.06, 0.02, 0.08, 0.92)
+	style.border_width_left = 5
+	style.border_width_right = 5
+	style.border_width_top = 5
+	style.border_width_bottom = 5
+	style.border_color = Color(0.95, 0.25, 0.45)
+	style.corner_radius_top_left = 14
+	style.corner_radius_top_right = 14
+	style.corner_radius_bottom_left = 14
+	style.corner_radius_bottom_right = 14
+	style.shadow_color = Color(0.95, 0.2, 0.4, 0.4)
+	style.shadow_size = 22
+	style.content_margin_left = 36
+	style.content_margin_right = 36
+	style.content_margin_top = 22
+	style.content_margin_bottom = 22
+	panel.add_theme_stylebox_override("panel", style)
+	center.add_child(panel)
+
+	var vbox = VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 10)
+	panel.add_child(vbox)
+
+	var title = Label.new()
+	title.text = "JACK PLAYED!"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 32)
+	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.35))
+	vbox.add_child(title)
+
+	var headline = Label.new()
+	headline.text = "SWAP ANY TWO FACE-DOWN CARDS"
+	headline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	headline.add_theme_font_size_override("font_size", 40)
+	headline.add_theme_color_override("font_color", Color(1.0, 0.45, 0.65))
+	headline.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.8))
+	headline.add_theme_constant_override("shadow_offset_x", 2)
+	headline.add_theme_constant_override("shadow_offset_y", 2)
+	vbox.add_child(headline)
+
+	var body = Label.new()
+	body.text = "Click cards on the table — including other players' hands.\nValid targets: %s" % targets
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.custom_minimum_size = Vector2(560, 0)
+	body.add_theme_font_size_override("font_size", 22)
+	body.add_theme_color_override("font_color", Color(0.92, 0.95, 1.0))
+	vbox.add_child(body)
+
+	var hint = Label.new()
+	hint.text = "Nobody sees what was swapped — pick 2 cards, then they trade places"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 18)
+	hint.add_theme_color_override("font_color", Color(0.75, 1.0, 0.9))
+	vbox.add_child(hint)
+
+	_show_message("Jack: select 2 face-down cards (yours or an opponent's)")
+	shake(0.2, 0.3)
+
+	center.modulate.a = 0.0
+	center.scale = Vector2(0.92, 0.92)
+	var intro = create_tween().set_parallel(true)
+	intro.tween_property(center, "modulate:a", 1.0, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	intro.tween_property(center, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+	var fade = create_tween()
+	fade.tween_interval(4.5)
+	fade.tween_property(center, "modulate:a", 0.0, 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	fade.tween_callback(center.queue_free)
 
 func _on_all_cards_revealed() -> void:
 	_update_turn_lights(-1, true)
@@ -3586,18 +4023,35 @@ func _toggle_emote_wheel() -> void:
 		return
 	if GameManager.current_state == GameManager.GameState.GAME_OVER:
 		return
-	_emote_wheel_open = not _emote_wheel_open
+	if _emote_wheel_open:
+		_close_emote_wheel()
+	else:
+		_open_emote_wheel()
+
+func _open_emote_wheel() -> void:
+	if pause_menu_instance != null:
+		return
+	if GameManager.current_state == GameManager.GameState.GAME_OVER:
+		return
+	_emote_wheel_open = true
 	if is_instance_valid(_emote_wheel_panel):
-		_emote_wheel_panel.visible = _emote_wheel_open
+		_emote_wheel_panel.visible = true
+	if is_instance_valid(_emote_toggle_btn):
+		_emote_toggle_btn.text = "CLOSE [T]"
+	_apply_gameplay_mouse_mode()
+
+func _close_emote_wheel() -> void:
+	_emote_wheel_open = false
+	if is_instance_valid(_emote_wheel_panel):
+		_emote_wheel_panel.visible = false
+	if is_instance_valid(_emote_toggle_btn):
+		_emote_toggle_btn.text = "EMOTE [T]"
 	_apply_gameplay_mouse_mode()
 
 func _on_emote_wheel_pressed(emote_id: String) -> void:
 	if not GameManager.request_emote(emote_id):
 		return
-	_emote_wheel_open = false
-	if is_instance_valid(_emote_wheel_panel):
-		_emote_wheel_panel.visible = false
-	_apply_gameplay_mouse_mode()
+	_close_emote_wheel()
 
 func _on_victory_emote_pressed(winner_id: int, emote_id: String) -> void:
 	GameManager.emit_player_emote(winner_id, emote_id, false)
@@ -3612,15 +4066,24 @@ func _update_emote_wheel_state() -> void:
 			and GameManager.current_state != GameManager.GameState.INITIALIZING
 	if not in_game or pause_menu_instance != null:
 		if _emote_wheel_open:
-			_emote_wheel_open = false
-			_emote_wheel_panel.visible = false
-			_apply_gameplay_mouse_mode()
+			_close_emote_wheel()
+		if is_instance_valid(_emote_toggle_btn):
+			_emote_toggle_btn.visible = false
+		return
+	if is_instance_valid(_emote_toggle_btn):
+		_emote_toggle_btn.visible = true
 
 	var remaining := GameManager.get_emote_cooldown_remaining(_human_ui_idx())
 	var on_cooldown := remaining > 0.0
 	for btn in _emote_buttons:
 		if is_instance_valid(btn):
 			btn.disabled = on_cooldown
+	if is_instance_valid(_emote_toggle_btn):
+		_emote_toggle_btn.disabled = on_cooldown
+		if on_cooldown:
+			_emote_toggle_btn.text = "WAIT %.1fs" % remaining
+		else:
+			_emote_toggle_btn.text = "CLOSE [T]" if _emote_wheel_open else "EMOTE [T]"
 	if is_instance_valid(_emote_cooldown_label):
 		if on_cooldown:
 			_emote_cooldown_label.text = "%.1fs" % remaining
@@ -3750,6 +4213,108 @@ func _on_pending_card_consumed():
 func _on_play_again_votes_updated(voted: int, total: int) -> void:
 	if is_instance_valid(play_again_btn):
 		play_again_btn.text = "Play Again (%d/%d)" % [voted, total]
+
+func _format_ability_name(ab: String) -> String:
+	return ab.capitalize().replace("_", " ")
+
+func _show_ability_purchase_alert(display_name: String, ab_id: String) -> void:
+	var old_alert = $GameUI/MainHUD.get_node_or_null("AbilityPurchaseAlert")
+	if old_alert:
+		old_alert.queue_free()
+
+	var center = CenterContainer.new()
+	center.name = "AbilityPurchaseAlert"
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$GameUI/MainHUD.add_child(center)
+
+	var panel = PanelContainer.new()
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.08, 0.05, 0.0, 0.92)
+	style.border_width_left = 5
+	style.border_width_right = 5
+	style.border_width_top = 5
+	style.border_width_bottom = 5
+	style.border_color = Color(1.0, 0.82, 0.15)
+	style.corner_radius_top_left = 14
+	style.corner_radius_top_right = 14
+	style.corner_radius_bottom_left = 14
+	style.corner_radius_bottom_right = 14
+	style.shadow_color = Color(1.0, 0.75, 0.0, 0.45)
+	style.shadow_size = 24
+	style.content_margin_left = 36
+	style.content_margin_right = 36
+	style.content_margin_top = 22
+	style.content_margin_bottom = 22
+	panel.add_theme_stylebox_override("panel", style)
+	center.add_child(panel)
+
+	var vbox = VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 8)
+	panel.add_child(vbox)
+
+	var title = Label.new()
+	title.text = "NEW ABILITY!"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_color_override("font_color", Color(1.0, 0.9, 0.25))
+	vbox.add_child(title)
+
+	var name_label = Label.new()
+	name_label.text = display_name.to_upper()
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.add_theme_font_size_override("font_size", 44)
+	name_label.add_theme_color_override("font_color", Color(1.0, 0.95, 0.55))
+	name_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.8))
+	name_label.add_theme_constant_override("shadow_offset_x", 2)
+	name_label.add_theme_constant_override("shadow_offset_y", 2)
+	vbox.add_child(name_label)
+
+	var desc := _get_ability_desc(ab_id)
+	if desc != "":
+		var desc_label = Label.new()
+		desc_label.text = desc.get_slice("\n", 0)
+		desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		desc_label.custom_minimum_size = Vector2(520, 0)
+		desc_label.add_theme_font_size_override("font_size", 20)
+		desc_label.add_theme_color_override("font_color", Color(0.85, 0.95, 1.0))
+		vbox.add_child(desc_label)
+
+	var hint = Label.new()
+	hint.text = "Added to your cabinet — click the hammer to use it"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 18)
+	hint.add_theme_color_override("font_color", Color(0.65, 1.0, 0.85))
+	vbox.add_child(hint)
+
+	_show_message("Purchased: " + display_name + " ($50) — check your cabinet")
+	shake(0.25, 0.35)
+
+	center.modulate.a = 0.0
+	center.scale = Vector2(0.92, 0.92)
+	var intro = create_tween().set_parallel(true)
+	intro.tween_property(center, "modulate:a", 1.0, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	intro.tween_property(center, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+	var fade = create_tween()
+	fade.tween_interval(4.0)
+	fade.tween_property(center, "modulate:a", 0.0, 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	fade.tween_callback(center.queue_free)
+
+func _play_ability_purchase_flash() -> void:
+	var flash_layer = CanvasLayer.new()
+	flash_layer.layer = 119
+	add_child(flash_layer)
+	var flash = ColorRect.new()
+	flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	flash.color = Color(1.0, 0.82, 0.15, 0.28)
+	flash_layer.add_child(flash)
+	var flash_tween = create_tween()
+	flash_tween.tween_property(flash, "color:a", 0.0, 0.35).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	flash_tween.tween_callback(flash_layer.queue_free)
 
 func _show_dutch_alert(caller_name: String):
 	var old_alert = $GameUI/MainHUD.get_node_or_null("DutchAlert")
@@ -3896,16 +4461,17 @@ func spawn_particles(type: String, global_pos: Vector3):
 			mesh.size = Vector2(0.16, 0.16)
 			
 		"ability_buy":
-			particles.amount = 20
-			particles.lifetime = 0.6
-			particles.spread = 120.0
+			particles.amount = 48
+			particles.lifetime = 0.85
+			particles.spread = 140.0
 			particles.direction = Vector3.UP
-			particles.gravity = Vector3(0, -3.0, 0) # Coins fall down
-			particles.initial_velocity_min = 2.0
-			particles.initial_velocity_max = 4.0
+			particles.gravity = Vector3(0, -2.5, 0) # Coins fall down
+			particles.initial_velocity_min = 2.5
+			particles.initial_velocity_max = 5.0
 			particles.color = Color(1.0, 0.9, 0.0) # Gold coins
 			grad.set_color(0, Color(1.0, 0.95, 0.2, 1.0))
 			grad.set_color(1, Color(0.8, 0.5, 0.0, 0.0))
+			mesh.size = Vector2(0.11, 0.11)
 			
 		"ability_use":
 			particles.amount = 40
@@ -4072,13 +4638,30 @@ func _apply_gameplay_mouse_mode() -> void:
 	if noclip_enabled:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		return
+	if ResponsiveUI.is_touch_device():
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		return
 	Input.mouse_mode = Input.MOUSE_MODE_CONFINED
 
 func _get_screen_ray_position() -> Vector2:
+	if ResponsiveUI.is_touch_device() and _touch_positions.has(0) and not _touch_look_active:
+		return _touch_positions[0]
 	var viewport_size := get_viewport().get_visible_rect().size
 	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		return viewport_size / 2.0
 	return get_viewport().get_mouse_position()
+
+func _handle_touch_look(delta: Vector2) -> void:
+	_look_yaw -= delta.x * 0.0025
+	_look_pitch -= delta.y * 0.0025
+	_look_yaw = clamp(_look_yaw, deg_to_rad(-105.0), deg_to_rad(105.0))
+	_look_pitch = clamp(_look_pitch, deg_to_rad(-50.0), deg_to_rad(22.0))
+
+func _handle_touch_tap(screen_pos: Vector2) -> void:
+	if _is_mouse_over_hud(screen_pos):
+		return
+	if _handle_board_click_at_screen(screen_pos):
+		return
 
 func _is_mouse_over_hud(screen_pos: Vector2) -> bool:
 	if is_instance_valid(action_panel) and action_panel.get_global_rect().has_point(screen_pos):
@@ -4086,19 +4669,36 @@ func _is_mouse_over_hud(screen_pos: Vector2) -> bool:
 	if _emote_wheel_open and is_instance_valid(_emote_wheel_panel) \
 			and _emote_wheel_panel.get_global_rect().has_point(screen_pos):
 		return true
+	if is_instance_valid(_emote_toggle_btn) and _emote_toggle_btn.visible \
+			and _emote_toggle_btn.get_global_rect().has_point(screen_pos):
+		return true
 	return false
 
 func _handle_board_click_at_screen(screen_pos: Vector2) -> bool:
 	if not is_instance_valid(camera):
 		return false
-	var ray_origin: Vector3 = camera.project_ray_origin(screen_pos)
-	var ray_normal: Vector3 = camera.project_ray_normal(screen_pos)
-	var space_state := get_world_3d().direct_space_state
-	var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
-	query.collision_mask = 1
-	query.collide_with_areas = true
-	query.collide_with_bodies = false
-	var result := space_state.intersect_ray(query)
+
+	# Chickens + hammers first so table cards do not steal the click.
+	if GameManager.current_player_index == _human_ui_idx():
+		var r_chicken := _board_raycast(screen_pos, COLLISION_LAYER_CHICKEN)
+		if r_chicken and _is_chicken_collider(r_chicken.collider):
+			_try_buy_ability(_human_ui_idx())
+			return true
+
+	if _hovered_hammer_idx_board >= 0 and is_instance_valid(_hovered_hammer_cabinet):
+		play_take_animation(_human_ui_idx())
+		_use_hovered_hammer()
+		return true
+
+	var result16 := _board_raycast(screen_pos, 16)
+	if result16 and result16.collider and result16.collider.has_meta("hammer_index"):
+		var owner_idx: int = result16.collider.get_meta("player_index", -1)
+		if owner_idx == _human_ui_idx():
+			play_take_animation(_human_ui_idx())
+			_on_hammer_clicked(result16.collider)
+			return true
+
+	var result := _board_raycast(screen_pos, 1)
 	if result and result.collider:
 		var col = result.collider
 		var parent = col.get_parent()
@@ -4111,23 +4711,11 @@ func _handle_board_click_at_screen(screen_pos: Vector2) -> bool:
 		if col.get_parent() == $DiscardArea and $DiscardArea/Area3D.input_ray_pickable:
 			_on_discard_clicked()
 			return true
-		if parent == _chicken_node and GameManager.current_player_index == GameManager.local_player_idx:
-			_try_buy_ability(GameManager.local_player_idx)
-			return true
 		if col.name == "TargetArea" and col.input_ray_pickable:
 			var player_idx: int = col.get_meta("player_index", -1)
 			if player_idx != -1:
 				_on_player_area_input(null, null, Vector3.ZERO, Vector3.ZERO, 0, player_idx)
 				return true
-	var query16 := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_normal * 100.0)
-	query16.collision_mask = 16
-	query16.collide_with_areas = true
-	query16.collide_with_bodies = false
-	var result16 := space_state.intersect_ray(query16)
-	if result16 and result16.collider and result16.collider.has_meta("hammer_index"):
-		play_take_animation(_human_ui_idx())
-		_on_hammer_clicked(result16.collider)
-		return true
 	return false
 
 func _update_crosshair_raycast() -> void:

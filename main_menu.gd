@@ -30,6 +30,21 @@ func _ready() -> void:
 	mp_btn.mouse_exited.connect(_on_button_mouse_exited.bind(mp_btn, "Multiplayer"))
 	settings_button.mouse_exited.connect(_on_button_mouse_exited.bind(settings_button, "Settings"))
 	exit_button.mouse_exited.connect(_on_button_mouse_exited.bind(exit_button, "Exit"))
+	if not get_viewport().size_changed.is_connected(_apply_responsive_layout):
+		get_viewport().size_changed.connect(_apply_responsive_layout)
+	call_deferred("_apply_responsive_layout")
+
+func _apply_responsive_layout() -> void:
+	var left_margin: Control = $LeftMargin
+	left_margin.anchor_right = 0.92 if ResponsiveUI.is_narrow_screen() else 0.42
+	$LeftMargin/VBox/Title.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(86))
+	for btn_name in ["StartButton", "MultiplayerButton", "SettingsButton", "ExitButton"]:
+		var btn: Button = $LeftMargin/VBox/Buttons.get_node(btn_name)
+		btn.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(38))
+	for btn_name in ["NormalButton", "EasyButton", "TutorialButton"]:
+		var btn: Button = $DifficultyPrompt/Panel.get_node(btn_name)
+		btn.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(26))
+	$DifficultyPrompt/Panel/TitleBar/TitleLabel.add_theme_font_size_override("font_size", ResponsiveUI.scaled_font(30))
 
 func _on_button_mouse_entered(type: String) -> void:
 	glitch_player.play_glitch_hover()

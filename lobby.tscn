@@ -31,6 +31,7 @@ grow_vertical = 2
 texture = ExtResource("2_bg")
 expand_mode = 2
 stretch_mode = 0
+mouse_filter = 2
 
 [node name="VHSEffect" type="ColorRect" parent="."]
 material = SubResource("ShaderMaterial_vhs")
