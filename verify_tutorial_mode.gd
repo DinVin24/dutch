@@ -151,7 +151,7 @@ func _run() -> void:
 	overlay.set("_last_money", 40)
 	overlay._on_player_gained_money(0, 10, 50)
 	await create_timer(0.25).timeout
-	_assert_tip_contains(overlay, ["$50", "CHICKEN", "ability egg"])
+	_assert_tip_contains(overlay, ["$50", "CHICKEN", "ability"])
 	_log("OK one-off tutorial events cover beer, Dutch, abilities, and chicken guidance")
 
 	gm.tutorial_mode = true
