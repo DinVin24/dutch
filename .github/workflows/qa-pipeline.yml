@@ -102,6 +102,6 @@ jobs:
           unzip butler.zip -d butler
           chmod +x butler/butler
           echo "Publishing Windows build to itch.io..."
-          ./butler/butler push build/windows/ DinVin24/dutch:windows
+          ./butler/butler push build/windows/ DinVin24/dutch-20:windows
           echo "Publishing Web build to itch.io..."
-          ./butler/butler push build/web/ DinVin24/dutch:html5
+          ./butler/butler push build/web/ DinVin24/dutch-20:html5
