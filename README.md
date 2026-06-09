@@ -1,362 +1,245 @@
-# Dutch
+# Dutch 🃏
 
-Dutch este un joc de cărți 3D, multiplayer, rules-heavy, construit în Godot 4. Proiectul urmărește explicit dezvoltarea asistată de AI pe tot ciclul software: planificare, arhitectură, implementare, testare, bug fixing, evals pentru agenți și CI.
+Dutch este un joc de cărți 3D, multiplayer, rules-heavy, construit în **Godot 4.6.x**. Proiectul urmărește în mod explicit dezvoltarea asistată de AI pe tot ciclul de viață al software-ului: planificare, design de arhitectură, implementare, testare automată, depanare, evaluări LLM (evals) și integrare continuă (CI/CD).
 
 > [!IMPORTANT]
 > **Documente Principale pentru Evaluare (Ghid Evaluator):**
-> - **Checklist Barem MDS 2026**: Acest document ([README.md](README.md)) servește drept centralizator pentru toate criteriile de notare.
+> - **Checklist Barem MDS 2026**: Acest document (`README.md`) centralizează toate criteriile de notare din barem.
 > - **Raport Utilizare AI**: [ai_usage_report.md](ai_usage_report.md) detaliază exhaustiv trasabilitatea utilizării instrumentelor de inteligență artificială în toate fazele de dezvoltare.
-> - **Design & Arhitectură**: [DESIGN.md](DESIGN.md) documentează structura tehnică a jocului, diagramele FSM, fluxul multiplayer și wireframe-urile.
-> - **Artefacte externe deja realizate**: live demo, demo offline și eseul individual există ca livrabile de predare, chiar dacă nu toate sunt stocate direct în acest repository.
+> - **Design & Arhitectură**: [DESIGN.md](DESIGN.md) documentează structura tehnică a jocului, diagramele FSM (Finite State Machine), fluxul multiplayer WebRTC și wireframe-urile interfeței.
+> - **Artefacte Externe Realizate**: Live demo, demo-ul offline și eseul individual reprezintă livrabile de predare finalizate, chiar dacă nu toate sunt stocate în mod direct în acest repository.
 
-Acest README este scris ca pagină principală de evaluare pentru baremul MDS 2026. Fiecare criteriu este bifat explicit și este susținut fie de dovezi concrete în repo, fie de artefacte externe deja realizate pentru predare.
+---
 
-## Formula De Notare
+## 🎯 Formula De Notare (MDS 2026)
 
-Conform baremului:
+Conform regulamentului disciplinei Modele de Dezvoltare Software:
+* $A$ = nota pe implementare (joc, multiplayer, agenți AI integrați, demo-uri)
+* $B$ = nota pe procesul de dezvoltare software asistat de AI (backlog, diagrame, git, teste, CI/CD, raport)
+* **Nota Finală** = $\text{round}\left(\frac{A + B}{2}\right)$
 
-- `A = nota pe implementare`
-- `B = nota pe procesul de dezvoltare software cu AI`
-- `nota finală = round((A + B) / 2)`
+---
 
-## Barem MDS 2026 - Checklist De Evaluare
+## 🎓 Barem MDS 2026 - Status Cerințe
 
-### A. Implementarea
+### A. Implementarea (Nota A)
 
 - `[x]` **Live demo pentru aplicația dezvoltată**
-  - Repo-ul conține aplicația, scenele, preset-urile de export și serverul de signaling:
-    - [game_board_3d.tscn](game_board_3d.tscn)
-    - [lobby.tscn](lobby.tscn)
-    - [export_presets.cfg](export_presets.cfg)
-    - [signaling_server/server.js](signaling_server/server.js)
-  - Cerința este satisfăcută prin demo live deja realizat.
-  - Demo / Build-uri live disponibile public:
-    - [dutch-20 pe itch.io](https://dinvin24.itch.io/dutch-20)
-    - [GitHub Releases](https://github.com/DinVin24/dutch/releases)
-  - Pentru trasabilitate tehnică, repo-ul conține și calea de build/deploy automatizat pentru Windows și Web:
-    - [.github/workflows/qa-pipeline.yml](.github/workflows/qa-pipeline.yml)
+  - **Status**: Finalizat. Jocul, interfețele și serverul de signaling sunt complet implementate.
+  - **Demo & Build-uri live disponibile public**:
+    - 🌐 [dutch-20 pe itch.io](https://dinvin24.itch.io/dutch-20)
+    - 📦 [GitHub Releases](https://github.com/DinVin24/dutch/releases)
+  - **Fișiere relevante**: [game_board_3d.tscn](game_board_3d.tscn), [lobby.tscn](lobby.tscn), [export_presets.cfg](export_presets.cfg), [signaling_server/server.js](signaling_server/server.js).
+  - **Deployment automat**: Pipeline-ul CI/CD rulează exportul automat pentru Windows și Web ([.github/workflows/qa-pipeline.yml](.github/workflows/qa-pipeline.yml)).
 
 - `[x]` **Minim 2 agenți AI integrați în produs**
-  - **Chippy / Game Assistant**: agent read-only pentru reguli, context de joc și descrierea mediului
-    - [game_assistant.gd](game_assistant.gd)
-    - [assistant_overlay.gd](assistant_overlay.gd)
-    - [game_knowledge.gd](game_knowledge.gd)
-    - [environment_knowledge.gd](environment_knowledge.gd)
-  - **Dutch Player Agent**: agent autonom care joacă un loc de bot prin tool calls validate de FSM
-    - [llm_player_agent.gd](llm_player_agent.gd)
-    - [agent_tool_registry.gd](agent_tool_registry.gd)
-    - [game_context.gd](game_context.gd)
-  - Integrarea lor în scenă:
-    - [game_board_3d.gd](game_board_3d.gd)
-  - Bootstrap-ul de runtime pentru tooluri și clientul local de model:
-    - [project.godot](project.godot)
-    - [lm_studio_client.gd](lm_studio_client.gd)
+  - **Status**: Finalizat. Jocul include doi agenți AI locali distincti care rulează prin LLM local/LM Studio:
+    1. **Chippy (Game Assistant)**: Agent de suport integrat în UI care răspunde la întrebări despre regulamentul jocului, starea mesei și comenzi folosind o bază de cunoștințe locală.
+       - *Fișiere*: [game_assistant.gd](game_assistant.gd), [assistant_overlay.gd](assistant_overlay.gd), [game_knowledge.gd](game_knowledge.gd), [environment_knowledge.gd](environment_knowledge.gd)
+    2. **Dutch Player Agent (Bot Seat)**: Agent autonom care controlează un loc de jucător la masă. Efectuează acțiuni (trage cărți, face swap, jump-in, folosește ciocane) prin tool calls, fiind constrâns de stările stricte din FSM.
+       - *Fișiere*: [llm_player_agent.gd](llm_player_agent.gd), [agent_tool_registry.gd](agent_tool_registry.gd), [game_context.gd](game_context.gd)
+    - *Integrare & Client*: [game_board_3d.gd](game_board_3d.gd), [lm_studio_client.gd](lm_studio_client.gd), [project.godot](project.godot).
 
 - `[x]` **Demo offline salvat (screencast / înregistrare)**
-  - Cerința este satisfăcută printr-un artefact offline deja realizat pentru predare.
-  - Link public:
-    - [Screencast / Demo offline pe YouTube](https://youtu.be/M28oy_3-a6M)
-  - Repo-ul documentează scenariile și pașii tehnici ai demonstrației prin:
-    - [README.md](README.md)
-    - [debug/lan_2pc_runbook.md](debug/lan_2pc_runbook.md)
-    - [run_experimental_qa.sh](run_experimental_qa.sh)
+  - **Status**: Finalizat.
+  - **Link public**: 🎥 [Screencast / Demo offline pe YouTube](https://youtu.be/M28oy_3-a6M)
+  - **Fișiere relevante**: [debug/lan_2pc_runbook.md](debug/lan_2pc_runbook.md), [run_experimental_qa.sh](run_experimental_qa.sh).
 
-- `[x]` **Temă originală, diferită de proiectele clasice de web din semestrul 1**
-  - Tema este un joc 3D de memorie, bluff, FSM strict, multiplayer și agenți AI locali, nu o aplicație web reutilizată din DAW.
+- `[x]` **Temă originală**
+  - **Status**: Finalizat. Jocul Dutch 3D nu este o aplicație web clasică sau o reutilizare din semestrul 1. Este un joc de cărți complex, cu memorie, bluff, FSM strict, logică WebRTC multiplayer și agenți AI locali.
 
-### B. Procesul de dezvoltare software cu AI
+---
 
-- `[x]` **User stories (minim 10) + backlog creation**
-  - Repo-ul conține un backlog mult peste pragul minim:
-    - [user_stories.md](user_stories.md)
-  - Include epics, stories și acceptance criteria pentru gameplay, multiplayer, tutorial, QA și AI.
-  - Planning-ul slice-urilor verticale este documentat în:
-    - [implementation_plan.md](implementation_plan.md)
-  - Cerința de backlog este considerată satisfăcută și validată în prezentarea către laborant.
-  - Notă:
-    - `implementation_plan.md` este păstrat ca artefact de planning inițial; implementarea finală de multiplayer a evoluat către stack-ul WebRTC + signaling documentat în repo.
+### B. Procesul de Dezvoltare Software cu AI (Nota B)
+
+- `[x]` **User Stories (minim 10) & Backlog Creation**
+  - **Status**: Finalizat. Backlog-ul este complet organizat în Jira și documentat în repo. Contine epics, stories și acceptance criteria pentru gameplay, multiplayer, tutorial, testare și AI.
+  - **Fișiere relevante**: [user_stories.md](user_stories.md), [ROADMAP.md](ROADMAP.md), [implementation_plan.md](implementation_plan.md).
 
 - `[x]` **Diagrame (UML / arhitectură / workflow-uri)**
-  - Diagram set Mermaid exportabil:
-    - [DESIGN.md](DESIGN.md)
-  - Include:
-    - FSM complet al meciului
-    - sequence diagrams pentru sync, reconnect, timeout și play-again
-    - component ownership
-    - matrices pentru reguli și abilities
-    - wireframes pentru lobby, HUD și stări de deconectare
+  - **Status**: Finalizat. Documentația conține diagrame detaliate în format Mermaid.
+  - **Conținut**: FSM-ul meciului, diagrame de secvență pentru sync, reconnect și play-again, matricea de abilități, structura componentelor și wireframe-uri HUD.
+  - **Fișiere relevante**: [DESIGN.md](DESIGN.md).
 
-- `[x]` **Source control cu git (branch creation, merge/rebase, PR-uri, minim 5 commits/student)**
-  - Repo-ul are istoric extins de branch-uri și PR-uri merge-uite.
-  - Exemple reprezentative:
-    - [PR #47](https://github.com/DinVin24/dutch/pull/47) - evals pentru agenți
-    - [PR #50](https://github.com/DinVin24/dutch/pull/50) - pipeline QA
-    - [PR #53](https://github.com/DinVin24/dutch/pull/53) - raport AI
-    - [PR #58](https://github.com/DinVin24/dutch/pull/58) - bugfix gameplay critic
-    - [PR #60](https://github.com/DinVin24/dutch/pull/60) - multiplayer camera + disconnect grace
-    - [PR #61](https://github.com/DinVin24/dutch/pull/61) - diagrame multiplayer/design
-  - Verificare locală pentru commit volume:
-    - `git shortlog -sne --all`
-  - Conventional commits și disciplină de repo:
-    - [AGENTS.md](AGENTS.md)
+- `[x]` **Source Control cu Git (branch creation, merge/rebase, PR-uri, minim 5 commits/student)**
+  - **Status**: Finalizat. Echipa folosește standardul *Conventional Commits* și lucrează cu Pull Requests pe branch-uri de feature.
+  - **Exemple PR-uri**: PR #47 (evals), PR #50 (pipeline QA), PR #53 (raport AI), PR #58 (corecturi gameplay), PR #60 (multiplayer & disconnect grace), PR #61 (diagrama de design).
+  - **Ghid & Verificare**: [AGENTS.md](AGENTS.md) și comanda locală `git shortlog -sne --all`.
 
-- `[x]` **Teste automate (inclusiv evals pentru agenți)**
-  - QA headless pentru logica jocului:
-    - [run_experimental_qa.sh](run_experimental_qa.sh)
-    - [qa_pipeline.gd](qa_pipeline.gd)
-  - Verificări țintite pentru gameplay și UI:
-    - [verify_turn_pacing.gd](verify_turn_pacing.gd)
-    - [verify_tutorial_mode.gd](verify_tutorial_mode.gd)
-    - [verify_hand_layout_after_beer.gd](verify_hand_layout_after_beer.gd)
-    - [verify_emote_wheel.gd](verify_emote_wheel.gd)
-  - Evals pentru agenți:
-    - [PROMPTFOO.md](PROMPTFOO.md)
-    - [evals/chippy.yaml](evals/chippy.yaml)
-    - [evals/bot.yaml](evals/bot.yaml)
-    - [evals/run_evals.sh](evals/run_evals.sh)
-    - [verify_agent_tools.gd](verify_agent_tools.gd)
-    - [verify_game_assistant.gd](verify_game_assistant.gd)
-    - [verify_lm_studio_client.gd](verify_lm_studio_client.gd)
+- `[x]` **Teste Automate și Evals pentru Agenți**
+  - **Status**: Finalizat. Sistemul are o suită complexă de testare formată din:
+    1. **Headless QA**: Validează logica jocului și a stărilor ([run_experimental_qa.sh](run_experimental_qa.sh), [qa_pipeline.gd](qa_pipeline.gd), [run_qa.bat](run_qa.bat)).
+    2. **Smoke Tests / Verificări Funcționale**: [verify_turn_pacing.gd](verify_turn_pacing.gd), [verify_tutorial_mode.gd](verify_tutorial_mode.gd), [verify_hand_layout_after_beer.gd](verify_hand_layout_after_beer.gd), [verify_emote_wheel.gd](verify_emote_wheel.gd), [verify_chicken_purchase.gd](verify_chicken_purchase.gd).
+    3. **Agent Evals (Promptfoo)**: Evaluări automate pentru calitatea răspunsurilor asistentului Chippy și ale botului conform regulilor ([PROMPTFOO.md](PROMPTFOO.md), [evals/chippy.yaml](evals/chippy.yaml), [evals/bot.yaml](evals/bot.yaml), [evals/run_evals.sh](evals/run_evals.sh), [verify_agent_tools.gd](verify_agent_tools.gd), [verify_game_assistant.gd](verify_game_assistant.gd)).
 
-- `[x]` **Raportare bug și rezolvare cu pull request**
-  - Exemplu concret de bug report:
-    - [Issue #22](https://github.com/DinVin24/dutch/issues/22) - player cannot jump in on own turn before drawing
-  - Exemplu concret de bugfix prin PR:
-    - [PR #58](https://github.com/DinVin24/dutch/pull/58) - rezolvă state locks și buguri de interacțiune
-  - Alte issue-uri închise există în istoric și pot fi verificate în GitHub Issues.
+- `[x]` **Raportare Bug și Rezolvare cu Pull Request**
+  - **Status**: Finalizat. Problemele sunt raportate prin GitHub Issues, iar rezolvările sunt verificate și adăugate prin PR-uri formale.
+  - **Exemple**: [Issue #22](https://github.com/DinVin24/dutch/issues/22) (eroare la Jump-In în propria tură) rezolvat prin [PR #58](https://github.com/DinVin24/dutch/pull/58). Formatul rapoartelor folosește șablonul din [pr_body.txt](pr_body.txt).
 
 - `[x]` **Pipeline CI/CD**
-  - `[x]` **CI** este implementat:
-    - [.github/workflows/qa-pipeline.yml](.github/workflows/qa-pipeline.yml)
-    - Rulează QA headless în GitHub Actions la `push` și `pull_request`
-  - `[x]` **CD** este implementat în același workflow:
-    - export automat pentru Windows Desktop și Web
-    - upload de build artifacts
-    - creare automată de GitHub Release pe `main`
-    - publicare automată pe itch.io prin Butler când `BUTLER_API_KEY` este configurat
+  - **Status**: Finalizat. Pipeline-ul rulează automat prin GitHub Actions la fiecare push sau PR.
+  - **CI**: Execută suita de teste QA Headless pe Linux ([.github/workflows/qa-pipeline.yml](.github/workflows/qa-pipeline.yml)).
+  - **CD**: Exportă automat executabilele pentru Windows Desktop, Web (HTML5) și Android, le încarcă ca artifacte, creează automat un GitHub Release pe ramura `main` și livrează build-urile direct pe itch.io folosind Butler.
 
-- `[x]` **Raport despre folosirea toolurilor de AI în timpul dezvoltării**
-  - Raportul principal:
-    - [ai_usage_report.md](ai_usage_report.md)
-  - Raportul este susținut de artefacte concrete:
-    - backlog și planning
-    - diagrame
-    - runtime AI agents
-    - evals și verificări
-    - PR-uri și bugflow
-    - workflow CI/CD
+- `[x]` **Raport despre utilizarea instrumentelor de AI**
+  - **Status**: Finalizat. Raportul detaliază interacțiunea cu asistenții AI pe tot parcursul proiectului.
+  - **Fișiere relevante**: [ai_usage_report.md](ai_usage_report.md).
 
-- `[x]` **Toate aspectele de mai sus implică utilizarea unor tooluri de AI**
-  - Trasabilitatea completă este documentată în:
-    - [ai_usage_report.md](ai_usage_report.md)
+- `[x]` **Toate aspectele implică AI & Centralizare în singur Repo**
+  - **Status**: Finalizat. Toate livrabilele de mai sus se află în acest repository unic și au fost create în parteneriat Human-AI.
 
-- `[x]` **Toate artefactele sunt centralizate într-un singur repository**
-  - Acest repo conține codul sursă, documentația, diagramele, workflow-urile, evals, serverul de signaling și rapoartele.
+---
 
-## Status Curent Al Checklistului
+## 🃏 Descrierea Jocului & Regulament
 
-- Toate criteriile majore din checklist sunt acoperite în starea actuală a proiectului.
-- Singurele completări opționale, dacă se dorește arhivare mai comodă pentru evaluator, sunt:
-  - un link sau o referință externă către eseul individual
+Dutch este un joc de cărți axat pe memorie, risc și minimizarea scorului de la finalul rundei.
 
-## Hartă Rapidă A Artefactelor Din Repo
+### 📋 Regulament de Bază
+* Fiecare jucător începe cu **4 cărți așezate cu fața în jos** (face-down) în fața sa.
+* La începutul meciului, ai voie să privești (peek) exact **2 cărți** din mâna ta.
+* **Structura unui tur**:
+  1. Tragi o carte din pachet (deck) sau din teancul de cărți aruncate (discard).
+  2. Alegi fie să o arunci direct în discard, fie să o schimbi (swap) cu una dintre cărțile tale (fără a o privi pe cea pe care o înlocuiești, dacă nu o cunoști deja).
+* **Scopul**: Să obții cel mai mic scor total la finalul rundei. Dacă rămâi fără cărți în mână, câștigi instant.
 
-### Planning și backlog
-- [user_stories.md](user_stories.md)
-- [implementation_plan.md](implementation_plan.md)
-- [AGENTS.md](AGENTS.md)
+### 🔢 Sistemul de Punctaj
+* **As (Ace)** = 1 punct
+* **2 - 10** = Valoarea nominală a cărții
+* **Valet (Jack)** = 11 puncte
+* **Damă (Queen)** = 12 puncte
+* **Popă (King)** = 13 puncte
+* **Popă de Caro (King of Diamonds ♦️)** = **0 puncte** (Cea mai valoroasă carte din joc!)
 
-### Arhitectură și diagrame
-- [DESIGN.md](DESIGN.md)
-- [ROADMAP.md](ROADMAP.md)
+### ⚡ Reguli Speciale (Abilitățile Cărților din Discard)
+Când arunci anumite cărți de joc în teancul de discard, declanșezi acțiuni speciale:
+* **Dama (Queen)**: Îți permite să privești (peek) orice carte cu fața în jos de pe masă.
+* **Valet (Jack)**: Îți permite să schimbi (swap) între ele oricare două cărți de pe masă (ale tale sau ale adversarilor), fără a le privi.
+* **Jump-In (Intrare prin Intercepție)**: Dacă un jucător aruncă o carte în discard, orice alt jucător (inclusiv în afara turei sale) poate arunca rapid o carte identică ca rang din mâna sa. Dacă este corect, își micșorează mâna. Dacă greșește, primește o carte de penalizare și bea o bere.
+* **Dutch**: Un jucător poate striga **"Dutch!"** în tura sa dacă consideră că are cel mai mic scor. Toți ceilalți jucători mai primesc un singur tur final, după care se calculează scorurile.
 
-### Logica de joc
-- [game_manager.gd](game_manager.gd)
-- [deck_manager.gd](deck_manager.gd)
-- [ability_manager.gd](ability_manager.gd)
-- [game_board_3d.gd](game_board_3d.gd)
+### 🍺 Economia Jocului (Beers & Money)
+* **Beri (Beers)**: Fiecare jucător începe cu **3 beri**. Greșelile majore (ex: Jump-In greșit sau discard instant eronat) te obligă să bei o bere. La 0 beri rămase, ești eliminat din meci.
+* **Bani ($)**: Când arunci cărți în discard, primești bani în funcție de valoarea cărții (Așii aduc cei mai mulți bani, Regii aduc 0$).
+* **Găina (The Chicken)**: O găină 3D plutește deasupra mesei. Jucătorii pot da click pe ea pentru a cheltui banii strânși și a cumpăra un **Ciocan de Abilități (Ability Hammer)**.
 
-### Multiplayer
-- [network_manager.gd](network_manager.gd)
-- [lobby.gd](lobby.gd)
-- [signaling_server/server.js](signaling_server/server.js)
-- [debug/lan_2pc_runbook.md](debug/lan_2pc_runbook.md)
+### 🔨 Sertarul de Abilități (Ability Hammers)
+Ciocanele cumpărate sunt plasate în cabinetul personal (maximum 6 sloturi). Trecerea cursorului peste un ciocan îi arată descrierea, iar click-ul (sau tasta `E`) îl activează în tura ta:
+* **Bottoms Up**: Obligă un adversar la alegere să bea o bere.
+* **Refuel**: Îți aduce o bere înapoi (maximum 3).
+* **Trim Off**: Îți elimină cea mai mare carte cunoscută din mână.
+* **Boulder**: Trimite cea mai mare carte din pachet unui adversar ales.
+* **Uno Reverse**: Schimbă sensul de joc la masă.
+* **Skip**: Blochează tura următorului jucător selectat.
+* **Perfect Match**: Resetează runda actuală. Tu primești cărțile As, 2, 3, 4. Ceilalți primesc cărți aleatorii, însă banii și abilitățile se păstrează.
+* **Inflation**: Dublează valoarea finală a cărților unui jucător ales la scor.
+* **Half Off**: Înjumătățește valoarea finală a cărților unui jucător ales la scor.
+* **Jumpscare**: Declanșează un jumpscare vizual/auditiv pe ecranul unui adversar ales.
+* **Shuffle**: Re-amestecă aleatoriu ordinea cărților din mâna unui jucător.
+* **Polarity Shift**: Inversează condiția de victorie (cel mai mare scor câștigă runda).
 
-### Agenți AI integrați în joc
-- [game_assistant.gd](game_assistant.gd)
-- [assistant_overlay.gd](assistant_overlay.gd)
-- [llm_player_agent.gd](llm_player_agent.gd)
-- [agent_tool_registry.gd](agent_tool_registry.gd)
-- [game_context.gd](game_context.gd)
-- [lm_studio_client.gd](lm_studio_client.gd)
+---
 
-### Teste și evals
-- [run_experimental_qa.sh](run_experimental_qa.sh)
-- [qa_pipeline.gd](qa_pipeline.gd)
-- [PROMPTFOO.md](PROMPTFOO.md)
-- [evals/run_evals.sh](evals/run_evals.sh)
-- [verify_agent_tools.gd](verify_agent_tools.gd)
-- [verify_game_assistant.gd](verify_game_assistant.gd)
+## 🛠️ Ghid de Instalare, Rulare și Testare
 
-### CI
-- [.github/workflows/qa-pipeline.yml](.github/workflows/qa-pipeline.yml)
+### 1. Cerințe Preliminare
+* **Godot Engine**: Versiunea **4.6.x** (recomandat 4.6.1 sau 4.6.2).
+* **Node.js**: Versiunea LTS (pentru serverul de signaling).
 
-### Raport AI
-- [ai_usage_report.md](ai_usage_report.md)
+### 2. Rulare Locală
+Pentru a porni jocul în mod normal:
+1. Pornirea serverului de signaling:
+   ```bash
+   cd signaling_server
+   npm install
+   npm start
+   ```
+2. Deschiderea proiectului în Godot:
+   ```bash
+   godot4 --path .
+   ```
+   *(Înlocuiește `godot4` cu calea către executabilul tău Godot dacă nu este în PATH)*
 
-### Artefacte externe de predare
-- Live demo realizat
-- Demo offline realizat
-- Eseu individual realizat
+### 3. Testare Multiplayer Locală
+Pentru a testa conexiunea WebRTC direct pe aceeași mașină:
+* În Windows, folosește scriptul PowerShell inclus:
+  ```powershell
+  ./run_two_instances.ps1
+  ```
+  Acesta va lansa automat două instanțe ale jocului pentru a testa interacțiunea în rețea.
+* Alternativ, introduceți un nume în Lobby, creați o cameră pe o instanță, copiați codul și alăturați-vă din a doua instanță. Implicit, jocul se conectează la serverul public de signaling `wss://signal.maestriisigma.ro`.
 
-## Descrierea Jocului
-
-Dutch este un joc de memorie, risc și optimizare a scorului.
-
-### Reguli de bază
-- Fiecare jucător începe cu 4 cărți `face-down`
-- La început poți privi 2 cărți
-- În tură:
-  - tragi o carte
-  - apoi alegi fie să o arunci
-  - fie să o schimbi cu una din mână
-- Câștigă scorul cel mai mic
-- Dacă rămâi fără cărți, câștigi imediat
-
-### Scor
-- `Ace = 1`
-- `2 ... 10 = valoarea nominală`
-- `Jack = 11`
-- `Queen = 12`
-- `King = 13`
-- `King of Diamonds = 0`
-
-### Reguli speciale
-- **Queen**: privești orice carte `face-down`
-- **Jack**: schimbi două cărți de pe masă
-- **Jump-In**: poți juca în afara turei dacă ai același rang ca ultima carte din discard
-- **Dutch**: anunți finalul rundei; toți ceilalți mai primesc un ultim tur, apoi confirmi sau renunți
-
-### Penalizări și economie (Beers & Money)
-- Fiecare jucător începe cu **3 beri** (3 beers). Anumite greșeli (precum un Jump-In eșuat sau un discard instant) te obligă să bei o bere. La 0 beri, ești eliminat.
-- **Bani**: Aruncarea cărților în discard îți aduce bani în funcție de valoarea cărții (Așii aduc valoare mare, Regii aduc 0 bani).
-- **Găina (The Chicken)**: O găină 3D plutește deasupra mesei. Poți da click pe ea pentru a cheltui banii strânși și a cumpăra un **Ability Hammer** (ciocan de abilitate) auriu, plasat în sertarul tău de cabinet.
-- **Ciocanele de Abilități (Ability Hammers)**: Sunt păstrate în sertarele cabinetului personal (până la 6 sloturi). Trecerea cursorului peste un ciocan arată descrierea, iar click-ul pe el (sau tasta `E` când ești cu cursorul pe el) îl activează în tura ta.
-
-### Ciocane de abilități speciale (Special Ability Hammers)
-- **Bottoms Up**: Obligă un jucător ales să bea o bere.
-- **Refuel**: Îți aduce o bere în plus (max 3).
-- **Trim Off**: Îți elimină cea mai mare carte cunoscută din mână.
-- **Boulder**: Oferă unui jucător ales cea mai mare carte aflată în pachet.
-- **Uno Reverse**: Inversează direcția de joc la masă.
-- **Skip**: Blochează tura următorului jucător selectat.
-- **Perfect Match**: Resetează runda curentă, dar tu primești cărțile Aș, 2, 3, 4. Ceilalți primesc cărți random, iar banii și abilitățile se păstrează.
-- **Inflation**: Dublează punctajul cărților din mâna unui jucător (la scorul de final; rangul cărții rămâne neschimbat pentru Jump-In).
-- **Half Off**: Înjumătățește valoarea cărților din mâna unui jucător la scor.
-- **Jumpscare**: Tragi o carte și declanșezi un jumpscare vizual/auditiv pe ecranul unui jucător la alegere.
-- **Shuffle**: Amestecă aleatoriu ordinea cărților din mâna unui jucător.
-- **Polarity Shift**: Inversează condiția de victorie (cel mai mare scor câștigă vs cel mai mic scor câștigă).
-
-## Setup Local
-
-### Engine
-- Godot `4.6.x`
-
-### Rulare locală
-```bash
-godot4 --path .
-```
-
-### Multiplayer stack actual
-- client/server logic în Godot
-- WebRTC peer transport
-- signaling WebSocket separat
-
-Fișiere relevante:
-- [network_manager.gd](network_manager.gd)
-- [signaling_server/server.js](signaling_server/server.js)
-
-### Server de signaling
-```bash
-cd signaling_server
-npm install
-npm start
-```
-
-## Agenți AI Locali
-
-Proiectul folosește un server local compatibil OpenAI prin LM Studio pentru agenții integrați în gameplay.
-
-### Chippy
-- răspunde la întrebări despre reguli
-- folosește knowledge base local și environment knowledge
-- are fallback deterministic pentru a limita halucinațiile
-
-### Dutch Player Agent
-- controlează un bot seat
-- alege acțiuni doar prin tool-uri validate de FSM
-- nu poate sări peste regulile authoritative din `GameManager`
-
-### Configurare LM Studio
-1. Încarcă un model mic local în LM Studio
-2. Pornește serverul local pe `http://127.0.0.1:1234`
-3. Setează, dacă e nevoie:
-
-```bash
-export DUTCH_LM_STUDIO_URL=http://127.0.0.1:1234/v1
-export DUTCH_LM_STUDIO_MODEL=llama-3.2-1b-instruct
-```
-
-## Comenzi De Verificare
-
-### QA headless (Linux / Windows)
-- Pe Linux:
+### 4. Rulare QA Headless (Suita de Teste Logică)
+* **Linux**:
   ```bash
-  export GODOT_BIN=/path/to/Godot_v4.6.x-stable_linux.x86_64
+  export GODOT_BIN=/cale/catre/Godot_v4.6.x
   ./run_experimental_qa.sh
   ```
-- Pe Windows: Rulează `run_qa.bat`
+* **Windows**:
+  Rulează fișierul batch preconfigurat:
+  ```cmd
+  run_qa.bat
+  ```
 
-### Verificări pentru agenți (Headless)
-Rulează scripturile de testare (înlocuiește `godot4` cu calea către executabilul Godot dacă este necesar):
+---
+
+## 🤖 Configurare Agenți AI (LM Studio)
+
+Jocul folosește un server local compatibil cu API-ul OpenAI (ex: LM Studio) pentru a rula agenții autonomi la masă.
+
+### Pași Configurare:
+1. Pornirea serverului în LM Studio pe portul implicit `127.0.0.1:1234`.
+2. Încărcarea unui model instruct compact (de exemplu, `llama-3.2-1b-instruct` sau similar).
+3. Configurarea variabilelor de mediu (opțional, dacă diferă de setările implicite):
+   ```bash
+   export DUTCH_LM_STUDIO_URL="http://127.0.0.1:1234/v1"
+   export DUTCH_LM_STUDIO_MODEL="llama-3.2-1b-instruct"
+   ```
+
+### Testarea Headless a Agenților:
+Poți rula separat scripturile de validare a integrării AI din linia de comandă:
 ```bash
 godot4 --headless --path . --script res://verify_agent_tools.gd
 godot4 --headless --path . --script res://verify_game_assistant.gd
 godot4 --headless --path . --script res://verify_lm_studio_client.gd
 ```
 
-### Promptfoo evals (Evals LLM/SLM)
-```bash
-./evals/run_evals.sh --mock
-./evals/run_evals.sh
-```
+### Rularea Evaluărilor (Promptfoo Evals):
+Pentru a rula framework-ul de testare al comportamentului LLM-urilor:
+* Rulare cu server mock (recomandat pentru CI/CD rapid):
+  ```bash
+  ./evals/run_evals.sh --mock
+  ```
+* Rulare cu LLM real:
+  ```bash
+  ./evals/run_evals.sh
+  ```
 
-## 🌐 Multiplayer Testing
-Multiplayer-ul folosește WebRTC prin intermediul unui server public de signaling WebSocket (`wss://signal.maestriisigma.ro`).
-- **Configurare Lobby**: Introdu un nume de utilizator, apoi alege fie să găzduiești (generează un cod unic de cameră), fie să te alături (introdu codul camerei gazde).
-- **Testare Locală**: Rulează scriptul PowerShell `./run_two_instances.ps1` pentru a lansa două ferestre de client alăturate pe mașina locală.
+---
 
-## 🎓 MDS Project Requirements (Procesul de Dezvoltare cu AI)
+## 📂 Harta Artefactelor Importante
 
-Acest proiect a fost dezvoltat utilizând tool-uri de AI (Agentic AI Development) în cadrul disciplinei **Modele de Dezvoltare Software (MDS)**. Mai jos sunt linkurile și detaliile către fiecare cerință din baremul de evaluare:
+Pentru o navigare rapidă în structura proiectului:
 
-1. **User Stories (Minim 10) & Backlog Creation** (2 pct):
-   * Tichete de backlog și povești de utilizator structurate în: [user_stories.md](user_stories.md)
-   * Roadmap și evoluția planificată a backlog-ului pe faze: [ROADMAP.md](ROADMAP.md)
-   * Backlog-ul și tichetele de lucru au fost de asemenea structurate și organizate în Jira.
-2. **Diagrame de Arhitectură și Workflow-uri** (1 pct):
-   * Diagrame detaliate în format Mermaid (arhitectura componentelor, mașina de stări a jocului / FSM și fluxul de execuție al agenților): [DESIGN.md](DESIGN.md)
-3. **Source Control cu Git** (1 pct):
-   * Proiectul urmează standardul *Conventional Commits* (ex. `feat()`, `fix()`, `docs()`).
-   * Istoricul de commits, ramurile create (ex. `docs/correct-hammers-and-multiplayer`, `fix/multiplayer-camera-timeout`) și fluxul de Pull Requests pot fi consultate în istoricul Git al repository-ului.
-4. **Teste Automate și Evals pentru Agenți** (2 pct):
-   * **Pipeline-ul local de testare (Headless)**: [qa_pipeline.gd](qa_pipeline.gd), care validează logic mașina de stări a jocului, rulat prin scriptul utilitar [run_qa.bat](run_qa.bat) (Windows) sau [run_experimental_qa.sh](run_experimental_qa.sh) (Linux).
-   * **Teste funcționale / Smoke tests**: [verify_tutorial_mode.gd](verify_tutorial_mode.gd), [verify_chicken_purchase.gd](verify_chicken_purchase.gd) și [verify_agent_tools.gd](verify_agent_tools.gd).
-   * **Agent Evals (Evaluări LLM/SLM)**: Fișierele de configurare și testare a performanței botului și asistentului (Chippy) în raport cu regulamentul: [evals/chippy.yaml](evals/chippy.yaml), [evals/bot.yaml](evals/bot.yaml), rulate prin scriptul [evals/run_evals.sh](evals/run_evals.sh).
-5. **Raportare Bug și Rezolvare cu Pull Request** (1 pct):
-   * Utilizarea de șabloane și rapoarte de corectură (ex. [pr_body.txt](pr_body.txt) și istoricul de PR-uri/issue-uri rezolvate direct de agenți).
-6. **Pipeline CI/CD** (1 pct):
-   * **CI**: Configurat prin GitHub Actions în [.github/workflows/qa-pipeline.yml](.github/workflows/qa-pipeline.yml) (descarcă automat executabilul Godot Headless pe Linux și rulează suita de teste la fiecare push/PR).
-   * **CD**: Integrat în același workflow; rulează exportul headless al jocului pentru Windows Desktop și Web (HTML5), le uploadează ca artifacte de build, creează automat un Release pe GitHub cu ambele build-uri pre-ambalate (ZIP) și publică automat build-urile pe itch.io folosind **Butler** CLI (dacă cheia `BUTLER_API_KEY` este configurată în GitHub Secrets) pentru orice push pe ramura `main`.
-7. **Raport despre folosirea toolurilor de AI** (2 pct):
-   * Raport complet în limba română privind procesul de pair programming cu agenți AI de-a lungul întregului ciclu de viață al software-ului: [ai_usage_report.md](ai_usage_report.md)
+* **Documentație & Organizare**:
+  * [user_stories.md](user_stories.md) - Poveștile de utilizator și criteriile de acceptare.
+  * [DESIGN.md](DESIGN.md) - Structura claselor, diagramele FSM și diagramele de secvență.
+  * [ROADMAP.md](ROADMAP.md) - Etapele de dezvoltare ale proiectului.
+  * [ai_usage_report.md](ai_usage_report.md) - Raportul detaliat privind interacțiunea cu AI.
+  * [AGENTS.md](AGENTS.md) - Regulile de dezvoltare și rolurile echipei.
+* **Componente Nucleu Godot (Scripts)**:
+  * [game_manager.gd](game_manager.gd) - Managerul central de stări și logica autoritativă.
+  * [deck_manager.gd](deck_manager.gd) - Gestionarea pachetului de cărți și a teancului de discard.
+  * [ability_manager.gd](ability_manager.gd) - Logica pentru ciocane și abilități speciale.
+  * [network_manager.gd](network_manager.gd) - Configurația WebRTC și sync-ul stărilor în multiplayer.
+* **Integrare AI & Evals**:
+  * [game_assistant.gd](game_assistant.gd) / [assistant_overlay.gd](assistant_overlay.gd) - Logica asistentului Chippy.
+  * [llm_player_agent.gd](llm_player_agent.gd) / [agent_tool_registry.gd](agent_tool_registry.gd) - Logica botului autonom.
+  * [evals/chippy.yaml](evals/chippy.yaml) / [evals/bot.yaml](evals/bot.yaml) - Teste Promptfoo de evaluare a comportamentului.
+* **Suita de Testare & Teste**:
+  * [qa_pipeline.gd](qa_pipeline.gd) - Pipeline-ul principal headless de QA.
+  * [verify_tutorial_mode.gd](verify_tutorial_mode.gd) / [verify_hand_layout_after_beer.gd](verify_hand_layout_after_beer.gd) - Teste de UI/integrare.
+  * [debug/lan_2pc_runbook.md](debug/lan_2pc_runbook.md) - Ghid tehnic de testare multiplayer în rețeaua locală.
+* **Artefacte Externe de Predare**:
+  * Live demo realizat (itch.io)
+  * Demo offline realizat (YouTube)
+  * Eseu individual realizat
