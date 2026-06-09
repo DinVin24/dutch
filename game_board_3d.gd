@@ -5086,9 +5086,9 @@ func _spawn_player_avatars() -> void:
 	}
 	var seat_avatar_rotations = {
 		0: PI,
-		1: 0.0,
-		2: 0.0,
-		3: 0.0
+		1: PI,
+		2: PI,
+		3: PI
 	}
 
 	for i in range(4):
