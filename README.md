@@ -26,14 +26,13 @@ Legendă:
 
 ### A. Implementarea
 
-- `[ ]` **Live demo pentru aplicația dezvoltată**
+- `[x]` **Live demo pentru aplicația dezvoltată**
   - Repo-ul conține aplicația, scenele, preset-urile de export și serverul de signaling:
     - [game_board_3d.tscn](game_board_3d.tscn)
     - [lobby.tscn](lobby.tscn)
     - [export_presets.cfg](export_presets.cfg)
     - [signaling_server/server.js](signaling_server/server.js)
-  - Mai rămâne de adăugat:
-    - `[ ]` link public către demo/build sau un scurt paragraf cu ruta exactă de prezentare live
+  - Demo / Build-uri live disponibile pe itch.io: [dutch-20 pe itch.io](https://dinvin24.itch.io/dutch-20) sau în secțiunea de [GitHub Releases](https://github.com/DinVin24/dutch/releases)
 
 - `[x]` **Minim 2 agenți AI integrați în produs**
   - **Chippy / Game Assistant**: agent read-only pentru reguli, context de joc și descrierea mediului
@@ -51,9 +50,8 @@ Legendă:
     - [project.godot](project.godot)
     - [lm_studio_client.gd](lm_studio_client.gd)
 
-- `[ ]` **Demo offline salvat (screencast / înregistrare)**
-  - Mai rămâne de adăugat:
-    - `[ ]` link YouTube / Drive / altă arhivă către demo-ul offline
+- `[x]` **Demo offline salvat (screencast / înregistrare)**
+  - [Screencast / Demo offline pe YouTube](https://youtu.be/M28oy_3-a6M)
 
 - `[x]` **Temă originală, diferită de proiectele clasice de web din semestrul 1**
   - Tema este un joc 3D de memorie, bluff, FSM strict, multiplayer și agenți AI locali, nu o aplicație web reutilizată din DAW.
@@ -119,13 +117,14 @@ Legendă:
     - [PR #58](https://github.com/DinVin24/dutch/pull/58) - rezolvă state locks și buguri de interacțiune
   - Alte issue-uri închise există în istoric și pot fi verificate în GitHub Issues.
 
-- `[ ]` **Pipeline CI/CD**
+- `[x]` **Pipeline CI/CD**
   - `[x]` **CI** este implementat:
     - [.github/workflows/qa-pipeline.yml](.github/workflows/qa-pipeline.yml)
     - Rulează QA headless în GitHub Actions la `push` și `pull_request`
-  - `[ ]` **CD** pentru punctaj maxim rămâne de întărit:
-    - `[ ]` workflow automat pentru build/export artifact
-    - `[ ]` opțional: release GitHub sau deploy documentat/automatizat
+  - `[x]` **CD** pentru punctaj maxim este implementat:
+    - export automat pentru Windows, Web (HTML5), Android la fiecare push pe `main`
+    - creare automată de Release GitHub cu zip-urile atașate
+    - publicare automată pe itch.io prin Butler CLI ([dutch-20 pe itch.io](https://dinvin24.itch.io/dutch-20))
 
 - `[x]` **Raport despre folosirea toolurilor de AI în timpul dezvoltării**
   - Raportul principal:
@@ -147,9 +146,9 @@ Legendă:
 
 ## Ce Mai Rămâne De Bifat Concret
 
-- `[ ]` Adăugare link către demo-ul offline când colegul îl urcă
-- `[ ]` Adăugare link către live demo / build / mod exact de rulare pentru evaluare
-- `[ ]` Adăugare workflow de CD pentru export/release automat, ca să nu rămână doar CI
+- `[x]` Adăugare link către demo-ul offline (realizat prin [Screencast pe YouTube](https://youtu.be/M28oy_3-a6M))
+- `[x]` Adăugare link către live demo / build / mod exact de rulare pentru evaluare ([dutch-20 pe itch.io](https://dinvin24.itch.io/dutch-20))
+- `[x]` Adăugare workflow de CD pentru export/release automat (complet integrat în GitHub Actions și itch.io)
 
 ## Hartă Rapidă A Artefactelor Din Repo
 
