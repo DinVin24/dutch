@@ -83,3 +83,21 @@ jobs:
           zip -j Dutch-Windows-v0.5.${{ github.run_number }}.zip build/windows/*
           zip -j Dutch-Web-v0.5.${{ github.run_number }}.zip build/web/*
           gh release create v0.5.${{ github.run_number }} Dutch-Windows-v0.5.${{ github.run_number }}.zip Dutch-Web-v0.5.${{ github.run_number }}.zip --title "Release v0.5.${{ github.run_number }}" --notes "Automated release of the Dutch game built from main branch commit ${{ github.sha }}."
+
+      - name: Publish to itch.io
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: |
+          if [ -z "$BUTLER_API_KEY" ]; then
+            echo "BUTLER_API_KEY secret is not set. Skipping automated publishing to itch.io."
+            exit 0
+          fi
+          echo "Downloading Butler CLI..."
+          curl -L -o butler.zip https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default
+          unzip butler.zip -d butler
+          chmod +x butler/butler
+          echo "Publishing Windows build to itch.io..."
+          ./butler/butler push build/windows/ DinVin24/dutch:windows
+          echo "Publishing Web build to itch.io..."
+          ./butler/butler push build/web/ DinVin24/dutch:html5
