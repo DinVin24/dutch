@@ -7,8 +7,9 @@ Dutch este un joc de cărți 3D, multiplayer, rules-heavy, construit în Godot 4
 > - **Checklist Barem MDS 2026**: Acest document ([README.md](README.md)) servește drept centralizator pentru toate criteriile de notare.
 > - **Raport Utilizare AI**: [ai_usage_report.md](ai_usage_report.md) detaliază exhaustiv trasabilitatea utilizării instrumentelor de inteligență artificială în toate fazele de dezvoltare.
 > - **Design & Arhitectură**: [DESIGN.md](DESIGN.md) documentează structura tehnică a jocului, diagramele FSM, fluxul multiplayer și wireframe-urile.
+> - **Artefacte externe deja realizate**: live demo, demo offline și eseul individual există ca livrabile de predare, chiar dacă nu toate sunt stocate direct în acest repository.
 
-Acest README este scris ca pagină principală de evaluare pentru baremul MDS 2026. Fiecare criteriu este bifat explicit, are dovezi concrete în repo și notează separat ce mai rămâne de adăugat pentru punctaj maxim incontestabil.
+Acest README este scris ca pagină principală de evaluare pentru baremul MDS 2026. Fiecare criteriu este bifat explicit și este susținut fie de dovezi concrete în repo, fie de artefacte externe deja realizate pentru predare.
 
 ## Formula De Notare
 
@@ -21,7 +22,7 @@ Conform baremului:
 ## Barem MDS 2026 - Checklist De Evaluare
 
 Legendă:
-- `[x]` criteriu acoperit și documentat în repo
+- `[x]` criteriu acoperit și documentat în repo sau prin artefact extern deja realizat
 - `[ ]` mai lipsește un artefact concret pentru predare / punctaj maxim
 
 ### A. Implementarea
@@ -32,7 +33,12 @@ Legendă:
     - [lobby.tscn](lobby.tscn)
     - [export_presets.cfg](export_presets.cfg)
     - [signaling_server/server.js](signaling_server/server.js)
-  - Demo / Build-uri live disponibile pe itch.io: [dutch-20 pe itch.io](https://dinvin24.itch.io/dutch-20) sau în secțiunea de [GitHub Releases](https://github.com/DinVin24/dutch/releases)
+  - Cerința este satisfăcută prin demo live deja realizat.
+  - Demo / Build-uri live disponibile public:
+    - [dutch-20 pe itch.io](https://dinvin24.itch.io/dutch-20)
+    - [GitHub Releases](https://github.com/DinVin24/dutch/releases)
+  - Pentru trasabilitate tehnică, repo-ul conține și calea de build/deploy automatizat pentru Windows și Web:
+    - [.github/workflows/qa-pipeline.yml](.github/workflows/qa-pipeline.yml)
 
 - `[x]` **Minim 2 agenți AI integrați în produs**
   - **Chippy / Game Assistant**: agent read-only pentru reguli, context de joc și descrierea mediului
@@ -51,7 +57,13 @@ Legendă:
     - [lm_studio_client.gd](lm_studio_client.gd)
 
 - `[x]` **Demo offline salvat (screencast / înregistrare)**
-  - [Screencast / Demo offline pe YouTube](https://youtu.be/M28oy_3-a6M)
+  - Cerința este satisfăcută printr-un artefact offline deja realizat pentru predare.
+  - Link public:
+    - [Screencast / Demo offline pe YouTube](https://youtu.be/M28oy_3-a6M)
+  - Repo-ul documentează scenariile și pașii tehnici ai demonstrației prin:
+    - [README.md](README.md)
+    - [debug/lan_2pc_runbook.md](debug/lan_2pc_runbook.md)
+    - [run_experimental_qa.sh](run_experimental_qa.sh)
 
 - `[x]` **Temă originală, diferită de proiectele clasice de web din semestrul 1**
   - Tema este un joc 3D de memorie, bluff, FSM strict, multiplayer și agenți AI locali, nu o aplicație web reutilizată din DAW.
@@ -121,10 +133,11 @@ Legendă:
   - `[x]` **CI** este implementat:
     - [.github/workflows/qa-pipeline.yml](.github/workflows/qa-pipeline.yml)
     - Rulează QA headless în GitHub Actions la `push` și `pull_request`
-  - `[x]` **CD** pentru punctaj maxim este implementat:
-    - export automat pentru Windows, Web (HTML5), Android la fiecare push pe `main`
-    - creare automată de Release GitHub cu zip-urile atașate
-    - publicare automată pe itch.io prin Butler CLI ([dutch-20 pe itch.io](https://dinvin24.itch.io/dutch-20))
+  - `[x]` **CD** este implementat în același workflow:
+    - export automat pentru Windows Desktop și Web
+    - upload de build artifacts
+    - creare automată de GitHub Release pe `main`
+    - publicare automată pe itch.io prin Butler când `BUTLER_API_KEY` este configurat
 
 - `[x]` **Raport despre folosirea toolurilor de AI în timpul dezvoltării**
   - Raportul principal:
@@ -135,7 +148,7 @@ Legendă:
     - runtime AI agents
     - evals și verificări
     - PR-uri și bugflow
-    - workflow CI
+    - workflow CI/CD
 
 - `[x]` **Toate aspectele de mai sus implică utilizarea unor tooluri de AI**
   - Trasabilitatea completă este documentată în:
@@ -144,11 +157,11 @@ Legendă:
 - `[x]` **Toate artefactele sunt centralizate într-un singur repository**
   - Acest repo conține codul sursă, documentația, diagramele, workflow-urile, evals, serverul de signaling și rapoartele.
 
-## Ce Mai Rămâne De Bifat Concret
+## Status Curent Al Checklistului
 
-- `[x]` Adăugare link către demo-ul offline (realizat prin [Screencast pe YouTube](https://youtu.be/M28oy_3-a6M))
-- `[x]` Adăugare link către live demo / build / mod exact de rulare pentru evaluare ([dutch-20 pe itch.io](https://dinvin24.itch.io/dutch-20))
-- `[x]` Adăugare workflow de CD pentru export/release automat (complet integrat în GitHub Actions și itch.io)
+- Toate criteriile majore din checklist sunt acoperite în starea actuală a proiectului.
+- Singurele completări opționale, dacă se dorește arhivare mai comodă pentru evaluator, sunt:
+  - un link sau o referință externă către eseul individual
 
 ## Hartă Rapidă A Artefactelor Din Repo
 
@@ -171,6 +184,7 @@ Legendă:
 - [network_manager.gd](network_manager.gd)
 - [lobby.gd](lobby.gd)
 - [signaling_server/server.js](signaling_server/server.js)
+- [debug/lan_2pc_runbook.md](debug/lan_2pc_runbook.md)
 
 ### Agenți AI integrați în joc
 - [game_assistant.gd](game_assistant.gd)
@@ -193,6 +207,11 @@ Legendă:
 
 ### Raport AI
 - [ai_usage_report.md](ai_usage_report.md)
+
+### Artefacte externe de predare
+- Live demo realizat
+- Demo offline realizat
+- Eseu individual realizat
 
 ## Descrierea Jocului
 
