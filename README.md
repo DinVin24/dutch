@@ -51,9 +51,8 @@ Legendă:
     - [project.godot](project.godot)
     - [lm_studio_client.gd](lm_studio_client.gd)
 
-- `[ ]` **Demo offline salvat (screencast / înregistrare)**
-  - Mai rămâne de adăugat:
-    - `[ ]` link YouTube / Drive / altă arhivă către demo-ul offline
+- `[x]` **Demo offline salvat (screencast / înregistrare)**
+  - [Screencast / Demo offline pe YouTube](https://youtu.be/M28oy_3-a6M)
 
 - `[x]` **Temă originală, diferită de proiectele clasice de web din semestrul 1**
   - Tema este un joc 3D de memorie, bluff, FSM strict, multiplayer și agenți AI locali, nu o aplicație web reutilizată din DAW.
@@ -147,7 +146,7 @@ Legendă:
 
 ## Ce Mai Rămâne De Bifat Concret
 
-- `[ ]` Adăugare link către demo-ul offline când colegul îl urcă
+- `[x]` Adăugare link către demo-ul offline (realizat prin [Screencast pe YouTube](https://youtu.be/M28oy_3-a6M))
 - `[ ]` Adăugare link către live demo / build / mod exact de rulare pentru evaluare
 - `[ ]` Adăugare workflow de CD pentru export/release automat, ca să nu rămână doar CI
 
