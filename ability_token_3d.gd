@@ -46,7 +46,7 @@ func _update_visuals() -> void:
 
 func _apply_textures():
 	if _grid_texture == null:
-		if FileAccess.file_exists(TEXTURE_PATH):
+		if ResourceLoader.exists(TEXTURE_PATH):
 			_grid_texture = load(TEXTURE_PATH)
 	
 	if not _grid_texture: return

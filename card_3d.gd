@@ -154,9 +154,8 @@ func set_discard_trail_active(active: bool) -> void:
 
 func _apply_atlas_textures():
 	if _master_texture == null:
-		if not FileAccess.file_exists(SPRITE_SHEET_PATH):
-			return
-		_master_texture = load(SPRITE_SHEET_PATH)
+		if ResourceLoader.exists(SPRITE_SHEET_PATH):
+			_master_texture = load(SPRITE_SHEET_PATH)
 	
 	if not _master_texture: return
 
