@@ -13,7 +13,7 @@ gantt
     section Phase 2: Immersive Bar
     Environment & Atmosphere :done, des3, 2026-04-01, 12d
     Chicken & Beer Models    :active, des4, after des3, 5d
-    Ability Card Textures    :done, des5, after des4, 4d
+    Ability Hammer Models & FX:done, des5, after des4, 4d
     section Phase 3: Networking
     Lobby & User Management  :des6, 2026-04-15, 14d
     Persistence & Stats      :des7, after des6, 7d
@@ -49,10 +49,10 @@ gantt
     - [x] Complete rework of the surroundings into a "Run-down Bar".
     - [x] Thematic table and chairs.
 2.  **Interactive 3D Models**:
-    - [ ] **The Chicken**: Animated model that interacts with money/eggs.
+    - [ ] **The Chicken**: Animated model that reacts to purchases.
     - [ ] **Beers**: 3D rendered mugs (3 per player) that disappear upon consumption.
 3.  **Visual Polish**:
-    - [x] Custom textures for all Ability Cards.
+    - [x] Custom models and FX for all Ability Hammers.
     - [x] Enhanced animations for drawing, swapping, and ability execution.
 
 ---

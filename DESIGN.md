@@ -101,11 +101,11 @@ stateDiagram-v2
     INITIAL_PEEK --> TURN_START_DRAW : Initial peeks complete
     
     TURN_START_DRAW --> TURN_RESOLVE_DRAWN : Player draws card
-    TURN_START_DRAW --> STATE_PLAYING_ABILITY : Player triggers Ability Card
+    TURN_START_DRAW --> STATE_PLAYING_ABILITY : Player triggers Ability Hammer
     
     TURN_RESOLVE_DRAWN --> TURN_PEEK_ABILITY : Queen discarded (Ability)
     TURN_RESOLVE_DRAWN --> TURN_SWAP_ABILITY : Jack discarded (Ability)
-    TURN_RESOLVE_DRAWN --> STATE_PLAYING_ABILITY : Trigger Ability Card
+    TURN_RESOLVE_DRAWN --> STATE_PLAYING_ABILITY : Trigger Ability Hammer
     TURN_RESOLVE_DRAWN --> TURN_END_CHOICE : Card swapped / discarded
     
     TURN_PEEK_ABILITY --> TURN_END_CHOICE : Peek complete
@@ -113,7 +113,7 @@ stateDiagram-v2
     
     TURN_END_CHOICE --> TURN_START_DRAW : End turn (normal flow)
     TURN_END_CHOICE --> TURN_CONFIRM_DUTCH : Call Dutch (under 7 points)
-    TURN_END_CHOICE --> STATE_PLAYING_ABILITY : Trigger Ability Card
+    TURN_END_CHOICE --> STATE_PLAYING_ABILITY : Trigger Ability Hammer
     
     %% Interrupt states (Jump-in)
     TURN_START_DRAW --> TURN_JUMP_IN_SELECTION : Any player initiates Jump-In

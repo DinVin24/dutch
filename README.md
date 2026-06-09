@@ -17,15 +17,15 @@ Each player starts with **3 Beers**. Certain mistakes force you to "drink":
 - **Money**: Discarding cards earns you money based on the card's value. 
     - **Aces**: High value.
     - **Kings of Spades, Hearts, Clubs**: Zero money.
-- **The Chicken**: A 3D chicken hovers over the table. Click its legs to spend money and receive an **Ability Card**.
-- **Ability Cards**: Kept face-down; view them once, then use them on your turn. They are a separate component and don't clash with your hand cards.
+- **The Chicken**: A 3D chicken hovers over the table. Click it to spend money and receive a golden **Ability Hammer** in your cabinet drawer.
+- **Ability Hammers**: Kept in your player cabinet drawers (up to 6 slots). Hovering over a hammer shows its ability description, and clicking it (or pressing `E` when hovered) activates it on your turn. They don't clash with your hand cards.
 
 ### Standard Card Rules
 - **Queen**: Look at any face-down card on the table (yours or an opponent's).
 - **Jack**: Swap any two cards on the table.
 - **King of Diamonds**: Counts as **0 points** (lowest possible value). Must be held in your hand to count toward your score.
 
-### Special Ability Tokens (Chicken Eggs)
+### Special Ability Hammers
 - **Bottoms Up**: Force a chosen player to drink a beer.
 - **Refuel**: Receive an extra beer (max 3).
 - **Trim Off**: Remove the highest card from your hand.
@@ -70,25 +70,15 @@ export DUTCH_LM_STUDIO_MODEL=llama-3.2-1b-instruct
 
 Targeted verification:
 
-```bash
-godot4 --headless --path . --script res://verify_agent_tools.gd
-godot4 --headless --path . --script res://verify_lm_studio_client.gd
-```
+For automated headless logic verification:
+- On Windows: Run `run_qa.bat`
+- To headlessly run individual test scripts (replace `<godot>` with your Godot 4 executable path/alias):
+  ```bash
+  <godot> --headless --path . --script res://verify_agent_tools.gd
+  <godot> --headless --path . --script res://verify_lm_studio_client.gd
+  ```
 
-## LAN Test Flow (Godot 4, ENet/UDP)
-- LAN test flow uses ENet over UDP on port `1234`.
-- Host listens on all interfaces; on Windows, allow inbound UDP `1234` for Godot/app in Defender Firewall.
-- `localhost` remains supported for same-machine testing when no connect target is provided.
-
-Host machine:
-- `godot4 --path . -- --host`
-
-Client machine (explicit host IP):
-- `godot4 --path . -- --client --connect-to 192.168.1.42`
-
-Client machine (same machine fallback):
-- `godot4 --path . -- --client`
-
-Auto handshake + commit helper script:
-- Dry run only: `python lan_handshake_autocommit.py --host-ip 127.0.0.1 --dry-run`
-- Run full flow (handshake, `git add .`, commit, push): `python lan_handshake_autocommit.py --host-ip 192.168.1.42`
+## 🌐 Multiplayer Testing
+Multiplayer uses WebRTC via a public WebSocket signaling server (`wss://signal.maestriisigma.ro`).
+- **Lobby Setup**: Enter a username, then choose to either host (generates a unique room code) or join (enter the host's room code).
+- **Local Testing**: Run the PowerShell script `./run_two_instances.ps1` to launch two client windows side-by-side on your local machine.
