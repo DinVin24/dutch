@@ -119,3 +119,13 @@ func set_player_name(name: String) -> void:
 		return
 	config.set_value("multiplayer", "player_name", trimmed)
 	config.save(SETTINGS_FILE_PATH)
+
+func get_matches_won() -> int:
+	if config.has_section_key("stats", "matches_won"):
+		return int(config.get_value("stats", "matches_won", 0))
+	return 0
+
+func increment_matches_won() -> void:
+	var won = get_matches_won() + 1
+	config.set_value("stats", "matches_won", won)
+	config.save(SETTINGS_FILE_PATH)

@@ -124,7 +124,7 @@
 - [x] **Story**: As a player who struggles with memory, I want an "Easy Mode" toggle that keeps my cards face-up at all times, so that I can focus on strategy rather than memorization.
 - [x] **Story**: As a player, I want a standardized keybinding system (Jump-In, End Turn, Dutch, Forfeit, Choosing cards) so that I can play efficiently without a mouse.
 - [x] **Story**: As a player, I want my volume, resolution, and keybind settings saved persistently so I don't have to reconfigure them every launch.
-- [ ] **Story**: As a persistent winner, I want my "Matches Won" stat saved to my profile so I can flex on my enemies.
+- [x] **Story**: As a persistent winner, I want my "Matches Won" stat saved to my profile so I can flex on my enemies.
 
 ## Epic 14: The Immersive Tavern (Roadmap Phase 2) [KAN-73]
 - [x] **Story**: As a player, I want to feel the atmosphere of a "Run-down Bar" with thematic table, chairs, and surroundings.

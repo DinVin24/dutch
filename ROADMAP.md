@@ -65,7 +65,7 @@ gantt
     - [X] Player Identity: Picking and displaying a Username.
 2.  **Progression & Saving**:
     - [x] **Persistent Settings**: Save Volume, Resolution, and Keybinds.
-    - [ ] **Player Stats**: Save "Matches Won" to player profiles to show off skill.
+    - [x] **Player Stats**: Save "Matches Won" to player profiles to show off skill.
 
 ---
 

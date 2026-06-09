@@ -60,6 +60,7 @@ func _ready():
 	var saved_code := SettingsManager.get_last_room_code()
 	if saved_code != "":
 		code_edit.text = saved_code
+	$LeftMargin/VBox/SetupPanel/StatsLabel.text = "STAT_WINS // " + str(SettingsManager.get_matches_won())
 	name_edit.grab_focus()
 	if not get_viewport().size_changed.is_connected(_apply_responsive_layout):
 		get_viewport().size_changed.connect(_apply_responsive_layout)
