@@ -3,7 +3,7 @@ class_name AbilityToken3D
 
 signal token_clicked(token: AbilityToken3D)
 
-const TEXTURE_PATH = "res://assets/images/cards/ability_grid.jpg"
+const GRID_TEXTURE = preload("res://assets/images/cards/ability_grid.jpg")
 const GRID_COLS = 13.0
 const GRID_ROWS = 5.0
 
@@ -24,8 +24,6 @@ var is_active: bool = true
 var is_face_up: bool = false
 var is_animating: bool = false
 
-static var _grid_texture: Texture2D = null
-
 func setup(p_id: String):
 	ability_id = p_id
 	if is_node_ready():
@@ -45,11 +43,9 @@ func _update_visuals() -> void:
 		$Visuals.rotation_degrees.y = 180.0 if is_face_up else 0.0
 
 func _apply_textures():
-	if _grid_texture == null:
-		if ResourceLoader.exists(TEXTURE_PATH):
-			_grid_texture = load(TEXTURE_PATH)
-	
-	if not _grid_texture: return
+	if GRID_TEXTURE == null:
+		push_error("AbilityToken3D: ability grid texture failed to preload")
+		return
 
 	var col = ABILITY_ORDER.find(ability_id)
 	if col == -1:
@@ -57,14 +53,14 @@ func _apply_textures():
 		return
 
 	var front_mat = StandardMaterial3D.new()
-	front_mat.albedo_texture = _grid_texture
+	front_mat.albedo_texture = GRID_TEXTURE
 	front_mat.uv1_scale = Vector3(1.0/GRID_COLS, 1.0/GRID_ROWS, 1.0)
 	front_mat.uv1_offset = Vector3(float(col)/GRID_COLS, 0.0, 0.0)
 	front_mat.roughness = 0.8
 	front_face.set_surface_override_material(0, front_mat)
 
 	var back_mat = StandardMaterial3D.new()
-	back_mat.albedo_texture = _grid_texture
+	back_mat.albedo_texture = GRID_TEXTURE
 	back_mat.uv1_scale = Vector3(1.0/GRID_COLS, 1.0/GRID_ROWS, 1.0)
 	back_mat.uv1_offset = Vector3(0.0, 4.0/GRID_ROWS, 0.0)
 	back_mat.roughness = 0.8

@@ -53,6 +53,9 @@ func start_pipeline():
 	root.add_child(gm)
 	
 	await self.process_frame
+	# PHASE 0: export-critical texture resources
+	await phase_texture_resources()
+	
 	# PHASE 1: INITIALIZATION & DEAL
 	await phase_initialization()
 	
@@ -81,6 +84,57 @@ func start_pipeline():
 	await _quit()
 
 # --- PHASE MODULES ---
+
+func phase_texture_resources():
+	print("\n>>> PHASE 0: Card / Ability Texture Resources <<<")
+	await _verify_card_texture_resources()
+	await _verify_ability_texture_resources()
+
+func _verify_card_texture_resources() -> void:
+	var card_scene: PackedScene = load("res://card_3d.tscn")
+	if card_scene == null:
+		print("[QA FAIL] Card texture check: card_3d.tscn missing")
+		quit(1)
+		return
+	var card := card_scene.instantiate() as Node3D
+	root.add_child(card)
+	card.call("setup", _make_card("Ace", "Hearts"))
+	await process_frame
+	await process_frame
+	_assert_mesh_texture(card.get_node_or_null("Visuals/FrontFace") as MeshInstance3D, "Card front")
+	_assert_mesh_texture(card.get_node_or_null("Visuals/BackFace") as MeshInstance3D, "Card back")
+	card.queue_free()
+
+func _verify_ability_texture_resources() -> void:
+	var ability_scene: PackedScene = load("res://ability_token_3d.tscn")
+	if ability_scene == null:
+		print("[QA FAIL] Ability texture check: ability_token_3d.tscn missing")
+		quit(1)
+		return
+	var token := ability_scene.instantiate() as Node3D
+	root.add_child(token)
+	token.call("setup", "refuel")
+	await process_frame
+	await process_frame
+	_assert_mesh_texture(token.get_node_or_null("Visuals/FrontFace") as MeshInstance3D, "Ability front")
+	_assert_mesh_texture(token.get_node_or_null("Visuals/BackFace") as MeshInstance3D, "Ability back")
+	token.queue_free()
+
+func _assert_mesh_texture(mesh: MeshInstance3D, label: String) -> void:
+	if mesh == null:
+		print("[QA FAIL] %s texture check: mesh missing" % label)
+		quit(1)
+		return
+	var material := mesh.get_surface_override_material(0) as StandardMaterial3D
+	if material == null:
+		print("[QA FAIL] %s texture check: material missing" % label)
+		quit(1)
+		return
+	if material.albedo_texture == null:
+		print("[QA FAIL] %s texture check: albedo texture missing" % label)
+		quit(1)
+		return
+	print("[QA PASS] %s texture bound" % label)
 
 func phase_initialization():
 	print("\n>>> PHASE 1: Initialization & Deal Logic <<<")

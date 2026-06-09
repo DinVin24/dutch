@@ -28,13 +28,11 @@ var hover_lift: float = 0.0
 var hover_scale: float = 1.0
 var hover_tween: Tween = null
 
-const SPRITE_SHEET_PATH = "res://assets/images/cards/playing_cards.png"
+const SPRITE_SHEET = preload("res://assets/images/cards/playing_cards.png")
 const CARD_WIDTH = 100
 const CARD_HEIGHT = 140
 const SUIT_ORDER = ["Hearts", "Diamonds", "Clubs", "Spades"]
 const RANK_ORDER = ["Ace", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Jack", "Queen", "King"]
-
-static var _master_texture: Texture2D = null
 
 var _current_suit: String = ""
 var _current_rank: String = ""
@@ -153,11 +151,9 @@ func set_discard_trail_active(active: bool) -> void:
 		_discard_trail.emitting = active
 
 func _apply_atlas_textures():
-	if _master_texture == null:
-		if ResourceLoader.exists(SPRITE_SHEET_PATH):
-			_master_texture = load(SPRITE_SHEET_PATH)
-	
-	if not _master_texture: return
+	if SPRITE_SHEET == null:
+		push_error("Card3D: playing card sprite sheet failed to preload")
+		return
 
 	# Front Face
 	# Optimization: only rebuild material if data changed
@@ -175,7 +171,7 @@ func _apply_atlas_textures():
 
 	var front_mat = StandardMaterial3D.new()
 	front_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	front_mat.albedo_texture = _master_texture
+	front_mat.albedo_texture = SPRITE_SHEET
 	front_mat.uv1_scale = Vector3(1.0/13.0, 1.0/5.0, 1.0)
 	front_mat.uv1_offset = Vector3(float(col)/13.0, float(row)/5.0, 0.0)
 	
@@ -188,7 +184,7 @@ func _apply_atlas_textures():
 	# Back Face (Row 4, Col 0)
 	var back_mat = StandardMaterial3D.new()
 	back_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	back_mat.albedo_texture = _master_texture
+	back_mat.albedo_texture = SPRITE_SHEET
 	back_mat.uv1_scale = Vector3(1.0/13.0, 1.0/5.0, 1.0)
 	back_mat.uv1_offset = Vector3(0.0, 4.0/5.0, 0.0)
 	
