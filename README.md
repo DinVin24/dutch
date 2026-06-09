@@ -223,11 +223,25 @@ Dutch este un joc de memorie, risc și optimizare a scorului.
 - **Jump-In**: poți juca în afara turei dacă ai același rang ca ultima carte din discard
 - **Dutch**: anunți finalul rundei; toți ceilalți mai primesc un ultim tur, apoi confirmi sau renunți
 
-### Penalizări și economie
-- Fiecare jucător începe cu `3 beers`
-- Greșelile costă beers
-- Aruncarea cărților îți dă bani
-- Banii se cheltuiesc pe abilities cumpărate de la chicken
+### Penalizări și economie (Beers & Money)
+- Fiecare jucător începe cu **3 beri** (3 beers). Anumite greșeli (precum un Jump-In eșuat sau un discard instant) te obligă să bei o bere. La 0 beri, ești eliminat.
+- **Bani**: Aruncarea cărților în discard îți aduce bani în funcție de valoarea cărții (Așii aduc valoare mare, Regii aduc 0 bani).
+- **Găina (The Chicken)**: O găină 3D plutește deasupra mesei. Poți da click pe ea pentru a cheltui banii strânși și a cumpăra un **Ability Hammer** (ciocan de abilitate) auriu, plasat în sertarul tău de cabinet.
+- **Ciocanele de Abilități (Ability Hammers)**: Sunt păstrate în sertarele cabinetului personal (până la 6 sloturi). Trecerea cursorului peste un ciocan arată descrierea, iar click-ul pe el (sau tasta `E` când ești cu cursorul pe el) îl activează în tura ta.
+
+### Ciocane de abilități speciale (Special Ability Hammers)
+- **Bottoms Up**: Obligă un jucător ales să bea o bere.
+- **Refuel**: Îți aduce o bere în plus (max 3).
+- **Trim Off**: Îți elimină cea mai mare carte cunoscută din mână.
+- **Boulder**: Oferă unui jucător ales cea mai mare carte aflată în pachet.
+- **Uno Reverse**: Inversează direcția de joc la masă.
+- **Skip**: Blochează tura următorului jucător selectat.
+- **Perfect Match**: Resetează runda curentă, dar tu primești cărțile Aș, 2, 3, 4. Ceilalți primesc cărți random, iar banii și abilitățile se păstrează.
+- **Inflation**: Dublează punctajul cărților din mâna unui jucător (la scorul de final; rangul cărții rămâne neschimbat pentru Jump-In).
+- **Half Off**: Înjumătățește valoarea cărților din mâna unui jucător la scor.
+- **Jumpscare**: Tragi o carte și declanșezi un jumpscare vizual/auditiv pe ecranul unui jucător la alegere.
+- **Shuffle**: Amestecă aleatoriu ordinea cărților din mâna unui jucător.
+- **Polarity Shift**: Inversează condiția de victorie (cel mai mare scor câștigă vs cel mai mic scor câștigă).
 
 ## Setup Local
 
@@ -276,26 +290,57 @@ Proiectul folosește un server local compatibil OpenAI prin LM Studio pentru age
 
 ```bash
 export DUTCH_LM_STUDIO_URL=http://127.0.0.1:1234/v1
-export DUTCH_LM_STUDIO_MODEL=qwen/qwen3.5-9b
+export DUTCH_LM_STUDIO_MODEL=llama-3.2-1b-instruct
 ```
 
 ## Comenzi De Verificare
 
-### QA headless
-```bash
-export GODOT_BIN=/path/to/Godot_v4.6.x-stable_linux.x86_64
-./run_experimental_qa.sh
-```
+### QA headless (Linux / Windows)
+- Pe Linux:
+  ```bash
+  export GODOT_BIN=/path/to/Godot_v4.6.x-stable_linux.x86_64
+  ./run_experimental_qa.sh
+  ```
+- Pe Windows: Rulează `run_qa.bat`
 
-### Verificări pentru agenți
+### Verificări pentru agenți (Headless)
+Rulează scripturile de testare (înlocuiește `godot4` cu calea către executabilul Godot dacă este necesar):
 ```bash
 godot4 --headless --path . --script res://verify_agent_tools.gd
 godot4 --headless --path . --script res://verify_game_assistant.gd
 godot4 --headless --path . --script res://verify_lm_studio_client.gd
 ```
 
-### Promptfoo evals
+### Promptfoo evals (Evals LLM/SLM)
 ```bash
 ./evals/run_evals.sh --mock
 ./evals/run_evals.sh
 ```
+
+## 🌐 Multiplayer Testing
+Multiplayer-ul folosește WebRTC prin intermediul unui server public de signaling WebSocket (`wss://signal.maestriisigma.ro`).
+- **Configurare Lobby**: Introdu un nume de utilizator, apoi alege fie să găzduiești (generează un cod unic de cameră), fie să te alături (introdu codul camerei gazde).
+- **Testare Locală**: Rulează scriptul PowerShell `./run_two_instances.ps1` pentru a lansa două ferestre de client alăturate pe mașina locală.
+
+## 🎓 MDS Project Requirements (Procesul de Dezvoltare cu AI)
+
+Acest proiect a fost dezvoltat utilizând tool-uri de AI (Agentic AI Development) în cadrul disciplinei **Modele de Dezvoltare Software (MDS)**. Mai jos sunt linkurile și detaliile către fiecare cerință din baremul de evaluare:
+
+1. **User Stories (Minim 10) & Backlog Creation** (2 pct):
+   * Tichete de backlog și povești de utilizator structurate în: [user_stories.md](user_stories.md)
+   * Roadmap și evoluția planificată a backlog-ului pe faze: [ROADMAP.md](ROADMAP.md)
+2. **Diagrame de Arhitectură și Workflow-uri** (1 pct):
+   * Diagrame detaliate în format Mermaid (arhitectura componentelor, mașina de stări a jocului / FSM și fluxul de execuție al agenților): [DESIGN.md](DESIGN.md)
+3. **Source Control cu Git** (1 pct):
+   * Proiectul urmează standardul *Conventional Commits* (ex. `feat()`, `fix()`, `docs()`).
+   * Istoricul de commits, ramurile create (ex. `docs/correct-hammers-and-multiplayer`, `fix/multiplayer-camera-timeout`) și fluxul de Pull Requests pot fi consultate în istoricul Git al repository-ului.
+4. **Teste Automate și Evals pentru Agenți** (2 pct):
+   * **Pipeline-ul local de testare (Headless)**: [qa_pipeline.gd](qa_pipeline.gd), care validează logic mașina de stări a jocului, rulat prin scriptul utilitar [run_qa.bat](run_qa.bat) (Windows) sau [run_experimental_qa.sh](run_experimental_qa.sh) (Linux).
+   * **Teste funcționale / Smoke tests**: [verify_tutorial_mode.gd](verify_tutorial_mode.gd), [verify_chicken_purchase.gd](verify_chicken_purchase.gd) și [verify_agent_tools.gd](verify_agent_tools.gd).
+   * **Agent Evals (Evaluări LLM/SLM)**: Fișierele de configurare și testare a performanței botului și asistentului (Chippy) în raport cu regulamentul: [evals/chippy.yaml](evals/chippy.yaml), [evals/bot.yaml](evals/bot.yaml), rulate prin scriptul [evals/run_evals.sh](evals/run_evals.sh).
+5. **Raportare Bug și Rezolvare cu Pull Request** (1 pct):
+   * Utilizarea de șabloane și rapoarte de corectură (ex. [pr_body.txt](pr_body.txt) și istoricul de PR-uri/issue-uri rezolvate direct de agenți).
+6. **Pipeline CI/CD** (1 pct):
+   * Configurat prin GitHub Actions în [.github/workflows/qa-pipeline.yml](.github/workflows/qa-pipeline.yml) (descarcă automat executabilul Godot Headless pe Linux și rulează suita de teste la fiecare push/PR).
+7. **Raport despre folosirea toolurilor de AI** (2 pct):
+   * Raport complet în limba română privind procesul de pair programming cu agenți AI de-a lungul întregului ciclu de viață al software-ului: [ai_usage_report.md](ai_usage_report.md)

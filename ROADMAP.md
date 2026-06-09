@@ -13,7 +13,7 @@ gantt
     section Phase 2: Immersive Bar
     Environment & Atmosphere :done, des3, 2026-04-01, 12d
     Chicken & Beer Models    :active, des4, after des3, 5d
-    Ability Card Textures    :done, des5, after des4, 4d
+    Ability Hammer Models & FX:done, des5, after des4, 4d
     section Phase 3: Networking
     Lobby & User Management  :des6, 2026-04-15, 14d
     Persistence & Stats      :des7, after des6, 7d
@@ -49,10 +49,10 @@ gantt
     - [x] Complete rework of the surroundings into a "Run-down Bar".
     - [x] Thematic table and chairs.
 2.  **Interactive 3D Models**:
-    - [ ] **The Chicken**: Animated model that interacts with money/eggs.
-    - [ ] **Beers**: 3D rendered mugs (3 per player) that disappear upon consumption.
+    - [x] **The Chicken**: Animated model that reacts to purchases.
+    - [x] **Beers**: 3D rendered mugs (3 per player) that disappear upon consumption.
 3.  **Visual Polish**:
-    - [x] Custom textures for all Ability Cards.
+    - [x] Custom models and FX for all Ability Hammers.
     - [x] Enhanced animations for drawing, swapping, and ability execution.
 
 ---
@@ -62,10 +62,9 @@ gantt
 
 ### 🛠️ Tasks
 1.  **Multiplayer Networking**:
-    - [ ] Lobby System: Host a room and view a list of Joinable rooms.
-    - [ ] Player Identity: Picking and displaying a Username.
+    - [X] Player Identity: Picking and displaying a Username.
 2.  **Progression & Saving**:
-    - [ ] **Persistent Settings**: Save Volume, Resolution, and Keybinds.
+    - [x] **Persistent Settings**: Save Volume, Resolution, and Keybinds.
     - [ ] **Player Stats**: Save "Matches Won" to player profiles to show off skill.
 
 ---
@@ -75,11 +74,11 @@ gantt
 
 ### 🛠️ Tasks
 1.  **Social Layer**:
-    - [ ] **Player Models**: 3D avatars seated at the table.
+    - [x] **Player Models**: 3D avatars seated at the table.
     - [ ] **Voice Chat**: Spatial interaction in the bar.
-    - [ ] **Emotes**: Triggerable animations for when a player wins.
+    - [x] **Emotes**: Triggerable animations for when a player wins.
 2.  **Platform Reach**:
-    - [ ] Complete Browser (WebAssembly) and Mobile (Android/iOS) UI adaptive support.
+    - [x] Complete Browser (WebAssembly) and Mobile (Android/iOS) UI adaptive support.
 
 ---
 

@@ -12,7 +12,7 @@ The project employs two distinct AI agents:
 
 To ensure both agents perform reliably under code changes, we test them across two environments:
 * **Offline Mock Mode**: A fast, deterministic dry-run utilizing static mock outputs. Perfect for CI/CD integration and verifying promptfoo assertions.
-* **Live LM Studio Mode**: Queries the actual loaded local LLM (`qwen/qwen3.5-9b`) to test reasoning accuracy, instruction compliance, and structural JSON tool-calling formatting.
+* **Live LM Studio Mode**: Queries the actual loaded local LLM (`llama-3.2-1b-instruct`) to test reasoning accuracy, instruction compliance, and structural JSON tool-calling formatting.
 
 ---
 
@@ -58,7 +58,7 @@ Both Chippy and the Bot require specific context values to make correct decision
 
 ## 4. CPU Reasoning & Latency Optimizations
 
-Because local models (like `qwen/qwen3.5-9b`) utilize internal reasoning steps (generating a `<think>` block before answering) and may run on CPU, we implemented three crucial optimizations:
+Because local models (like `llama-3.2-1b-instruct` or reasoning models like `qwen`) can be slow and may run on CPU, we implemented three crucial optimizations:
 
 1. **Extended Timeouts**: Set `timeoutMs: 300000` (5 minutes) at the top of our YAML configurations and exported `REQUEST_TIMEOUT_MS=300000` in our runner shell script to prevent Promptfoo from aborting requests while the model is thinking.
 2. **Expanded Token Budgets**: Increased `max_tokens` to `1500` per call to ensure Qwen's thinking process does not get cut off mid-thought, allowing it to output the actual answer.
@@ -87,7 +87,7 @@ We maintain a suite of **20 test cases** checking specific game logic:
 ## 6. How to Run the Evaluations
 
 ### Pre-requisites
-Make sure Node.js is installed. If running live evaluations, start LM Studio, load your model (`qwen/qwen3.5-9b`), and ensure the local port is active (`http://127.0.0.1:1234`).
+Make sure Node.js is installed. If running live evaluations, start LM Studio, load your model (`llama-3.2-1b-instruct`), and ensure the local port is active (`http://127.0.0.1:1234`).
 
 ### Run Offline / Mock Mode (CI/CD)
 Fast, zero-latency validation of assertions and yaml formats:

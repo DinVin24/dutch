@@ -350,7 +350,7 @@ func _on_player_gained_money(player_idx: int, _amount: int, total: int) -> void:
 	# (e.g. after spending on an ability and earning back up to $50).
 	if _last_money < 50 and total >= 50:
 		_show_transient_tip(FACE_SMUG,
-			"You have $%d! Click the CHICKEN on the table to buy an ability egg for $50.\nAbilities can totally change the game!" % total)
+			"You have $%d! Click the CHICKEN on the table to buy an ability for $50.\nAbilities can totally change the game!" % total)
 	_last_money = total
 
 

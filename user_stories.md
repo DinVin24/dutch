@@ -99,7 +99,7 @@
 ## Epic 8: The Tavern Expansion [KAN-36]
 - [x] **Story**: As a player, I want 3 physical 3D beers spawned at my side, representing lives, which I must drink from if I fail a Jump-In or instantly discard a drawn card. [KAN-47]
 - [x] **Story**: As a player, I want to earn money scaled to the rank of discarded cards to create an economic layer. [KAN-48]
-- [x] **Story**: As a player, I want to click a hovering chicken to spend money and spawn an egg that cracks into a face-down Ability Card. [KAN-49]
+- [x] **Story**: As a player, I want to click a hovering chicken to spend money and receive a golden hammer in my drawer that grants an ability. [KAN-49]
 - [x] **Story**: As a player, I want to be able to use a variety of disruption and utility abilities (Shuffle, Reverse, Skip, Boulder, etc.).
 
 ## Epic 9: Online Multiplayer Matchmaking [KAN-25]
