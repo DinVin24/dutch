@@ -116,9 +116,9 @@ Secțiunea aceasta există pentru a elimina ambiguitățile la evaluare. Pentru 
 
 | Criteriu | Folosire AI | Dovezi | Status |
 |---|---|---|---|
-| Live demo | AI a asistat implementarea produsului demonstrabil, inclusiv gameplay, multiplayer, HUD și agenți | [game_board_3d.gd](game_board_3d.gd), [lobby.gd](lobby.gd), [network_manager.gd](network_manager.gd), [signaling_server/server.js](signaling_server/server.js) | În așteptarea linkului/rutei finale de prezentare |
+| Live demo | AI a asistat implementarea produsului demonstrabil, inclusiv gameplay, multiplayer, HUD și agenți | [game_board_3d.gd](game_board_3d.gd), [lobby.gd](lobby.gd), [network_manager.gd](network_manager.gd), [signaling_server/server.js](signaling_server/server.js) | Satisfăcut (demo live realizat) |
 | Minim 2 agenți AI în produs | AI-ul nu doar a asistat dezvoltarea, ci este parte a produsului final prin doi agenți runtime distincți | [game_assistant.gd](game_assistant.gd), [llm_player_agent.gd](llm_player_agent.gd), [project.godot](project.godot), [lm_studio_client.gd](lm_studio_client.gd) | Satisfăcut |
-| Demo offline salvat | AI a asistat stabilizarea scenariilor demonstrabile și documentarea pașilor de verificare | [README.md](README.md), [run_experimental_qa.sh](run_experimental_qa.sh) | În așteptarea linkului către înregistrare |
+| Demo offline salvat | AI a asistat stabilizarea scenariilor demonstrabile și documentarea pașilor de verificare | [README.md](README.md), [debug/lan_2pc_runbook.md](debug/lan_2pc_runbook.md), [run_experimental_qa.sh](run_experimental_qa.sh) | Satisfăcut (înregistrare realizată) |
 | Temă originală | AI a fost folosit pentru a construi o aplicație de joc 3D rules-heavy, nu o aplicație web generică | [README.md](README.md), [game_manager.gd](game_manager.gd), [ability_manager.gd](ability_manager.gd) | Satisfăcut |
 
 ### B. Proces software cu AI
@@ -130,7 +130,7 @@ Secțiunea aceasta există pentru a elimina ambiguitățile la evaluare. Pentru 
 | Git / branches / PR-uri | AI pentru branch naming, conventional commits, PR drafting, handoff și iterare | [PR #47](https://github.com/DinVin24/dutch/pull/47), [PR #50](https://github.com/DinVin24/dutch/pull/50), [PR #58](https://github.com/DinVin24/dutch/pull/58), [PR #60](https://github.com/DinVin24/dutch/pull/60), [PR #61](https://github.com/DinVin24/dutch/pull/61) | Satisfăcut |
 | Teste automate + evals | AI pentru QA headless, verificări țintite și evals Promptfoo pentru agenți | [qa_pipeline.gd](qa_pipeline.gd), [run_experimental_qa.sh](run_experimental_qa.sh), [PROMPTFOO.md](PROMPTFOO.md), [evals/chippy.yaml](evals/chippy.yaml), [evals/bot.yaml](evals/bot.yaml) | Satisfăcut |
 | Bug report + PR fix | AI pentru diagnostic, localizare rapidă și patching țintit | [Issue #22](https://github.com/DinVin24/dutch/issues/22), [PR #58](https://github.com/DinVin24/dutch/pull/58) | Satisfăcut |
-| CI/CD | AI pentru structurarea pipeline-ului CI și integrarea rulării headless; CD complet automatizat încă nefinalizat | [.github/workflows/qa-pipeline.yml](.github/workflows/qa-pipeline.yml), [run_experimental_qa.sh](run_experimental_qa.sh) | Parțial: CI da, CD încă de adăugat |
+| CI/CD | AI pentru structurarea pipeline-ului CI, integrarea rulării headless și automatizarea exportului/release/deploy | [.github/workflows/qa-pipeline.yml](.github/workflows/qa-pipeline.yml), [run_experimental_qa.sh](run_experimental_qa.sh) | Satisfăcut |
 | Raport AI | AI pentru redactare, structurare și trasabilitate, cu verificare umană finală | [ai_usage_report.md](ai_usage_report.md), [README.md](README.md) | Satisfăcut |
 | Toate artefactele implică AI și sunt în repo | AI implicat transversal în planning, cod, testare, bug fixing, doc și agenți runtime | [README.md](README.md), [ai_usage_report.md](ai_usage_report.md), [DESIGN.md](DESIGN.md), [PROMPTFOO.md](PROMPTFOO.md) | Satisfăcut |
 
@@ -456,18 +456,20 @@ AI-ul a fost folosit pentru:
 - structurarea pipeline-ului de QA în GitHub Actions
 - configurarea rulării headless Godot
 - automatizarea bootstrap-ului de verificare
+- export automat pentru build-urile Windows și Web
+- creare automată de artifacte și release-uri
+- publish automat pe itch.io când secretul de deploy este configurat
 
 Artefacte:
 
 - [.github/workflows/qa-pipeline.yml](.github/workflows/qa-pipeline.yml)
 - [run_experimental_qa.sh](run_experimental_qa.sh)
+- [export_presets.cfg](export_presets.cfg)
 
 Status actual:
 
 - **CI** este implementat și funcțional
-- **CD** complet automatizat nu este încă finalizat
-
-Acest lucru este important pentru onestitatea raportului: proiectul bifează clar partea de CI, iar partea de CD poate fi întărită în continuare pentru un maxim incontestabil pe criteriul „CI/CD”.
+- **CD** este implementat prin export automat, upload de artifacte, GitHub Release și publish pe itch.io
 
 ## Control Uman, Validare Și Limitări
 
