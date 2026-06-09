@@ -346,3 +346,5 @@ Acest proiect a fost dezvoltat utilizând tool-uri de AI (Agentic AI Development
    * **CD**: Integrat în același workflow; rulează exportul headless al jocului pentru Windows Desktop și Web (HTML5), le uploadează ca artifacte de build, creează automat un Release pe GitHub cu ambele build-uri pre-ambalate (ZIP) și publică automat build-urile pe itch.io folosind **Butler** CLI (dacă cheia `BUTLER_API_KEY` este configurată în GitHub Secrets) pentru orice push pe ramura `main`.
 7. **Raport despre folosirea toolurilor de AI** (2 pct):
    * Raport complet în limba română privind procesul de pair programming cu agenți AI de-a lungul întregului ciclu de viață al software-ului: [ai_usage_report.md](ai_usage_report.md)
+
+<!-- CD Pipeline test trigger -->
