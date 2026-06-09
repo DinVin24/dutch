@@ -329,6 +329,7 @@ Acest proiect a fost dezvoltat utilizând tool-uri de AI (Agentic AI Development
 1. **User Stories (Minim 10) & Backlog Creation** (2 pct):
    * Tichete de backlog și povești de utilizator structurate în: [user_stories.md](user_stories.md)
    * Roadmap și evoluția planificată a backlog-ului pe faze: [ROADMAP.md](ROADMAP.md)
+   * Backlog-ul și tichetele de lucru au fost de asemenea structurate și organizate în Jira.
 2. **Diagrame de Arhitectură și Workflow-uri** (1 pct):
    * Diagrame detaliate în format Mermaid (arhitectura componentelor, mașina de stări a jocului / FSM și fluxul de execuție al agenților): [DESIGN.md](DESIGN.md)
 3. **Source Control cu Git** (1 pct):
