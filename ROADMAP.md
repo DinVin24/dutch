@@ -49,8 +49,8 @@ gantt
     - [x] Complete rework of the surroundings into a "Run-down Bar".
     - [x] Thematic table and chairs.
 2.  **Interactive 3D Models**:
-    - [ ] **The Chicken**: Animated model that reacts to purchases.
-    - [ ] **Beers**: 3D rendered mugs (3 per player) that disappear upon consumption.
+    - [x] **The Chicken**: Animated model that reacts to purchases.
+    - [x] **Beers**: 3D rendered mugs (3 per player) that disappear upon consumption.
 3.  **Visual Polish**:
     - [x] Custom models and FX for all Ability Hammers.
     - [x] Enhanced animations for drawing, swapping, and ability execution.
@@ -62,8 +62,7 @@ gantt
 
 ### 🛠️ Tasks
 1.  **Multiplayer Networking**:
-    - [ ] Lobby System: Host a room and view a list of Joinable rooms.
-    - [ ] Player Identity: Picking and displaying a Username.
+    - [X] Player Identity: Picking and displaying a Username.
 2.  **Progression & Saving**:
     - [x] **Persistent Settings**: Save Volume, Resolution, and Keybinds.
     - [ ] **Player Stats**: Save "Matches Won" to player profiles to show off skill.
@@ -75,11 +74,11 @@ gantt
 
 ### 🛠️ Tasks
 1.  **Social Layer**:
-    - [ ] **Player Models**: 3D avatars seated at the table.
+    - [x] **Player Models**: 3D avatars seated at the table.
     - [ ] **Voice Chat**: Spatial interaction in the bar.
-    - [ ] **Emotes**: Triggerable animations for when a player wins.
+    - [x] **Emotes**: Triggerable animations for when a player wins.
 2.  **Platform Reach**:
-    - [ ] Complete Browser (WebAssembly) and Mobile (Android/iOS) UI adaptive support.
+    - [x] Complete Browser (WebAssembly) and Mobile (Android/iOS) UI adaptive support.
 
 ---
 
