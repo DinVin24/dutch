@@ -277,6 +277,8 @@ func _on_player_disconnected(id: int):
 	_mp_log("peer_disconnected", "peer disconnected", {"id": id})
 	if rtc_connections.has(id):
 		rtc_connections.erase(id)
+	if players.has(id):
+		players.erase(id)
 	player_disconnected.emit(id)
 	players_updated.emit()
 
@@ -331,6 +333,7 @@ func sync_match_settings(settings: Dictionary):
 func start_match(total_players: int, deck_seed: int):
 	var sender := multiplayer.get_remote_sender_id()
 	_mp_log("rpc.start_match", "starting match", {"sender_id": sender, "total_players": total_players, "seed": deck_seed})
+	GameManager.is_multiplayer = true
 	GameManager.pending_mp_player_count = clampi(total_players, 2, 4)
 	GameManager.pending_match_seed = deck_seed
 	play_again_votes.clear()
