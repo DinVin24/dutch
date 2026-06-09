@@ -344,35 +344,42 @@ flowchart TB
 ### Lobby Screen
 
 ```mermaid
-flowchart LR
-    subgraph LobbyScreen["Lobby.tscn"]
-        direction LR
+flowchart TB
+    Root["Lobby.tscn"] --> SetupState["State 1<br/>SetupPanel visible"]
+    Root --> ActiveState["State 2<br/>ActiveLobbyPanel visible"]
 
-        subgraph LeftColumn["Left Column"]
-            direction TB
-            L1["Title"]
-            L2["Name input"]
-            L3["Room code input"]
-            L4["Host button / Join button"]
-            L5["Status / error label"]
-            L6["Back button"]
-        end
+    subgraph SetupPanel["SetupPanel wireframe"]
+        direction TB
+        S1["Title"]
+        S2["Name row<br/>label + name input"]
+        S3["Connection row<br/>room code input + Host button + Join button"]
+        S4["Status / error label"]
+        S5["Back button"]
+        S1 --> S2 --> S3 --> S4 --> S5
+    end
 
-        subgraph RightColumn["Right Column"]
-            direction TB
-            R1["Room code + host IP"]
-            R2["Players list"]
-            R3["Match settings<br/>abilities / fill bots / beers / visibility"]
-            R4["Start hint"]
-            R5["Start match button"]
-            R6["Copy room code button"]
+    subgraph ActivePanel["ActiveLobbyPanel wireframe"]
+        direction TB
+        A1["Header row<br/>room code label + host IP or 'Connected to Host' + copy button"]
+        A2["Body row"]
+        A3["Start hint"]
+        A4["Start match button"]
+        A5["Back button"]
+        A1 --> A2 --> A3 --> A4 --> A5
+
+        subgraph BodyRow["Body row split"]
+            direction LR
+            B1["Players list"]
+            B2["Settings pane<br/>abilities toggle<br/>fill bots toggle<br/>beer count<br/>card visibility"]
         end
     end
 
-    L4 -. host flow .-> R1
-    L4 -. join flow .-> R2
-    R3 -. host editable .-> R5
-    R3 -. client read-only .-> R2
+    SetupState --> SetupPanel
+    ActiveState --> ActivePanel
+    S3 -. host flow .-> A1
+    S3 -. join flow .-> A1
+    B2 -. host mode: editable .-> A4
+    B2 -. client mode: read-only .-> B1
 ```
 
 ### In-Match HUD And 3D Board
