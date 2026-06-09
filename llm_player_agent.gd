@@ -104,6 +104,11 @@ func _request_llm_action(player_idx: int) -> bool:
 	var result: Dictionary = await AgentToolRegistry.execute_tool(tool_name, arguments, player_idx)
 	if result.get("ok", false):
 		gm.bot_action.emit("LM Player %d used %s." % [player_idx, tool_name])
+		if tool_name == "buy_ability":
+			var data: Dictionary = result.get("data", {})
+			if data.get("success", false):
+				print("[LLM Agent] Bought ability, scheduling next decision in the same FSM state.")
+				_schedule_decision()
 		return true
 	return false
 
