@@ -124,6 +124,7 @@ var _touch_tap_starts: Dictionary = {}
 var _touch_look_active: bool = false
 var player_avatars: Dictionary = {}
 var avatar_arm_weights: Dictionary = {}
+var avatar_base_rotations: Dictionary = {}
 var _camera_initialized: bool = false
 var _drink_timers: Dictionary = {}
 var _drink_beers: Dictionary = {}
@@ -145,8 +146,10 @@ var _shake_intensity: float = 0.0
 var _shake_timer: float = 0.0
 var _base_camera_pos: Vector3
 var _base_camera_rotation: Vector3
-## Extra shift on top of scene default camera position (e.g. multiplayer seat framing).
+## Shared additive shift on top of the authored scene camera.
+## Kept at zero during gameplay so singleplayer and multiplayer framing match.
 var _mp_camera_offset: Vector3 = Vector3.ZERO
+var _camera_anchor_player_idx: int = -1
 var _mp_connection_label: Label = null
 var _mp_status_poll_timer: float = 0.0
 var _last_turn_player_idx: int = -1
@@ -161,18 +164,7 @@ var _debug_overlay_visible: bool = false
 var _debug_overlay_layer: CanvasLayer = null
 var _debug_overlay_label: Label = null
 
-var _last_sync_diag := {
-	"state": -1,
-	"cur": -1,
-	"deck": -1,
-	"discard": -1,
-	"pending": false,
-	"dutch_i": -1,
-	"abilities": [[], [], [], []],
-	"beers": [3, 3, 3, 3],
-	"hand_sizes": [0, 0, 0, 0],
-	"money": [0, 0, 0, 0]
-}
+var _last_sync_diag := _make_empty_sync_diag()
 
 func _ready():
 	if Engine.is_editor_hint():
@@ -223,8 +215,12 @@ func _ready():
 	GameManager.pending_card_consumed.connect(_on_pending_card_consumed)
 	GameManager.multiplayer_sync_applied.connect(_on_multiplayer_sync_applied)
 	GameManager.mp_connection_status_changed.connect(_on_mp_connection_status_changed)
+	GameManager.mp_disconnect_grace_started.connect(_on_mp_disconnect_grace_started)
+	GameManager.mp_disconnect_recovered.connect(_on_mp_disconnect_recovered)
+	GameManager.mp_disconnect_timed_out.connect(_on_mp_disconnect_timed_out)
 	GameManager.player_emoted.connect(_on_player_emoted)
 	NetworkManager.play_again_votes_updated.connect(_on_play_again_votes_updated)
+	NetworkManager.game_started.connect(_on_network_game_started)
 	NetworkManager.server_disconnected.connect(_on_host_disconnected)
 	
 	# Dynamic Tavern Ambient & Spotlight Lighting
@@ -288,6 +284,7 @@ func _ready():
 
 	await get_tree().process_frame
 	_update_deck_visual()
+	base_camera_transform = $Camera3D.global_transform
 	_base_camera_pos = $Camera3D.position
 	_base_camera_rotation = $Camera3D.rotation
 	_setup_table_noise()
@@ -303,7 +300,7 @@ func _ready():
 					child.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	print("Game Board 3D: Starting game...")
-	GameManager.initialize_game(4)
+	_start_or_attach_current_match()
 	_configure_visible_player_seats(GameManager.num_players)
 	_apply_local_player_seat_rotation()
 	trigger_glitch(0.4, 0.8) # Intro glitch
@@ -332,6 +329,84 @@ func _send_action(action: String, args: Dictionary = {}) -> bool:
 func _human_ui_idx() -> int:
 	return GameManager.local_player_idx if GameManager.is_multiplayer else 0
 
+func _make_empty_sync_diag() -> Dictionary:
+	return {
+		"state": -1,
+		"cur": -1,
+		"deck": -1,
+		"discard": -1,
+		"pending": false,
+		"dutch_i": -1,
+		"abilities": [[], [], [], []],
+		"beers": [3, 3, 3, 3],
+		"hand_sizes": [0, 0, 0, 0],
+		"money": [0, 0, 0, 0],
+		"disconnect_pending": [-1, -1, -1, -1]
+	}
+
+func _is_multiplayer_client() -> bool:
+	return multiplayer.multiplayer_peer != null \
+		and not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer) \
+		and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED \
+		and not multiplayer.is_server()
+
+func _start_or_attach_current_match() -> void:
+	if _is_multiplayer_client():
+		_attach_to_multiplayer_match()
+	else:
+		GameManager.initialize_game(4)
+
+func _attach_to_multiplayer_match() -> void:
+	GameManager.is_multiplayer = true
+	call_deferred("_bootstrap_multiplayer_client_scene")
+
+func _bootstrap_multiplayer_client_scene() -> void:
+	if not is_inside_tree() or not _is_multiplayer_client():
+		return
+	if GameManager.players_info.is_empty() or GameManager.current_state == GameManager.GameState.INITIALIZING:
+		return
+	_on_multiplayer_sync_applied()
+
+func _reset_board_for_new_match() -> void:
+	_hide_message(true)
+	_hide_jack_swap_ui()
+	swap_sources.clear()
+	_keyboard_selected_card_idx = -1
+	_hovered_card_node = null
+	_initial_peek_open.clear()
+	_initial_peek_memorized.clear()
+	_victory_results_pending.clear()
+	_victory_cinematic_active = false
+	_debug_reveal = false
+	_debug_flipped_nodes.clear()
+	_camera_anchor_player_idx = -1
+	_camera_initialized = false
+	_last_sync_diag = _make_empty_sync_diag()
+	play_again_btn = null
+	if is_instance_valid(_victory_overlay_layer):
+		_victory_overlay_layer.queue_free()
+	_victory_overlay_layer = null
+	if is_instance_valid(pending_card):
+		pending_card.queue_free()
+	pending_card = null
+	for p_idx in range(player_hands.size()):
+		for card in player_hands[p_idx].duplicate():
+			if is_instance_valid(card):
+				card.queue_free()
+		player_hands[p_idx].clear()
+	for p_idx in player_pos_nodes.keys():
+		for child in player_pos_nodes[p_idx].get_children():
+			if child is Card3D:
+				child.queue_free()
+	_update_discard_visual()
+	_update_deck_visual()
+
+func _on_network_game_started() -> void:
+	if get_tree().current_scene != self:
+		return
+	_reset_board_for_new_match()
+	_start_or_attach_current_match()
+
 func _effective_camera_base_local() -> Vector3:
 	return _base_camera_pos + _mp_camera_offset
 
@@ -340,23 +415,19 @@ func _effective_camera_base_local() -> Vector3:
 func _apply_local_player_seat_rotation() -> void:
 	if not is_instance_valid(player_positions_root):
 		return
+	var target_local_idx := GameManager.local_player_idx if GameManager.is_multiplayer else 0
+	var seat_changed := _camera_anchor_player_idx != target_local_idx
 	if GameManager.is_multiplayer:
-		player_positions_root.rotation.y = GameManager.local_player_idx * (TAU / 4.0)
-		# Same +Z dolly in board space for every seat so the local hand stays fully in frame after seat rotation.
-		const MP_CAMERA_DOLLY_Z := 1.55
-		_mp_camera_offset = Vector3(0, 0, MP_CAMERA_DOLLY_Z)
+		player_positions_root.rotation.y = target_local_idx * (TAU / 4.0)
 	else:
 		player_positions_root.rotation.y = 0.0
-		_mp_camera_offset = Vector3.ZERO
-	if is_instance_valid(camera):
-		if GameManager.is_multiplayer:
-			# Table cam (not avatar FP): rotate with seat so the deck stays centered for every peer.
-			camera.rotation.y = _base_camera_rotation.y + GameManager.local_player_idx * (TAU / 4.0)
-			_look_yaw = 0.0
-			_look_pitch = 0.0
-		else:
-			camera.rotation.y = _base_camera_rotation.y
+	_mp_camera_offset = Vector3.ZERO
+	if seat_changed and is_instance_valid(camera):
+		camera.rotation = _base_camera_rotation
 		camera.position = _effective_camera_base_local()
+		_look_yaw = 0.0
+		_look_pitch = 0.0
+	_camera_anchor_player_idx = target_local_idx
 
 func _attach_cabinets_to_seats() -> void:
 	# World offsets from each chair: left of the seat, same depth as the player (not behind them).
@@ -587,7 +658,7 @@ func _on_multiplayer_sync_applied() -> void:
 	if local_idx >= 0 and local_idx < GameManager.players_info.size():
 		if money_labels.size() > 0:
 			money_labels[0].text = "$" + str(GameManager.players_info[local_idx].money)
-	
+
 	# --- Synchronize beers: drink / refill animations on all peers ---
 	var prev_beers: Array = _last_sync_diag.get("beers", [3, 3, 3, 3])
 	for pi in range(GameManager.num_players):
@@ -600,6 +671,19 @@ func _on_multiplayer_sync_applied() -> void:
 			_animate_beer_refill(beers_array, cur_beers)
 		else:
 			_sync_beer_visuals(pi, cur_beers)
+
+	var prev_disconnect_pending: Array = _last_sync_diag.get("disconnect_pending", [-1, -1, -1, -1])
+	var disconnect_pending_snapshot: Array = GameManager.get_disconnect_pending_remaining_ms_snapshot()
+	for pi in range(GameManager.num_players):
+		var old_pending: int = int(prev_disconnect_pending[pi]) if pi < prev_disconnect_pending.size() else -1
+		var new_pending_ms: int = int(disconnect_pending_snapshot[pi]) if pi < disconnect_pending_snapshot.size() else -1
+		if new_pending_ms > 0 and old_pending <= 0:
+			_on_mp_disconnect_grace_started(pi, float(new_pending_ms) / 1000.0)
+		elif new_pending_ms <= 0 and old_pending > 0:
+			if GameManager.players_info[pi].is_eliminated:
+				_on_mp_disconnect_timed_out(pi)
+			else:
+				_on_mp_disconnect_recovered(pi)
 
 	# --- Penalty/jump-in hand growth: force relayout on clients ---
 	var prev_hand_sizes: Array = _last_sync_diag.get("hand_sizes", [0, 0, 0, 0])
@@ -675,6 +759,7 @@ func _on_multiplayer_sync_applied() -> void:
 		else:
 			money_snapshot.append(0)
 	_last_sync_diag["money"] = money_snapshot
+	_last_sync_diag["disconnect_pending"] = disconnect_pending_snapshot
 	_update_draw_arrow_visibility()
 
 func _create_hud_ui():
@@ -3000,7 +3085,14 @@ func _show_defeat_overlay(results: Array) -> void:
 
 	var play_again = Button.new()
 	play_again.text = "Try Again"
-	play_again.pressed.connect(func(): get_tree().reload_current_scene())
+	play_again.pressed.connect(func():
+		if GameManager.is_multiplayer:
+			play_again.disabled = true
+			play_again.text = "Voted!"
+			NetworkManager.vote_play_again.rpc()
+		else:
+			get_tree().reload_current_scene()
+	)
 	btn_h.add_child(play_again)
 
 	var main_menu = Button.new()
@@ -3648,8 +3740,8 @@ func _process(delta: float) -> void:
 									beer_node.global_position = target_gpos
 									beer_node.global_basis = target_gbasis
 
-		# 4. First-Person Camera Placement and Look tracking for local player
-		if not GameManager.is_multiplayer and player_avatars.has(local_p_idx) and is_instance_valid(player_avatars[local_p_idx]):
+		# 4. First-Person Camera placement uses the same local-avatar rules in singleplayer and multiplayer.
+		if player_avatars.has(local_p_idx) and is_instance_valid(player_avatars[local_p_idx]):
 			var avatar = player_avatars[local_p_idx]
 			var skeleton = avatar.get_node_or_null("Armature/Skeleton3D") as Skeleton3D
 			if skeleton:
@@ -3660,7 +3752,9 @@ func _process(delta: float) -> void:
 					# Rotate body Y (yaw) based on camera Y rotation with 35% damping
 					var smooth_yaw = camera.rotation.y - _base_camera_rotation.y
 					var body_yaw = clamp(smooth_yaw * 0.35, deg_to_rad(-50.0), deg_to_rad(50.0))
-					avatar.rotation.y = deg_to_rad(180.0) + body_yaw
+					var base_avatar_rotation: Vector3 = avatar_base_rotations.get(local_p_idx, avatar.rotation)
+					avatar.rotation = base_avatar_rotation
+					avatar.rotation.y = base_avatar_rotation.y + body_yaw
 					
 					# Rotate head bone to look exactly where the camera is looking
 					var cam_basis = camera.global_transform.basis
@@ -4990,6 +5084,12 @@ func _spawn_player_avatars() -> void:
 		2: 90.0,
 		3: 90.0
 	}
+	var seat_avatar_rotations = {
+		0: PI,
+		1: 0.0,
+		2: 0.0,
+		3: 0.0
+	}
 
 	for i in range(4):
 		var chair = chairs[i]
@@ -5036,9 +5136,12 @@ func _spawn_player_avatars() -> void:
 		var avatar_global: Transform3D = char_node.global_transform
 		char_node.reparent(seat)
 		char_node.global_transform = avatar_global
+		# Normalize to the seat-local yaw that points this imported avatar toward the table.
+		char_node.rotation = Vector3(0.0, float(seat_avatar_rotations.get(i, 0.0)), 0.0)
 
 		player_avatars[i] = char_node
 		avatar_arm_weights[i] = 1.0
+		avatar_base_rotations[i] = char_node.rotation
 
 	take_inst.queue_free()
 	_refresh_avatar_body_visibility()
@@ -5183,6 +5286,24 @@ func _get_drink_bone_rotation(bone_name: String, t: float) -> Quaternion:
 
 func _on_mp_connection_status_changed(lag_ms: int, status: String) -> void:
 	_update_mp_connection_label(lag_ms, status)
+
+func _on_mp_disconnect_grace_started(player_idx: int, timeout_sec: float) -> void:
+	if player_idx < 0 or player_idx >= GameManager.players_info.size():
+		return
+	var player_name := str(GameManager.players_info[player_idx].name)
+	_show_message("%s disconnected. Holding seat for %ds." % [player_name, maxi(1, ceili(timeout_sec))])
+
+func _on_mp_disconnect_recovered(player_idx: int) -> void:
+	if player_idx < 0 or player_idx >= GameManager.players_info.size():
+		return
+	var player_name := str(GameManager.players_info[player_idx].name)
+	_show_message(player_name + " reconnected.")
+
+func _on_mp_disconnect_timed_out(player_idx: int) -> void:
+	if player_idx < 0 or player_idx >= GameManager.players_info.size():
+		return
+	var player_name := str(GameManager.players_info[player_idx].name)
+	_show_message(player_name + " timed out and was removed.")
 
 func _update_mp_connection_label(lag_ms: int, status: String) -> void:
 	if not is_instance_valid(_mp_connection_label):

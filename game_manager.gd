@@ -44,9 +44,13 @@ signal ability_unlocked(player_idx, ability_id)
 signal polarity_shifted(new_state: bool)
 signal multiplayer_sync_applied
 signal mp_connection_status_changed(lag_ms: int, status: String)
+signal mp_disconnect_grace_started(player_idx: int, timeout_sec: float)
+signal mp_disconnect_recovered(player_idx: int)
+signal mp_disconnect_timed_out(player_idx: int)
 
 const EMOTE_IDS: Array[String] = ["laugh", "shock", "gg", "chicken"]
 const EMOTE_COOLDOWN_SEC := 4.0
+const MP_DISCONNECT_GRACE_SEC := 15.0
 
 var current_state: GameState = GameState.INITIALIZING
 var deck_manager: DeckManager
@@ -87,6 +91,9 @@ var _mp_last_applied_sync_seq: int = -1
 var _mp_game_over_scores_applied: bool = false
 var _mp_sync_prev_cur: int = -1
 var _emote_cooldown_until: Dictionary = {}
+var _pending_disconnect_deadlines_msec: Dictionary = {}
+var _pending_disconnect_peer_ids: Dictionary = {}
+var _replicated_pending_disconnect_remaining_msec: Dictionary = {}
 var mp_sync_lag_ms: int = 0
 var mp_connection_status: String = "ok"
 var turn_direction: int = 1 # 1 for clockwise, -1 for counter-clockwise (Uno Reverse)
@@ -133,6 +140,7 @@ func _ready():
 	ability_manager = AbilityManager.new()
 	add_child(ability_manager)
 	
+	NetworkManager.player_connected.connect(_on_network_player_connected)
 	NetworkManager.player_disconnected.connect(_on_peer_disconnected)
 	
 	# Background Music Setup (Dual Players for Seamless Loop)
@@ -184,6 +192,7 @@ func _process(_delta: float) -> void:
 		
 		if pos > length - 2.0 and not next_game_player.playing:
 			_start_game_music_crossfade()
+	_tick_pending_disconnect_grace()
 
 func _start_menu_music_crossfade() -> void:
 	next_menu_player.play()
@@ -258,6 +267,9 @@ func initialize_game(p_count: int = 4):
 	_mp_game_over_scores_applied = false
 	_mp_sync_prev_cur = -1
 	_emote_cooldown_until.clear()
+	_pending_disconnect_deadlines_msec.clear()
+	_pending_disconnect_peer_ids.clear()
+	_replicated_pending_disconnect_remaining_msec.clear()
 	mp_sync_lag_ms = 0
 	mp_connection_status = "ok"
 	players_info.clear()
@@ -720,40 +732,125 @@ func _check_elimination_win_condition() -> bool:
 		return true
 	return false
 
-func _on_peer_disconnected(peer_id: int) -> void:
-	if not is_multiplayer or not multiplayer.is_server():
+func get_disconnect_pending_remaining_ms_snapshot() -> Array:
+	var snapshot: Array = [-1, -1, -1, -1]
+	if not is_multiplayer:
+		return snapshot
+	if multiplayer.multiplayer_peer != null and multiplayer.is_server():
+		var now := Time.get_ticks_msec()
+		for key in _pending_disconnect_deadlines_msec.keys():
+			var player_idx := int(key)
+			if player_idx < 0 or player_idx >= snapshot.size():
+				continue
+			snapshot[player_idx] = maxi(0, int(_pending_disconnect_deadlines_msec[key]) - now)
+	else:
+		for key in _replicated_pending_disconnect_remaining_msec.keys():
+			var player_idx := int(key)
+			if player_idx < 0 or player_idx >= snapshot.size():
+				continue
+			snapshot[player_idx] = int(_replicated_pending_disconnect_remaining_msec[key])
+	return snapshot
+
+func _find_pending_disconnect_player_idx_by_name(player_name: String) -> int:
+	var normalized_name := player_name.strip_edges()
+	if normalized_name == "":
+		return -1
+	var match_idx := -1
+	for key in _pending_disconnect_deadlines_msec.keys():
+		var player_idx := int(key)
+		if not _is_valid_player_index(player_idx):
+			continue
+		if str(players_info[player_idx].name).strip_edges() != normalized_name:
+			continue
+		if match_idx != -1:
+			return -1
+		match_idx = player_idx
+	return match_idx
+
+func _on_network_player_connected(peer_id: int, info: Dictionary) -> void:
+	if not is_multiplayer or multiplayer.multiplayer_peer == null or not multiplayer.is_server():
 		return
-	if players_info.is_empty() or current_state == GameState.GAME_OVER:
+	if players_info.is_empty() or current_state == GameState.INITIALIZING:
 		return
-	var player_idx: int = int(peer_to_idx.get(peer_id, -1))
-	if player_idx == -1:
+	var reconnect_idx := _find_pending_disconnect_player_idx_by_name(str(info.get("name", "")))
+	if reconnect_idx == -1:
+		return
+	_pending_disconnect_deadlines_msec.erase(reconnect_idx)
+	_pending_disconnect_peer_ids.erase(reconnect_idx)
+	peer_to_idx[peer_id] = reconnect_idx
+	idx_to_peer[reconnect_idx] = peer_id
+	debug_log("reconnect", "P%d rebound to peer %d (%s)" % [
+		reconnect_idx,
+		peer_id,
+		str(info.get("name", "Player"))
+	])
+	mp_disconnect_recovered.emit(reconnect_idx)
+	NetworkManager.start_match.rpc_id(peer_id, num_players, 0)
+	sync_match_state.rpc_id(peer_id, _build_mp_sync_payload())
+	_mp_broadcast_state_if_server()
+
+func _begin_peer_disconnect_grace(peer_id: int, player_idx: int) -> void:
+	if _pending_disconnect_deadlines_msec.has(player_idx):
 		return
 	peer_to_idx.erase(peer_id)
 	idx_to_peer.erase(player_idx)
+	_pending_disconnect_deadlines_msec[player_idx] = Time.get_ticks_msec() + int(MP_DISCONNECT_GRACE_SEC * 1000.0)
+	_pending_disconnect_peer_ids[player_idx] = peer_id
+	debug_log("disconnect", "P%d (peer %d) disconnected — holding seat for %ds" % [
+		player_idx,
+		peer_id,
+		int(MP_DISCONNECT_GRACE_SEC)
+	])
+	mp_disconnect_grace_started.emit(player_idx, MP_DISCONNECT_GRACE_SEC)
+	_mp_broadcast_state_if_server()
+
+func _tick_pending_disconnect_grace() -> void:
+	if _pending_disconnect_deadlines_msec.is_empty():
+		return
+	if not is_multiplayer or multiplayer.multiplayer_peer == null or not multiplayer.is_server():
+		return
+	var now := Time.get_ticks_msec()
+	var expired_players: Array[int] = []
+	for key in _pending_disconnect_deadlines_msec.keys():
+		var player_idx := int(key)
+		if int(_pending_disconnect_deadlines_msec[key]) <= now:
+			expired_players.append(player_idx)
+	for player_idx in expired_players:
+		var peer_id := int(_pending_disconnect_peer_ids.get(player_idx, -1))
+		_resolve_peer_disconnect_timeout(player_idx, peer_id)
+
+func _resolve_peer_disconnect_timeout(player_idx: int, peer_id: int) -> void:
+	_pending_disconnect_deadlines_msec.erase(player_idx)
+	_pending_disconnect_peer_ids.erase(player_idx)
 	if not _is_valid_player_index(player_idx):
+		_mp_broadcast_state_if_server()
+		return
+	if current_state == GameState.GAME_OVER:
+		_mp_broadcast_state_if_server()
 		return
 	if not players_info[player_idx].is_eliminated:
 		players_info[player_idx].is_eliminated = true
 		players_info[player_idx].is_bot = true
-		debug_log("disconnect", "P%d (peer %d) rage-quit → eliminated" % [player_idx, peer_id])
+		debug_log("disconnect", "P%d (peer %d) timed out after %ds offline → eliminated" % [
+			player_idx,
+			peer_id,
+			int(MP_DISCONNECT_GRACE_SEC)
+		])
 		player_eliminated.emit(player_idx)
+		mp_disconnect_timed_out.emit(player_idx)
 
-	# Count remaining active players — elimination can occur from any FSM state so
-	# we force the GAME_OVER transition rather than relying on _check_elimination_win_condition
-	# which uses the FSM validation table (TURN_RESOLVE_DRAWN → GAME_OVER is not listed).
 	var active_count := 0
 	for i in range(num_players):
 		if not players_info[i].is_eliminated:
 			active_count += 1
 	var game_ended := active_count <= 1
 
-	# Always clear a pending drawn card when the seat that drew it is vacated
 	if current_player_index == player_idx and drawn_card_data != null:
 		drawn_card_data = null
 		pending_card_consumed.emit()
 
 	if game_ended:
-		print("Only one player remains after disconnect. Game Over.")
+		print("Only one player remains after disconnect timeout. Game Over.")
 		change_state(GameState.GAME_OVER, true)
 		_mp_broadcast_state_if_server()
 		return
@@ -768,6 +865,18 @@ func _on_peer_disconnected(peer_id: int) -> void:
 		jump_in_validating = false
 		change_state(_resolve_post_interrupt_state())
 	_mp_broadcast_state_if_server()
+
+func _on_peer_disconnected(peer_id: int) -> void:
+	if not is_multiplayer or not multiplayer.is_server():
+		return
+	if players_info.is_empty() or current_state == GameState.GAME_OVER:
+		return
+	var player_idx: int = int(peer_to_idx.get(peer_id, -1))
+	if player_idx == -1:
+		return
+	if not _is_valid_player_index(player_idx):
+		return
+	_begin_peer_disconnect_grace(peer_id, player_idx)
 
 func drink_beer(p_idx: int):
 	if players_info[p_idx].is_eliminated: return
@@ -1347,6 +1456,7 @@ func _build_mp_sync_payload() -> Dictionary:
 		"tutorial": tutorial_mode,
 		"num": num_players,
 		"peers": peer_pairs,
+		"disc_pending": get_disconnect_pending_remaining_ms_snapshot(),
 		"players": players_arr,
 		"deck": deck_arr,
 		"discard": disc_arr,
@@ -1384,6 +1494,12 @@ func _apply_mp_sync_payload(payload: Dictionary) -> void:
 	easy_mode = bool(payload.get("easy", false))
 	tutorial_mode = bool(payload.get("tutorial", false))
 	last_ability_event = (payload.get("last_ab", {}) as Dictionary).duplicate()
+	_replicated_pending_disconnect_remaining_msec.clear()
+	var pending_disconnects: Array = payload.get("disc_pending", [])
+	for i in range(pending_disconnects.size()):
+		var remaining_ms := int(pending_disconnects[i])
+		if remaining_ms > 0:
+			_replicated_pending_disconnect_remaining_msec[i] = remaining_ms
 	peer_to_idx.clear()
 	idx_to_peer.clear()
 	for pair in payload.get("peers", []):
@@ -1533,6 +1649,11 @@ func broadcast_player_emote(player_idx: int, emote_id: String) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func sync_match_state(payload: Dictionary) -> void:
+	if multiplayer.multiplayer_peer == null:
+		return
+	if not is_multiplayer:
+		is_multiplayer = multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED \
+			and not multiplayer.is_server()
 	if not is_multiplayer:
 		return
 	if multiplayer.is_server():
