@@ -58,11 +58,22 @@ jobs:
           mkdir -p build/windows
           ./Godot_v4.6.1-stable_linux.x86_64 --headless --export-release "Windows Desktop" build/windows/Dutch.exe
 
-      - name: Upload Build Artifacts
+      - name: Export Web
+        run: |
+          mkdir -p build/web
+          ./Godot_v4.6.1-stable_linux.x86_64 --headless --export-release "Web" build/web/index.html
+
+      - name: Upload Windows Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Dutch-Windows-Build
           path: build/windows/
+
+      - name: Upload Web Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dutch-Web-Build
+          path: build/web/
 
       - name: Create GitHub Release
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -70,4 +81,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           zip -j Dutch-Windows-v0.5.${{ github.run_number }}.zip build/windows/*
-          gh release create v0.5.${{ github.run_number }} Dutch-Windows-v0.5.${{ github.run_number }}.zip --title "Release v0.5.${{ github.run_number }}" --notes "Automated release of the Dutch game built from main branch commit ${{ github.sha }}."
+          zip -j Dutch-Web-v0.5.${{ github.run_number }}.zip build/web/*
+          gh release create v0.5.${{ github.run_number }} Dutch-Windows-v0.5.${{ github.run_number }}.zip Dutch-Web-v0.5.${{ github.run_number }}.zip --title "Release v0.5.${{ github.run_number }}" --notes "Automated release of the Dutch game built from main branch commit ${{ github.sha }}."

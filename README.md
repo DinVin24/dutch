@@ -103,6 +103,6 @@ Acest proiect a fost dezvoltat utilizând tool-uri de AI (Agentic AI Development
    * Utilizarea de șabloane și rapoarte de corectură (ex. [pr_body.txt](pr_body.txt) și istoricul de PR-uri/issue-uri rezolvate direct de agenți).
 6. **Pipeline CI/CD** (1 pct):
    * **CI**: Configurat prin GitHub Actions în [.github/workflows/qa-pipeline.yml](.github/workflows/qa-pipeline.yml) (descarcă automat executabilul Godot Headless pe Linux și rulează suita de teste la fiecare push/PR).
-   * **CD**: Integrat în același workflow; rulează exportul headless al jocului pentru Windows Desktop, îl uploadează ca artifact de build și creează automat un Release pe GitHub cu executabilul pre-ambalat (ZIP) pentru orice push pe ramura `main`.
+   * **CD**: Integrat în același workflow; rulează exportul headless al jocului pentru Windows Desktop și Web (HTML5, pentru itch.io), le uploadează ca artifacte de build și creează automat un Release pe GitHub cu ambele build-uri pre-ambalate (ZIP) pentru orice push pe ramura `main`.
 7. **Raport despre folosirea toolurilor de AI** (2 pct):
    * Raport complet în limba română privind procesul de pair programming cu agenți AI de-a lungul întregului ciclu de viață al software-ului: [ai_usage_report.md](ai_usage_report.md)
