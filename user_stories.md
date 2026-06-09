@@ -103,15 +103,7 @@
 - [x] **Story**: As a player, I want to be able to use a variety of disruption and utility abilities (Shuffle, Reverse, Skip, Boulder, etc.).
 
 ## Epic 9: Online Multiplayer Matchmaking [KAN-25]
-- [ ] **Story**: As a player, I want to find matches online quickly using a matchmaking system.
-- [ ] **Story**: As a player, I want to host private lobbies to play with my friends.
-
-## Epic 10: Cosmetic Unlock System [KAN-50]
-- [ ] **Story**: As a player, I want to earn experience points from matches to unlock new card backs and character skins.
-
-
-## Epic 11: Voice Chat Integration [KAN-53]
-- [ ] **Story**: As a player, I want spatial voice chat in the tavern to interact with other players during matches.
+- [x] **Story**: As a player, I want to host private lobbies to play with my friends.
 
 ## Epic 12: Polarity Shift (Advanced Mechanics) [KAN-67]
 - [x] **Story**: As a player, I want to be able to use a 'Polarity Shift' ability to invert the game's win condition between Lowest Wins and Highest Wins. [KAN-69]
@@ -128,12 +120,12 @@
 
 ## Epic 14: The Immersive Tavern (Roadmap Phase 2) [KAN-73]
 - [x] **Story**: As a player, I want to feel the atmosphere of a "Run-down Bar" with thematic table, chairs, and surroundings.
-- [ ] **Story**: As a player, I want to see the 3D Chicken animated and reacting to my purchases.
-- [ ] **Story**: As a player, I want to see 3D Beer mugs that visually empty as I drink them for penalties.
+- [x] **Story**: As a player, I want to see the 3D Chicken animated and reacting to my purchases.
+- [x] **Story**: As a player, I want to see 3D Beer mugs that visually empty as I drink them for penalties.
 
 ## Epic 15: Social & Multiplayer (Roadmap Phase 3 & 4) [KAN-74]
-- [ ] **Story**: As a player, I want to host or join a multiplayer room from a lobby list and pick my own username.
-- [ ] **Story**: As a winner, I want to trigger a unique emote animation and celebrate in spatial voice chat.
+- [x] **Story**: As a player, I want to host or join a multiplayer room and pick my own username.
+- [x] **Story**: As a winner, I want to trigger a unique emote animation to celebrate my victory.
 
 ## Epic 16: Interactive Tutorial Mode [KAN-76]
 - [x] **Story**: As a first-time player, I want a Tutorial option on the main menu start screen (alongside Normal/Easy), so that I can opt into a guided experience without reading a manual. [KAN-77]
