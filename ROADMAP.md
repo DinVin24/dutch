@@ -12,14 +12,14 @@ gantt
     Easy Mode & UI Polish     :done, des2, after des1, 5d
     section Phase 2: Immersive Bar
     Environment & Atmosphere :done, des3, 2026-04-01, 12d
-    Chicken & Beer Models    :active, des4, after des3, 5d
+    Chicken & Beer Models    :done, des4, after des3, 5d
     Ability Hammer Models & FX:done, des5, after des4, 4d
     section Phase 3: Networking
-    Lobby & User Management  :des6, 2026-04-15, 14d
-    Persistence & Stats      :des7, after des6, 7d
+    Lobby & User Management  :done, des6, 2026-04-15, 14d
+    Persistence & Stats      :done, des7, after des6, 7d
     section Phase 4: Social
-    Voice Chat & Emotes      :des8, 2026-05-10, 10d
-    Mobile/Browser Support   :des9, after des8, 14d
+    Emotes                   :done, des8, 2026-05-10, 10d
+    Mobile/Browser Support   :done, des9, after des8, 14d
 ```
 
 ---
@@ -37,7 +37,7 @@ gantt
     - [x] Rework 3D view angle for optimal board visibility.
     - [x] Reduce UI saturation and "bloat" for a premium, clean aesthetic.
 4.  **Sound Design**:
-    - [/] High-fidelity foley for card moves and environment sounds.
+    - [x] High-fidelity foley for card moves and environment sounds.
 
 ---
 
@@ -65,7 +65,7 @@ gantt
     - [X] Player Identity: Picking and displaying a Username.
 2.  **Progression & Saving**:
     - [x] **Persistent Settings**: Save Volume, Resolution, and Keybinds.
-    - [ ] **Player Stats**: Save "Matches Won" to player profiles to show off skill.
+    - [x] **Player Stats**: Save "Matches Won" to player profiles to show off skill.
 
 ---
 
@@ -75,7 +75,6 @@ gantt
 ### 🛠️ Tasks
 1.  **Social Layer**:
     - [x] **Player Models**: 3D avatars seated at the table.
-    - [ ] **Voice Chat**: Spatial interaction in the bar.
     - [x] **Emotes**: Triggerable animations for when a player wins.
 2.  **Platform Reach**:
     - [x] Complete Browser (WebAssembly) and Mobile (Android/iOS) UI adaptive support.
@@ -87,6 +86,6 @@ gantt
 | Task ID | Component | Description | Assignee | Status |
 | :--- | :--- | :--- | :--- | :--- |
 | PM-001 | Docs | Logic & Roadmap Correction | Antigravity | [COMPLETED] |
-| VIS-001 | Env | Immersive Bar Rework | [UNASSIGNED] | [BACKLOG] |
-| NET-001 | Sync | Multiplayer Lobby System | [UNASSIGNED] | [BACKLOG] |
-| SYS-002 | Save | Persistence: Settings/Stats | [UNASSIGNED] | [BACKLOG] |
+| VIS-001 | Env | Immersive Bar Rework | vpreotesoiu | [COMPLETED] |
+| NET-001 | Sync | Multiplayer Lobby System | vpreotesoiu | [COMPLETED] |
+| SYS-002 | Save | Persistence: Settings/Stats | Antigravity | [COMPLETED] |

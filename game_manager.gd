@@ -677,6 +677,12 @@ func _handle_game_over():
 	all_cards_revealed.emit()
 	var results := _calculate_scores()
 	var winner_id: int = results[0].id if results.size() > 0 else -1
+	
+	# Increment persistent wins if the local human player won
+	var local_human_idx := local_player_idx if is_multiplayer else 0
+	if winner_id == local_human_idx:
+		SettingsManager.increment_matches_won()
+		
 	game_over.emit(winner_id)
 	scores_ready.emit(results)
 
