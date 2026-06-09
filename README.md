@@ -82,3 +82,26 @@ For automated headless logic verification:
 Multiplayer uses WebRTC via a public WebSocket signaling server (`wss://signal.maestriisigma.ro`).
 - **Lobby Setup**: Enter a username, then choose to either host (generates a unique room code) or join (enter the host's room code).
 - **Local Testing**: Run the PowerShell script `./run_two_instances.ps1` to launch two client windows side-by-side on your local machine.
+
+## 🎓 MDS Project Requirements (Procesul de Dezvoltare cu AI)
+
+Acest proiect a fost dezvoltat utilizând tool-uri de AI (Agentic AI Development) în cadrul disciplinei **Modele de Dezvoltare Software (MDS)**. Mai jos sunt linkurile și detaliile către fiecare cerință din baremul de evaluare:
+
+1. **User Stories (Minim 10) & Backlog Creation** (2 pct):
+   * Tichete de backlog și povești de utilizator structurate în: [user_stories.md](user_stories.md)
+   * Roadmap și evoluția planificată a backlog-ului pe faze: [ROADMAP.md](ROADMAP.md)
+2. **Diagrame de Arhitectură și Workflow-uri** (1 pct):
+   * Diagrame detaliate în format Mermaid (arhitectura componentelor, mașina de stări a jocului / FSM și fluxul de execuție al agenților): [DESIGN.md](DESIGN.md)
+3. **Source Control cu Git** (1 pct):
+   * Proiectul urmează standardul *Conventional Commits* (ex. `feat()`, `fix()`, `docs()`).
+   * Istoricul de commits, ramurile create (ex. `docs/correct-hammers-and-multiplayer`, `fix/multiplayer-camera-timeout`) și fluxul de Pull Requests pot fi consultate în istoricul Git al repository-ului.
+4. **Teste Automate și Evals pentru Agenți** (2 pct):
+   * **Pipeline-ul local de testare (Headless)**: [qa_pipeline.gd](qa_pipeline.gd), care validează logic mașina de stări a jocului, rulat prin scriptul utilitar [run_qa.bat](run_qa.bat) (Windows) sau [run_experimental_qa.sh](run_experimental_qa.sh) (Linux).
+   * **Teste funcționale / Smoke tests**: [verify_tutorial_mode.gd](verify_tutorial_mode.gd), [verify_chicken_purchase.gd](verify_chicken_purchase.gd) și [verify_agent_tools.gd](verify_agent_tools.gd).
+   * **Agent Evals (Evaluări LLM/SLM)**: Fișierele de configurare și testare a performanței botului și asistentului (Chippy) în raport cu regulamentul: [evals/chippy.yaml](evals/chippy.yaml), [evals/bot.yaml](evals/bot.yaml), rulate prin scriptul [evals/run_evals.sh](evals/run_evals.sh).
+5. **Raportare Bug și Rezolvare cu Pull Request** (1 pct):
+   * Utilizarea de șabloane și rapoarte de corectură (ex. [pr_body.txt](pr_body.txt) și istoricul de PR-uri/issue-uri rezolvate direct de agenți).
+6. **Pipeline CI/CD** (1 pct):
+   * Configurat prin GitHub Actions în [.github/workflows/qa-pipeline.yml](.github/workflows/qa-pipeline.yml) (descarcă automat executabilul Godot Headless pe Linux și rulează suita de teste la fiecare push/PR).
+7. **Raport despre folosirea toolurilor de AI** (2 pct):
+   * Raport complet în limba română privind procesul de pair programming cu agenți AI de-a lungul întregului ciclu de viață al software-ului: [ai_usage_report.md](ai_usage_report.md)
