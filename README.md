@@ -92,3 +92,26 @@ Client machine (same machine fallback):
 Auto handshake + commit helper script:
 - Dry run only: `python lan_handshake_autocommit.py --host-ip 127.0.0.1 --dry-run`
 - Run full flow (handshake, `git add .`, commit, push): `python lan_handshake_autocommit.py --host-ip 192.168.1.42`
+
+---
+
+## Deliverables (documentație proiect)
+
+### Partea A
+
+| Categorie | Fișier |
+|-----------|--------|
+| **Aplicație** | [project.godot](project.godot) — proiectul Godot (scenă principală, autoload-uri, configurare joc) |
+| **Agenți AI** | [AGENTS.md](AGENTS.md) — workflow agentic; implementare: [game_assistant.gd](game_assistant.gd) (Chippy), [llm_player_agent.gd](llm_player_agent.gd) (Bot), [agent_tool_registry.gd](agent_tool_registry.gd) |
+
+### Partea B
+
+| Categorie | Fișier |
+|-----------|--------|
+| **User Stories** | [user_stories.md](user_stories.md) — epics și user stories (format Agile / Given-When-Then) |
+| **Diagrame** | [DESIGN.md](DESIGN.md) — arhitectură, FSM și diagrame Mermaid |
+| **Source Control** | [.githooks/commit-msg](.githooks/commit-msg) — hook Git pentru Conventional Commits |
+| **Teste Automate** | [run_experimental_qa.sh](run_experimental_qa.sh) — pipeline QA headless (FSM, logică, integritate) |
+| **Pull Requests** | [AGENTS.md](AGENTS.md#roles--responsibilities) — verificare PR, squash-merge, handoff între agenți |
+| **CI/CD** | [.github/workflows/qa-pipeline.yml](.github/workflows/qa-pipeline.yml) — GitHub Actions: QA la push/PR pe `main` și `develop` |
+| **AI Documentation** | [PROMPTFOO.md](PROMPTFOO.md) — evaluare prompturi Chippy/Bot; suite în [evals/](evals/) |
