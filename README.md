@@ -3,7 +3,8 @@
 Dutch este un joc de cărți 3D, multiplayer, rules-heavy, construit în **Godot 4.6.x**. Proiectul urmărește în mod explicit dezvoltarea asistată de AI pe tot ciclul de viață al software-ului: planificare, design de arhitectură, implementare, testare automată, depanare, evaluări LLM (evals) și integrare continuă (CI/CD).
 
 > [!IMPORTANT]
-> **Documente Principale pentru Evaluare (Ghid Evaluator):**
+> **Documente principale și informații pentru Evaluare (Ghid Evaluator):**
+> - **Membrii echipei**: Acest proiect a fost realizat de: **Preotesoiu Vlad**, **Simionov Teodora**, **Șoltuzu Emanuel**, **Telejman Alexandru** și **Vatavu Emilian**, toți de la **grupa 232**.
 > - **Checklist Barem MDS 2026**: Acest document (`README.md`) centralizează toate criteriile de notare din barem.
 > - **Raport Utilizare AI**: [ai_usage_report.md](ai_usage_report.md) detaliază exhaustiv trasabilitatea utilizării instrumentelor de inteligență artificială în toate fazele de dezvoltare.
 > - **Design & Arhitectură**: [DESIGN.md](DESIGN.md) documentează structura tehnică a jocului, diagramele FSM (Finite State Machine), fluxul multiplayer WebRTC și wireframe-urile interfeței.
