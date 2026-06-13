@@ -167,7 +167,7 @@ Pentru a testa conexiunea WebRTC direct pe aceeași mașină:
   ./run_two_instances.ps1
   ```
   Acesta va lansa automat două instanțe ale jocului pentru a testa interacțiunea în rețea.
-* Alternativ, introduceți un nume în Lobby, creați o cameră pe o instanță, copiați codul și alăturați-vă din a doua instanță. Implicit, jocul se conectează la serverul public de signaling `wss://signal.maestriisigma.ro`.
+* Alternativ, introduceți un nume în Lobby, creați o cameră pe o instanță, copiați codul și alăturați-vă din a doua instanță. Implicit, jocul se conectează la serverul public de signaling `wss://dutch-signaling.onrender.com`.
 
 ### 4. Rulare QA Headless (Suita de Teste Logică)
 * **Linux**:
